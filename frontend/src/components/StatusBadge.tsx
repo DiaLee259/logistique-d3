@@ -1,0 +1,18 @@
+import { cn, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
+
+interface StatusBadgeProps {
+  statut: string;
+  size?: 'sm' | 'md';
+}
+
+export default function StatusBadge({ statut, size = 'md' }: StatusBadgeProps) {
+  return (
+    <span className={cn(
+      'inline-flex items-center rounded-full border font-medium',
+      size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs',
+      statutCommandeColor(statut),
+    )}>
+      {statutCommandeLabel(statut)}
+    </span>
+  );
+}

@@ -1,0 +1,382 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  LOGISTICIEN_1
+  LOGISTICIEN_2
+  CHEF_PROJET
+}
+
+enum TypeMouvement {
+  ENTREE
+  SORTIE
+}
+
+enum StatutCommande {
+  EN_ATTENTE           // Reçue, pas encore traitée par Log1
+  EN_VALIDATION        // Log1 en cours de validation
+  VALIDEE              // Validée par Log1
+  EN_ATTENTE_LOG2      // Transmise à Log2, en attente d'expédition
+  EXPEDIEE             // Expédiée par Log2
+  LIVREE               // Confirmée reçue par le prestataire
+  ANNULEE
+}
+
+enum StatutLivraison {
+  EN_ATTENTE
+  EN_COURS
+  LIVREE
+  INCIDENT
+}
+
+enum ProdSav {
+  PROD
+  SAV
+  MALFACON
+  AUTRE
+}
+
+// ─── UTILISATEURS ─────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  nom       String
+  prenom    String
+  role      Role     @default(LOGISTICIEN_2)
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commandesValidees  Commande[] @relation("ValideurLog1")
+  commandesExpediees Commande[] @relation("ExpediteurLog2")
+  mouvements         Mouvement[]
+  commandesTS        CommandeTS[]
+
+  @@map("users")
+}
+
+// ─── ENTREPÔTS ────────────────────────────────────────────────────────────────
+
+model Entrepot {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  nom          String
+  localisation String
+  gestionnaire String?
+  adresse      String?
+  telephone    String?
+  email        String?
+  actif        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stocks                 Stock[]
+  mouvements             Mouvement[]
+  livraisons             Livraison[]
+  repartitionsCommandeTS RepartitionCommandeTS[]
+
+  @@map("entrepots")
+}
+
+// ─── ARTICLES ─────────────────────────────────────────────────────────────────
+
+model Article {
+  id                  String   @id @default(uuid())
+  reference           String   @unique
+  nom                 String
+  description         String?
+  unite               String   @default("unité")
+  seuilAlerte         Int      @default(10)
+  actif               Boolean  @default(true)
+  regleConsommation   String?
+  facteurConsommation Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  stocks             Stock[]
+  mouvements         Mouvement[]
+  lignesCommande     LigneCommande[]
+  lignesLivraison    LigneLivraison[]
+  consommations      Consommation[]
+  inventaires        InventairePhysique[]
+  lignesCommandeTS   LigneCommandeTS[]
+
+  @@map("articles")
+}
+
+// ─── STOCK ────────────────────────────────────────────────────────────────────
+
+model Stock {
+  id         String   @id @default(uuid())
+  articleId  String
+  entrepotId String
+  quantite   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  article  Article  @relation(fields: [articleId], references: [id])
+  entrepot Entrepot @relation(fields: [entrepotId], references: [id])
+
+  @@unique([articleId, entrepotId])
+  @@map("stocks")
+}
+
+// ─── MOUVEMENTS ───────────────────────────────────────────────────────────────
+
+model Mouvement {
+  id                 String        @id @default(uuid())
+  date               DateTime      @default(now())
+  articleId          String
+  entrepotId         String
+  type               TypeMouvement
+  quantiteDemandee   Int
+  quantiteFournie    Int
+  departement        String?
+  numeroCommande     String?
+  numeroOperation    String?
+  sourceDestination  String?
+  prodSav            ProdSav       @default(PROD)
+  commentaire        String?
+  adresseMail        String?
+  manager            String?
+  infoSupplementaire String?
+  adresse            String?
+  cout               Float?
+  envoye             Boolean       @default(false)
+  recu               Boolean       @default(false)
+  userId             String?
+  commandeId         String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  article  Article   @relation(fields: [articleId], references: [id])
+  entrepot Entrepot  @relation(fields: [entrepotId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+  commande Commande? @relation(fields: [commandeId], references: [id])
+
+  @@map("mouvements")
+}
+
+// ─── COMMANDES ────────────────────────────────────────────────────────────────
+
+model Commande {
+  id                   String         @id @default(uuid())
+  numero               String         @unique
+  dateReception        DateTime       @default(now())
+  dateCommande         DateTime?      // date sur le bon de commande prestataire
+  dateTraitement       DateTime?      // date de validation Log1
+  dateTransmissionLog2 DateTime?      // date de transmission à Log2
+  dateExpedition       DateTime?      // date expédition Log2
+  dateLivraison        DateTime?      // date confirmation livraison
+  departement          String
+  demandeur            String?
+  emailDemandeur       String?
+  societe              String?        // société du prestataire
+  interlocuteur        String?        // interlocuteur
+  manager              String?
+  nombreGrilles        Int?
+  typeGrille           String?        // type de grille
+  statut               StatutCommande @default(EN_ATTENTE)
+  commentaire          String?
+  commentaireLog2      String?
+  fichierExcelUrl      String?
+  fichierPerceptionUrl String?
+  bonRetourUrl         String?
+  emailEnvoye          Boolean        @default(false)
+  dateEmailEnvoye      DateTime?
+  bonRetourRecu        Boolean        @default(false)
+  dateBonRetourRecu    DateTime?
+  tokenPublic          String?        @unique // token pour lien prestataire
+  valideurId           String?
+  expediteurId         String?
+
+  valideur   User? @relation("ValideurLog1", fields: [valideurId], references: [id])
+  expediteur User? @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
+
+  lignes     LigneCommande[]
+  mouvements Mouvement[]
+  livraisons Livraison[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("commandes")
+}
+
+model LigneCommande {
+  id               String  @id @default(uuid())
+  commandeId       String
+  articleId        String
+  quantiteDemandee Int
+  quantiteValidee  Int?
+  quantiteFournie  Int?
+  commentaire      String?
+  stockDisponible  Int?
+
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  article  Article  @relation(fields: [articleId], references: [id])
+
+  @@map("lignes_commande")
+}
+
+// ─── LIEN PRESTATAIRE ─────────────────────────────────────────────────────────
+
+model LienPrestataire {
+  id          String    @id @default(uuid())
+  token       String    @unique @default(uuid())
+  nom         String    // libellé du lien ex: "Formulaire commande Dept 49"
+  actif       Boolean   @default(true)
+  expiresAt   DateTime?
+  createdBy   String?
+  utilisations Int      @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@map("liens_prestataire")
+}
+
+// ─── LIVRAISONS FOURNISSEURS ──────────────────────────────────────────────────
+
+model Livraison {
+  id              String          @id @default(uuid())
+  numero          String          @unique
+  dateLivraison   DateTime        @default(now())
+  fournisseur     String
+  entrepotId      String
+  statut          StatutLivraison @default(EN_ATTENTE)
+  bonLivraisonUrl String?
+  bonCommandeUrl  String?
+  commentaire     String?
+  commandeId      String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  entrepot Entrepot         @relation(fields: [entrepotId], references: [id])
+  commande Commande?        @relation(fields: [commandeId], references: [id])
+  lignes   LigneLivraison[]
+
+  @@map("livraisons")
+}
+
+model LigneLivraison {
+  id                String  @id @default(uuid())
+  livraisonId       String
+  articleId         String
+  quantiteCommandee Int
+  quantiteRecue     Int
+  commentaire       String?
+
+  livraison Livraison @relation(fields: [livraisonId], references: [id], onDelete: Cascade)
+  article   Article   @relation(fields: [articleId], references: [id])
+
+  @@map("lignes_livraison")
+}
+
+// ─── CONSOMMATION ─────────────────────────────────────────────────────────────
+
+model Consommation {
+  id                  String   @id @default(uuid())
+  date                DateTime
+  articleId           String
+  departement         String?
+  quantiteTheorique   Float
+  quantiteReelle      Float
+  ecart               Float
+  nombreInterventions Int      @default(0)
+  source              String?
+  createdAt           DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id])
+
+  @@map("consommations")
+}
+
+// ─── INVENTAIRE PHYSIQUE ──────────────────────────────────────────────────────
+
+model InventairePhysique {
+  id          String   @id @default(uuid())
+  articleId   String
+  entrepotId  String
+  quantite    Int
+  date        DateTime @default(now())
+  userId      String?
+  commentaire String?
+
+  article Article @relation(fields: [articleId], references: [id])
+
+  @@map("inventaires_physiques")
+}
+
+// ─── COMMANDES TS (APPROVISIONNEMENT PÉRIODIQUE) ──────────────────────────────
+
+model CommandeTS {
+  id          String   @id @default(uuid())
+  numero      String   @unique
+  titre       String
+  dateDebut   DateTime
+  dateFin     DateTime
+  statut      String   @default("EN_COURS") // EN_COURS, CLOTUREE
+  commentaire String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?           @relation(fields: [createdById], references: [id])
+  lignes    LigneCommandeTS[]
+
+  @@map("commandes_ts")
+}
+
+model LigneCommandeTS {
+  id           String @id @default(uuid())
+  commandeTSId String
+  articleId    String
+  qteProd      Int    @default(0)
+  qteSav       Int    @default(0)
+  qteMalfacon  Int    @default(0)
+
+  commandeTS   CommandeTS              @relation(fields: [commandeTSId], references: [id], onDelete: Cascade)
+  article      Article                 @relation(fields: [articleId], references: [id])
+  repartitions RepartitionCommandeTS[]
+
+  @@unique([commandeTSId, articleId])
+  @@map("lignes_commandes_ts")
+}
+
+model RepartitionCommandeTS {
+  id                String @id @default(uuid())
+  ligneCommandeTSId String
+  entrepotId        String
+  tauxRepartition   Float  @default(0)
+  qteRecue          Int    @default(0)
+
+  ligneCommandeTS LigneCommandeTS @relation(fields: [ligneCommandeTSId], references: [id], onDelete: Cascade)
+  entrepot        Entrepot        @relation(fields: [entrepotId], references: [id])
+
+  @@unique([ligneCommandeTSId, entrepotId])
+  @@map("repartitions_commandes_ts")
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String?
+  type      String
+  titre     String
+  message   String
+  lue       Boolean  @default(false)
+  lien      String?
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}

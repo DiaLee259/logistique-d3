@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 220 25% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+    --primary: 217 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 220 25% 20%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 38%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 217 71% 45%;
+    --radius: 0.5rem;
+    --sidebar-background: 220 25% 12%;
+    --sidebar-foreground: 220 20% 85%;
+    --sidebar-primary: 217 71% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 18%;
+    --sidebar-accent-foreground: 220 20% 90%;
+    --sidebar-border: 220 25% 18%;
+    --sidebar-ring: 217 71% 55%;
+  }
+
+  .dark {
+    --background: 220 18% 16%;
+    --foreground: 220 15% 90%;
+    --card: 220 18% 21%;
+    --card-foreground: 220 15% 90%;
+    --popover: 220 18% 21%;
+    --popover-foreground: 220 15% 90%;
+    --primary: 217 71% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 18% 27%;
+    --secondary-foreground: 220 15% 82%;
+    --muted: 220 18% 25%;
+    --muted-foreground: 220 10% 75%;
+    --accent: 38 92% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 18% 30%;
+    --input: 220 18% 30%;
+    --ring: 217 71% 58%;
+  }
+
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  /* Uniformisation des tailles de police */
+  h1 { font-size: 1.1rem; }
+  h2 { font-size: 1rem; }
+  h3 { font-size: 0.875rem; }
+  p, span, td, th, label, input, select, textarea, button { font-size: inherit; }
+  .text-sm { font-size: 0.8125rem !important; }
+  .text-xs { font-size: 0.75rem !important; }
+  .text-base { font-size: 0.875rem !important; }
+  .text-lg { font-size: 1rem !important; }
+  .text-xl { font-size: 1.125rem !important; }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+  input::placeholder, textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
+  option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .animate-fade-in { animation: fade-in 0.3s ease-out; }
+}

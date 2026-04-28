@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: logistique-d3-backend
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build && npx prisma generate && npx prisma migrate deploy
+    startCommand: node dist/main
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: logistique-d3-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+databases:
+  - name: logistique-d3-db
+    plan: free
+    databaseName: logistique_d3
