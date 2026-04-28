@@ -11,4 +11,4 @@ backend/frontend/
 Thumbs.db
 coverage/
 .nyc_output/
-uploads/
+backend/uploads/
