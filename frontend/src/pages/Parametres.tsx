@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { usersApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -117,6 +117,7 @@ export default function Parametres() {
 
   // ── Catalogue Articles ────────────────────────────────────────────────────
   const [catalogueFilter, setCatalogueFilter] = useState<'all' | 'actif' | 'inactif'>('all');
+  const [editingSeuil, setEditingSeuil] = useState<{ id: string; value: string } | null>(null);
 
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles-all'],
@@ -132,6 +133,25 @@ export default function Parametres() {
       toast.success('Article mis à jour');
     },
   });
+
+  const updateSeuilMut = useMutation({
+    mutationFn: ({ id, seuilAlerte }: { id: string; seuilAlerte: number }) =>
+      articlesApi.update(id, { seuilAlerte }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['articles-all'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success('Seuil d\'alerte mis à jour');
+      setEditingSeuil(null);
+    },
+    onError: () => toast.error('Erreur lors de la mise à jour'),
+  });
+
+  const saveSeuil = () => {
+    if (!editingSeuil) return;
+    const val = parseInt(editingSeuil.value);
+    if (isNaN(val) || val < 0) { toast.error('Valeur invalide'); return; }
+    updateSeuilMut.mutate({ id: editingSeuil.id, seuilAlerte: val });
+  };
 
   const articlesFiltres = articles.filter(a => {
     if (catalogueFilter === 'actif') return a.actif;
@@ -358,11 +378,69 @@ export default function Parametres() {
                 {articlesFiltres.length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Aucun article</td></tr>
                 ) : articlesFiltres.map(a => (
-                  <tr key={a.id} className={cn('border-b border-border/50', !a.actif && 'opacity-50')}>
+                  <tr key={a.id} className={cn('border-b border-border/50 hover:bg-muted/10', !a.actif && 'opacity-50')}>
                     <td className="px-3 py-2.5 font-mono text-muted-foreground">{a.reference}</td>
                     <td className="px-3 py-2.5 font-medium">{a.nom}</td>
                     <td className="px-3 py-2.5 text-muted-foreground">{a.unite}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{a.seuilAlerte}</td>
+
+                    {/* ── Seuil alerte éditable ── */}
+                    <td className="px-3 py-2">
+                      {hasRole('ADMIN', 'LOGISTICIEN_1') ? (
+                        editingSeuil?.id === a.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingSeuil.value}
+                              onChange={e => setEditingSeuil(p => p ? { ...p, value: e.target.value } : null)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveSeuil();
+                                if (e.key === 'Escape') setEditingSeuil(null);
+                              }}
+                              autoFocus
+                              className="w-16 px-2 py-1 text-xs border border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
+                            />
+                            <button
+                              onClick={saveSeuil}
+                              disabled={updateSeuilMut.isPending}
+                              className="p-1 rounded bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-60"
+                              title="Valider"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setEditingSeuil(null)}
+                              className="p-1 rounded bg-muted text-muted-foreground hover:bg-muted/80"
+                              title="Annuler"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditingSeuil({ id: a.id, value: String(a.seuilAlerte) })}
+                            className="flex items-center gap-1.5 group rounded px-1.5 py-0.5 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                            title="Cliquer pour modifier le seuil"
+                          >
+                            <span className={cn(
+                              'font-mono font-semibold',
+                              a.seuilAlerte <= 5 ? 'text-red-600' : a.seuilAlerte <= 15 ? 'text-amber-600' : 'text-foreground'
+                            )}>
+                              {a.seuilAlerte}
+                            </span>
+                            <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 text-muted-foreground transition-opacity" />
+                          </button>
+                        )
+                      ) : (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          a.seuilAlerte <= 5 ? 'text-red-600' : a.seuilAlerte <= 15 ? 'text-amber-600' : 'text-foreground'
+                        )}>
+                          {a.seuilAlerte}
+                        </span>
+                      )}
+                    </td>
+
                     <td className="px-3 py-2.5">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         a.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
@@ -387,6 +465,13 @@ export default function Parametres() {
               </tbody>
             </table>
           </div>
+
+          {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Pencil className="w-3 h-3" />
+              Cliquez sur un seuil pour le modifier — rouge ≤ 5, orange ≤ 15
+            </p>
+          )}
         </div>
       )}
 
