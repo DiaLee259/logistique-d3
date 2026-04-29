@@ -31,7 +31,7 @@ export class CommandesController {
     return this.service.createPublique(token, body);
   }
 
-  // ── Routes protégées ──────────────────────────────────────────────────────
+  // ── Routes statiques (AVANT :id pour éviter conflit de routes) ───────────
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -57,6 +57,22 @@ export class CommandesController {
     return this.service.desactiverLien(id);
   }
 
+  // ── Corbeille — toutes ces routes AVANT @Get(':id') ──────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('corbeille/vider')
+  viderCorbeille() { return this.service.viderCorbeille(); }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('corbeille/:id')
+  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
+
+  // ── Routes par :id ────────────────────────────────────────────────────────
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   findById(@Param('id') id: string) {
@@ -69,7 +85,6 @@ export class CommandesController {
     return this.service.create(dto);
   }
 
-  // Log1 ET Log2 peuvent valider (traiter dès la réception)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
   @Patch(':id/valider')
@@ -98,7 +113,6 @@ export class CommandesController {
     return this.service.marquerBonRetourRecu(id, body.url);
   }
 
-  // Log1 ET Log2 peuvent expédier
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
   @Patch(':id/expedier')
@@ -106,7 +120,6 @@ export class CommandesController {
     return this.service.expedier(id, req.user.id, body.commentaire);
   }
 
-  // Tout le monde peut marquer livrée
   @UseGuards(JwtAuthGuard)
   @Patch(':id/livree')
   marquerLivree(@Param('id') id: string) {
@@ -118,10 +131,6 @@ export class CommandesController {
   annuler(@Param('id') id: string) {
     return this.service.annuler(id);
   }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('corbeille')
-  findCorbeille() { return this.service.findCorbeille(); }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/restaurer')

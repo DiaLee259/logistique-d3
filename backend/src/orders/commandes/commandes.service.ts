@@ -368,6 +368,26 @@ export class CommandesService {
     });
   }
 
+  async supprimerDefinitivement(id: string) {
+    // Nullifier les FK sur mouvements et livraisons avant suppression
+    await this.prisma.mouvement.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
+    await this.prisma.livraison.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
+    // LigneCommande a onDelete: Cascade → supprimées automatiquement
+    return this.prisma.commande.delete({ where: { id } });
+  }
+
+  async viderCorbeille() {
+    const items = await this.prisma.commande.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: { id: true },
+    });
+    if (!items.length) return { count: 0 };
+    const ids = items.map(i => i.id);
+    await this.prisma.mouvement.updateMany({ where: { commandeId: { in: ids } }, data: { commandeId: null } });
+    await this.prisma.livraison.updateMany({ where: { commandeId: { in: ids } }, data: { commandeId: null } });
+    return this.prisma.commande.deleteMany({ where: { id: { in: ids } } });
+  }
+
   async findCorbeille() {
     return this.prisma.commande.findMany({
       where: { NOT: { deletedAt: null } },

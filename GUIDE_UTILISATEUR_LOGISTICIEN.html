@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guide Utilisateur — Logistique D3</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 11pt;
+      color: #1a1a2e;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── Mise en page impression ── */
+    @media print {
+      .no-print { display: none; }
+      .page-break { page-break-before: always; }
+      body { font-size: 10pt; }
+      .cover { min-height: 100vh; }
+    }
+
+    /* ── Bouton imprimer ── */
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+      z-index: 999;
+    }
+    .print-btn:hover { background: #1d4ed8; }
+
+    /* ── Page de couverture ── */
+    .cover {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #3b82f6 100%);
+      color: white;
+      padding: 80px 60px;
+      min-height: 500px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .cover-logo {
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 30px;
+    }
+    .cover h1 {
+      font-size: 36pt;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 10px;
+    }
+    .cover h2 {
+      font-size: 16pt;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-bottom: 40px;
+    }
+    .cover-info {
+      display: flex;
+      gap: 40px;
+      margin-top: 20px;
+    }
+    .cover-info div {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      padding: 14px 20px;
+    }
+    .cover-info .label {
+      font-size: 9pt;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .cover-info .value {
+      font-size: 11pt;
+      font-weight: 600;
+    }
+    .cover-url {
+      margin-top: 50px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px;
+      padding: 16px 24px;
+      display: inline-block;
+    }
+    .cover-url .url-label { font-size: 9pt; opacity: 0.7; margin-bottom: 4px; }
+    .cover-url .url { font-size: 13pt; font-weight: 700; font-family: monospace; }
+
+    /* ── Contenu ── */
+    .content {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 40px 50px;
+    }
+
+    /* ── Sommaire ── */
+    .toc {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 40px;
+    }
+    .toc h2 {
+      font-size: 14pt;
+      color: #2563eb;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toc ol {
+      list-style: none;
+      counter-reset: toc-counter;
+    }
+    .toc ol li {
+      counter-increment: toc-counter;
+      padding: 5px 0;
+      border-bottom: 1px dotted #cbd5e1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5pt;
+    }
+    .toc ol li::before {
+      content: counter(toc-counter) ". ";
+      color: #2563eb;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+    .toc ol li:last-child { border-bottom: none; }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 38px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+      color: white;
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+    .section-header .num {
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 11pt;
+      flex-shrink: 0;
+    }
+    .section-header h2 {
+      font-size: 13pt;
+      font-weight: 700;
+    }
+    .section-header .icon {
+      margin-left: auto;
+      font-size: 18pt;
+      opacity: 0.7;
+    }
+
+    h3 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin: 18px 0 8px;
+      padding-left: 10px;
+      border-left: 3px solid #2563eb;
+    }
+
+    p { margin-bottom: 8px; color: #374151; font-size: 10.5pt; }
+
+    /* ── Listes ── */
+    ul, ol {
+      padding-left: 22px;
+      margin-bottom: 10px;
+    }
+    li {
+      margin-bottom: 5px;
+      color: #374151;
+      font-size: 10.5pt;
+    }
+
+    /* ── Boîtes ── */
+    .box {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-size: 10.5pt;
+    }
+    .box-blue {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+    .box-green {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+    .box-amber {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+    .box-red {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+    .box-title {
+      font-weight: 700;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 10pt;
+    }
+    th {
+      background: #1e3a5f;
+      color: white;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      color: #374151;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    tr:hover td { background: #eff6ff; }
+
+    /* ── Badge statut ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 9pt;
+      font-weight: 600;
+    }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-amber { background: #fef3c7; color: #b45309; }
+    .badge-red { background: #fee2e2; color: #dc2626; }
+    .badge-gray { background: #f3f4f6; color: #6b7280; }
+    .badge-purple { background: #f3e8ff; color: #7e22ce; }
+
+    /* ── Étapes numérotées ── */
+    .steps {
+      counter-reset: step-counter;
+      list-style: none;
+      padding: 0;
+    }
+    .steps li {
+      counter-increment: step-counter;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .steps li::before {
+      content: counter(step-counter);
+      background: #2563eb;
+      color: white;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9pt;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── Pied de page ── */
+    .footer {
+      margin-top: 60px;
+      padding: 24px 32px;
+      background: #1e3a5f;
+      color: rgba(255,255,255,0.7);
+      border-radius: 12px;
+      text-align: center;
+      font-size: 9.5pt;
+    }
+    .footer strong { color: white; }
+
+    /* ── Séparateur ── */
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+
+    kbd {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 9.5pt;
+      font-family: monospace;
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨️ Enregistrer en PDF</button>
+
+<!-- COUVERTURE -->
+<div class="cover">
+  <div class="cover-logo">📦</div>
+  <h1>Logistique D3</h1>
+  <h2>Guide Utilisateur — Logisticien</h2>
+
+  <div class="cover-info">
+    <div>
+      <div class="label">Version</div>
+      <div class="value">1.0 — 2026</div>
+    </div>
+    <div>
+      <div class="label">Destinataires</div>
+      <div class="value">Logisticien 1 &amp; 2</div>
+    </div>
+    <div>
+      <div class="label">Application</div>
+      <div class="value">Gestion Stock Fibre Optique</div>
+    </div>
+  </div>
+
+  <div class="cover-url">
+    <div class="url-label">🌐 Accès à l'application</div>
+    <div class="url">logistique-d3-frontend.vercel.app</div>
+  </div>
+</div>
+
+<!-- CONTENU -->
+<div class="content">
+
+  <!-- SOMMAIRE -->
+  <div class="toc">
+    <h2>📋 Sommaire</h2>
+    <ol>
+      <li><span>Connexion à l'application</span><span style="color:#94a3b8">p.2</span></li>
+      <li><span>Présentation de l'interface</span><span style="color:#94a3b8">p.2</span></li>
+      <li><span>Tableau de bord (Dashboard)</span><span style="color:#94a3b8">p.3</span></li>
+      <li><span>Gestion des commandes prestataires</span><span style="color:#94a3b8">p.3</span></li>
+      <li><span>Livraisons fournisseurs</span><span style="color:#94a3b8">p.5</span></li>
+      <li><span>Gestion du stock</span><span style="color:#94a3b8">p.6</span></li>
+      <li><span>Mouvements de stock</span><span style="color:#94a3b8">p.6</span></li>
+      <li><span>Inventaires physiques</span><span style="color:#94a3b8">p.7</span></li>
+      <li><span>Commandes TS (Approvisionnement périodique)</span><span style="color:#94a3b8">p.8</span></li>
+      <li><span>Liens prestataires</span><span style="color:#94a3b8">p.9</span></li>
+    </ol>
+  </div>
+
+  <!-- 1. CONNEXION -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">1</div>
+      <h2>Connexion à l'application</h2>
+      <span class="icon">🔐</span>
+    </div>
+
+    <p>Ouvrez votre navigateur (Chrome, Firefox ou Edge) et accédez à l'adresse :</p>
+
+    <div class="box box-blue" style="text-align:center; font-family: monospace; font-size: 13pt; font-weight: 700;">
+      logistique-d3-frontend.vercel.app
+    </div>
+
+    <h3>Identifiants de connexion</h3>
+    <table>
+      <tr>
+        <th>Rôle</th>
+        <th>Email</th>
+        <th>Mot de passe</th>
+        <th>Accès</th>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">Admin</span></td>
+        <td>admin@logistique-d3.fr</td>
+        <td>password123</td>
+        <td>Accès complet</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">Logisticien 1</span></td>
+        <td>log1@logistique-d3.fr</td>
+        <td>password123</td>
+        <td>Validation commandes</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">Logisticien 2</span></td>
+        <td>log2@logistique-d3.fr</td>
+        <td>password123</td>
+        <td>Expédition commandes</td>
+      </tr>
+    </table>
+
+    <div class="box box-amber">
+      <div class="box-title">⚠️ Sécurité</div>
+      Il est recommandé de changer votre mot de passe lors de votre première connexion via la section <strong>Paramètres</strong>.
+    </div>
+  </div>
+
+  <!-- 2. INTERFACE -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="num">2</div>
+      <h2>Présentation de l'interface</h2>
+      <span class="icon">🖥️</span>
+    </div>
+
+    <p>L'application est organisée en plusieurs zones :</p>
+
+    <table>
+      <tr>
+        <th>Zone</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td>🗂️ <strong>Menu latéral gauche</strong></td>
+        <td>Navigation entre les modules (Dashboard, Commandes, Stock, Livraisons…)</td>
+      </tr>
+      <tr>
+        <td>🔔 <strong>Cloche de notifications</strong></td>
+        <td>Alertes temps réel (nouvelle commande, stock faible, inventaire requis…)</td>
+      </tr>
+      <tr>
+        <td>🌙 <strong>Mode sombre/clair</strong></td>
+        <td>Bouton en haut à droite pour basculer l'affichage</td>
+      </tr>
+      <tr>
+        <td>📊 <strong>Zone centrale</strong></td>
+        <td>Contenu du module sélectionné</td>
+      </tr>
+    </table>
+
+    <div class="box box-blue">
+      <div class="box-title">💡 Bon à savoir</div>
+      L'application se met à jour automatiquement toutes les 15 secondes. Vous voyez les nouvelles commandes sans avoir à recharger la page.
+    </div>
+  </div>
+
+  <!-- 3. DASHBOARD -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">3</div>
+      <h2>Tableau de bord (Dashboard)</h2>
+      <span class="icon">📊</span>
+    </div>
+
+    <p>Le dashboard affiche un résumé complet de l'activité logistique en temps réel.</p>
+
+    <h3>Indicateurs clés (KPIs)</h3>
+    <table>
+      <tr>
+        <th>Indicateur</th>
+        <th>Signification</th>
+      </tr>
+      <tr>
+        <td>📦 Commandes en attente</td>
+        <td>Commandes reçues non encore traitées — à traiter en priorité</td>
+      </tr>
+      <tr>
+        <td>⚠️ Alertes stock</td>
+        <td>Articles dont le stock est en dessous du seuil d'alerte</td>
+      </tr>
+      <tr>
+        <td>📬 Expédiées (non livrées)</td>
+        <td>Commandes envoyées aux prestataires en attente de confirmation</td>
+      </tr>
+      <tr>
+        <td>✅ Livrées ce mois</td>
+        <td>Commandes confirmées reçues par les prestataires</td>
+      </tr>
+    </table>
+
+    <h3>Filtres disponibles</h3>
+    <p>Vous pouvez filtrer les graphiques par <strong>mois</strong>, <strong>département</strong> ou <strong>entrepôt</strong> via les menus déroulants en haut du dashboard.</p>
+  </div>
+
+  <!-- 4. COMMANDES -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="num">4</div>
+      <h2>Gestion des commandes prestataires</h2>
+      <span class="icon">📋</span>
+    </div>
+
+    <h3>Cycle de vie d'une commande</h3>
+    <p>Chaque commande suit un processus en plusieurs étapes :</p>
+
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin: 12px 0; align-items:center;">
+      <span class="badge badge-gray">📥 En attente</span>
+      <span style="color:#94a3b8">→</span>
+      <span class="badge badge-blue">🔍 En validation</span>
+      <span style="color:#94a3b8">→</span>
+      <span class="badge badge-green">✅ Validée</span>
+      <span style="color:#94a3b8">→</span>
+      <span class="badge badge-amber">⏳ En attente Log2</span>
+      <span style="color:#94a3b8">→</span>
+      <span class="badge badge-purple">🚚 Expédiée</span>
+      <span style="color:#94a3b8">→</span>
+      <span class="badge badge-green">📦 Livrée</span>
+    </div>
+
+    <h3>Rôle du Logisticien 1 — Validation</h3>
+    <ol class="steps">
+      <li>Aller dans le menu <strong>Commandes</strong></li>
+      <li>Cliquer sur une commande <span class="badge badge-gray">En attente</span></li>
+      <li>Vérifier les articles demandés et les quantités disponibles en stock</li>
+      <li>Renseigner les <strong>quantités validées</strong> pour chaque article</li>
+      <li>Cliquer sur <strong>"Valider la commande"</strong> → statut passe à <span class="badge badge-green">Validée</span></li>
+    </ol>
+
+    <h3>Rôle du Logisticien 2 — Expédition</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Commandes</strong>, filtrer par statut <span class="badge badge-green">Validée</span></li>
+      <li>Cliquer sur la commande à expédier</li>
+      <li>Vérifier les quantités à fournir</li>
+      <li>Cliquer sur <strong>"Expédier"</strong> → le stock est automatiquement décrémenté</li>
+      <li>Un bon d'expédition peut être envoyé par email au prestataire</li>
+      <li>Quand le prestataire confirme réception : cliquer <strong>"Marquer comme livrée"</strong></li>
+    </ol>
+
+    <h3>Statuts des commandes</h3>
+    <table>
+      <tr><th>Statut</th><th>Signification</th><th>Qui agit ?</th></tr>
+      <tr><td><span class="badge badge-gray">En attente</span></td><td>Commande reçue, non traitée</td><td>Logisticien 1</td></tr>
+      <tr><td><span class="badge badge-blue">En validation</span></td><td>En cours de traitement</td><td>Logisticien 1</td></tr>
+      <tr><td><span class="badge badge-green">Validée</span></td><td>Approuvée, attente expédition</td><td>Logisticien 2</td></tr>
+      <tr><td><span class="badge badge-amber">En attente Log2</span></td><td>Transmise à Log2</td><td>Logisticien 2</td></tr>
+      <tr><td><span class="badge badge-purple">Expédiée</span></td><td>Envoyée au prestataire</td><td>Prestataire</td></tr>
+      <tr><td><span class="badge badge-green">Livrée</span></td><td>Confirmée reçue</td><td>Logisticien</td></tr>
+      <tr><td><span class="badge badge-red">Annulée</span></td><td>Commande annulée</td><td>—</td></tr>
+    </table>
+
+    <h3>Créer une commande manuellement</h3>
+    <ol class="steps">
+      <li>Cliquer sur <strong>"+ Nouvelle commande"</strong> en haut à droite</li>
+      <li>Renseigner le département, le demandeur et l'email</li>
+      <li>Ajouter les articles et les quantités demandées</li>
+      <li>Cliquer sur <strong>"Créer"</strong></li>
+    </ol>
+
+    <div class="box box-blue">
+      <div class="box-title">📄 Import Excel</div>
+      Il est possible d'importer un bon de commande au format Excel (.xlsx). Cliquer sur <strong>"Import Excel"</strong> et sélectionner le fichier. L'application associera automatiquement les articles reconnus.
+    </div>
+
+    <h3>Fiche de perception</h3>
+    <p>Sur chaque commande validée, un bouton <strong>"Télécharger fiche de perception"</strong> permet de générer un PDF récapitulatif à faire signer.</p>
+
+    <h3>Supprimer une commande</h3>
+    <div class="box box-amber">
+      <div class="box-title">⚠️ Attention</div>
+      L'icône 🗑️ sur chaque ligne supprime définitivement la commande. Une confirmation est demandée. Utiliser uniquement en phase de test ou en cas d'erreur de saisie.
+    </div>
+  </div>
+
+  <!-- 5. LIVRAISONS -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="num">5</div>
+      <h2>Livraisons fournisseurs</h2>
+      <span class="icon">🚚</span>
+    </div>
+
+    <p>Cette section concerne les <strong>réapprovisionnements reçus de vos fournisseurs</strong>. Chaque livraison enregistrée met automatiquement à jour le stock de l'entrepôt concerné.</p>
+
+    <h3>Enregistrer une nouvelle livraison</h3>
+    <ol class="steps">
+      <li>Aller dans le menu <strong>Livraisons</strong></li>
+      <li>Cliquer sur <strong>"+ Nouvelle livraison"</strong></li>
+      <li>Renseigner le nom du <strong>fournisseur</strong></li>
+      <li>Sélectionner l'<strong>entrepôt de réception</strong></li>
+      <li>Ajouter les articles reçus et les <strong>quantités réellement reçues</strong></li>
+      <li>Optionnel : photographier et uploader le bon de livraison (BL)</li>
+      <li>Cliquer sur <strong>"Enregistrer"</strong> → le stock est mis à jour automatiquement</li>
+    </ol>
+
+    <div class="box box-green">
+      <div class="box-title">✅ Mise à jour automatique du stock</div>
+      Dès qu'une livraison est enregistrée, les quantités en stock des articles concernés sont automatiquement incrémentées dans l'entrepôt sélectionné.
+    </div>
+
+    <h3>Filtres disponibles</h3>
+    <ul>
+      <li><strong>Mois</strong> : filtrer par période</li>
+      <li><strong>Entrepôt</strong> : voir uniquement les livraisons d'un entrepôt</li>
+      <li><strong>Article</strong> : rechercher les livraisons contenant un article spécifique</li>
+    </ul>
+  </div>
+
+  <!-- 6. STOCK -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">6</div>
+      <h2>Gestion du stock</h2>
+      <span class="icon">📦</span>
+    </div>
+
+    <p>La page <strong>Stock</strong> affiche les quantités disponibles pour chaque article, par entrepôt.</p>
+
+    <h3>Consulter le stock</h3>
+    <ol class="steps">
+      <li>Aller dans le menu <strong>Stock</strong></li>
+      <li>Sélectionner un entrepôt dans le menu déroulant (ou laisser "Tous les entrepôts")</li>
+      <li>Le tableau affiche : article, référence, stock théorique, seuil d'alerte, statut</li>
+    </ol>
+
+    <h3>Alertes de stock</h3>
+    <p>Les articles dont le stock est <strong>en dessous du seuil d'alerte</strong> apparaissent en rouge et sont signalés dans les notifications. Cela indique qu'un réapprovisionnement est nécessaire.</p>
+
+    <table>
+      <tr><th>Indicateur</th><th>Signification</th></tr>
+      <tr><td>🟢 Vert</td><td>Stock au-dessus du seuil d'alerte</td></tr>
+      <tr><td>🔴 Rouge</td><td>Stock en dessous du seuil — réapprovisionnement requis</td></tr>
+      <tr><td>⚪ Gris</td><td>Aucun stock enregistré</td></tr>
+    </table>
+  </div>
+
+  <!-- 7. MOUVEMENTS -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="num">7</div>
+      <h2>Mouvements de stock</h2>
+      <span class="icon">↔️</span>
+    </div>
+
+    <p>Les mouvements retracent <strong>tous les flux d'articles</strong> : entrées (réceptions fournisseurs) et sorties (expéditions prestataires).</p>
+
+    <h3>Types de mouvements</h3>
+    <table>
+      <tr><th>Type</th><th>Description</th><th>Impact stock</th></tr>
+      <tr>
+        <td><span class="badge badge-green">ENTRÉE</span></td>
+        <td>Réception d'articles (livraison fournisseur)</td>
+        <td>Stock +</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">SORTIE</span></td>
+        <td>Envoi d'articles (commande prestataire)</td>
+        <td>Stock −</td>
+      </tr>
+    </table>
+
+    <h3>Créer un mouvement manuel</h3>
+    <ol class="steps">
+      <li>Cliquer sur <strong>"+ Nouveau mouvement"</strong></li>
+      <li>Choisir le type (Entrée ou Sortie)</li>
+      <li>Sélectionner l'article, l'entrepôt, les quantités</li>
+      <li>Renseigner le département, numéro de commande et manager si applicable</li>
+      <li>Valider — le stock est mis à jour instantanément</li>
+    </ol>
+
+    <h3>Suivi envoi / réception</h3>
+    <p>Chaque mouvement possède deux cases à cocher :</p>
+    <ul>
+      <li><strong>Envoyé</strong> : l'article a bien été expédié</li>
+      <li><strong>Reçu</strong> : le destinataire a confirmé la réception</li>
+    </ul>
+
+    <div class="box box-blue">
+      <div class="box-title">💡 Import en lot</div>
+      Il est possible de créer plusieurs mouvements en une fois via l'import de fichier Excel.
+    </div>
+  </div>
+
+  <!-- 8. INVENTAIRES -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">8</div>
+      <h2>Inventaires physiques</h2>
+      <span class="icon">🔢</span>
+    </div>
+
+    <p>La page <strong>Inventaire</strong> permet de réaliser des comptages physiques et de comparer avec le stock théorique du système.</p>
+
+    <h3>Réaliser un inventaire</h3>
+    <ol class="steps">
+      <li>Aller dans le menu <strong>Inventaire</strong></li>
+      <li>Sélectionner l'entrepôt à inventorier</li>
+      <li>Cliquer sur <strong>"Saisir un inventaire"</strong></li>
+      <li>Pour chaque article, saisir la <strong>quantité réellement comptée</strong></li>
+      <li>Cliquer sur <strong>"Valider l'inventaire"</strong></li>
+    </ol>
+
+    <h3>Lecture du tableau</h3>
+    <table>
+      <tr><th>Colonne</th><th>Signification</th></tr>
+      <tr><td>Stock théorique</td><td>Quantité calculée par le système</td></tr>
+      <tr><td>Dernière qté comptée</td><td>Résultat du dernier inventaire physique</td></tr>
+      <tr><td>Écart</td><td>Différence entre comptage et système (+ = surplus, − = manque)</td></tr>
+      <tr><td>Date inventaire</td><td>Date et heure du dernier comptage</td></tr>
+    </table>
+
+    <h3>Historique des inventaires</h3>
+    <p>Cliquer sur l'onglet <strong>"Historique"</strong> pour consulter toutes les sessions d'inventaire passées, avec la date, l'entrepôt et les quantités comptées.</p>
+
+    <div class="box box-amber">
+      <div class="box-title">⚠️ Alerte inventaire</div>
+      Si un entrepôt n'a pas fait l'objet d'un inventaire depuis plus de <strong>3 mois</strong>, une alerte apparaît sur le tableau de bord et dans les notifications.
+    </div>
+  </div>
+
+  <!-- 9. COMMANDES TS -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="num">9</div>
+      <h2>Commandes TS (Approvisionnement périodique)</h2>
+      <span class="icon">🔄</span>
+    </div>
+
+    <p>Les <strong>Commandes TS</strong> (Tranche Successive) permettent de planifier et suivre l'approvisionnement périodique de plusieurs entrepôts sur une période définie.</p>
+
+    <h3>Créer une commande TS</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Commandes TS</strong> et cliquer sur <strong>"+ Nouvelle commande TS"</strong></li>
+      <li>Renseigner le titre, la date de début et de fin</li>
+      <li>Sélectionner les articles concernés</li>
+      <li>Pour chaque article, saisir les quantités <strong>PROD</strong>, <strong>SAV</strong> et <strong>Malfaçon</strong></li>
+      <li>Définir le <strong>taux de répartition</strong> par entrepôt (total doit faire 100%)</li>
+      <li>Valider la création</li>
+    </ol>
+
+    <h3>Suivi d'une commande TS</h3>
+    <p>Une fois créée, la commande TS affiche pour chaque article et entrepôt :</p>
+    <ul>
+      <li>Les <strong>quantités commandées</strong> (calculées depuis les taux de répartition)</li>
+      <li>Les <strong>quantités reçues</strong> (mises à jour automatiquement via les livraisons)</li>
+      <li>L'avancement en temps réel</li>
+    </ul>
+
+    <h3>Clôturer une commande TS</h3>
+    <p>Quand toutes les livraisons sont reçues, cliquer sur <strong>"Clôturer"</strong> pour archiver la commande.</p>
+
+    <div class="box box-green">
+      <div class="box-title">✅ Statuts</div>
+      <span class="badge badge-blue">EN COURS</span> : commande active &nbsp;|&nbsp;
+      <span class="badge badge-gray">CLÔTURÉE</span> : archivée, consultable en lecture seule
+    </div>
+  </div>
+
+  <!-- 10. LIENS PRESTATAIRE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="num">10</div>
+      <h2>Liens prestataires</h2>
+      <span class="icon">🔗</span>
+    </div>
+
+    <p>Les <strong>liens prestataires</strong> permettent à vos prestataires de soumettre leurs commandes via un formulaire en ligne, <strong>sans avoir de compte</strong> dans l'application.</p>
+
+    <h3>Générer un lien</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Commandes</strong> et cliquer sur <strong>"Liens prestataire"</strong></li>
+      <li>Saisir un nom pour le lien (ex : "Formulaire Département 49")</li>
+      <li>Définir la durée de validité (en jours)</li>
+      <li>Cliquer sur <strong>"Générer"</strong></li>
+      <li>Copier le lien et l'envoyer au prestataire par email</li>
+    </ol>
+
+    <h3>Utilisation par le prestataire</h3>
+    <p>Le prestataire ouvre le lien dans son navigateur, remplit le formulaire (articles, quantités, département…) et soumet sa commande. Elle apparaît immédiatement dans l'application avec le statut <span class="badge badge-gray">En attente</span>.</p>
+
+    <h3>Suivi des commandes prestataires</h3>
+    <p>Le prestataire peut suivre sa commande en saisissant son numéro de commande sur la page <strong>/suivi</strong>.</p>
+
+    <div class="box box-amber">
+      <div class="box-title">⚠️ Expiration des liens</div>
+      Un lien expiré ne peut plus être utilisé. Il peut être désactivé manuellement depuis la liste des liens. Générez un nouveau lien si nécessaire.
+    </div>
+  </div>
+
+  <hr />
+
+  <!-- PIED DE PAGE -->
+  <div class="footer">
+    <p><strong>Logistique D3</strong> — Application de gestion de stock fibre optique</p>
+    <p style="margin-top:6px;">🌐 logistique-d3-frontend.vercel.app &nbsp;|&nbsp; 📧 Support : admin@logistique-d3.fr</p>
+    <p style="margin-top:6px; font-size:9pt; opacity:0.6;">Document confidentiel — Usage interne uniquement — Version 1.0 — 2026</p>
+  </div>
+
+</div>
+
+</body>
+</html>

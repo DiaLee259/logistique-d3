@@ -10,21 +10,18 @@ export class CommandesTSController {
   @Get()
   findAll() { return this.service.findAll(); }
 
-  @Get(':id')
-  findById(@Param('id') id: string) { return this.service.findById(id); }
+  // ── Corbeille — AVANT :id ─────────────────────────────────────────────────
 
-  @Post()
-  create(@Body() dto: any, @Request() req: any) {
-    return this.service.create(dto, req.user.userId);
-  }
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
 
-  @Put(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.service.update(id, dto);
-  }
+  @Delete('corbeille/vider')
+  viderCorbeille() { return this.service.viderCorbeille(); }
 
-  @Put(':id/cloturer')
-  cloturer(@Param('id') id: string) { return this.service.cloturer(id); }
+  @Delete('corbeille/:id')
+  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
+
+  // ── Sous-ressources (2 segments — pas de conflit avec :id) ───────────────
 
   @Put('lignes/:ligneId')
   updateLigne(@Param('ligneId') ligneId: string, @Body() dto: any) {
@@ -36,8 +33,23 @@ export class CommandesTSController {
     return this.service.updateRepartition(repartitionId, dto);
   }
 
-  @Get('corbeille')
-  findCorbeille() { return this.service.findCorbeille(); }
+  // ── Routes par :id ────────────────────────────────────────────────────────
+
+  @Get(':id')
+  findById(@Param('id') id: string) { return this.service.findById(id); }
+
+  @Post()
+  create(@Body() dto: any, @Request() req: any) {
+    return this.service.create(dto, req.user.userId ?? req.user.id);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: any) {
+    return this.service.update(id, dto);
+  }
+
+  @Put(':id/cloturer')
+  cloturer(@Param('id') id: string) { return this.service.cloturer(id); }
 
   @Patch(':id/restaurer')
   restore(@Param('id') id: string) { return this.service.restore(id); }

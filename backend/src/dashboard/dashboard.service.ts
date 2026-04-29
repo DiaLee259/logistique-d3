@@ -31,6 +31,14 @@ export class DashboardService {
     if (articleId) mouvFilter.articleId = articleId;
     if (debut || fin) mouvFilter.date = dateFilter;
 
+    // Filtre de date pour commandes (sur dateReception)
+    const cmdDateFilter: any = { deletedAt: null };
+    if (debut || fin) {
+      cmdDateFilter.dateReception = {};
+      if (debut) cmdDateFilter.dateReception.gte = new Date(debut);
+      if (fin) cmdDateFilter.dateReception.lte = new Date(fin + 'T23:59:59');
+    }
+
     const [
       totalEntrees,
       totalSorties,
@@ -39,6 +47,9 @@ export class DashboardService {
       commandesAttLog2,
       commandesValidees,
       commandesExpediees,
+      commandesLivrees,
+      commandesTraitees,
+      commandesTotal,
       stocksEnAlerte,
     ] = await Promise.all([
       this.prisma.mouvement.aggregate({
@@ -50,10 +61,13 @@ export class DashboardService {
         _sum: { quantiteFournie: true },
       }),
       this.prisma.article.count({ where: { actif: true } }),
-      this.prisma.commande.count({ where: { statut: 'EN_ATTENTE' } }),
-      this.prisma.commande.count({ where: { statut: 'EN_ATTENTE_LOG2' } }),
-      this.prisma.commande.count({ where: { statut: 'VALIDEE' } }),
-      this.prisma.commande.count({ where: { statut: 'EXPEDIEE' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: 'EN_ATTENTE' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: 'EN_ATTENTE_LOG2' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: 'VALIDEE' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: 'EXPEDIEE' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: 'LIVREE' } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: { in: ['EXPEDIEE', 'LIVREE'] } } }),
+      this.prisma.commande.count({ where: { ...cmdDateFilter, statut: { not: 'ANNULEE' } } }),
       this.prisma.stock.count({ where: { quantite: { lte: 10 } } }),
     ]);
 
@@ -69,8 +83,11 @@ export class DashboardService {
       commandesAttLog2,
       commandesValidees,
       commandesExpediees,
+      commandesLivrees,
+      commandesTraitees,
+      commandesTotal,
       stocksEnAlerte,
-      tauxService: sorties > 0 ? Math.round((sorties / (entrees + sorties)) * 100) : 0,
+      tauxService: commandesTotal > 0 ? Math.round((commandesTraitees / commandesTotal) * 100) : 0,
     };
   }
 
@@ -130,7 +147,7 @@ export class DashboardService {
 
   async getVolumeParDemandeur(mois?: string) {
     const parsed = mois ? parseMois(mois) : {};
-    const where: any = { statut: { not: 'ANNULEE' } };
+    const where: any = { statut: { not: 'ANNULEE' }, deletedAt: null };
     if (parsed.dateDebut || parsed.dateFin) {
       where.dateReception = {};
       if (parsed.dateDebut) where.dateReception.gte = new Date(parsed.dateDebut);
@@ -153,12 +170,16 @@ export class DashboardService {
 
   async getDelaisMoyens() {
     const commandes = await this.prisma.commande.findMany({
-      where: { statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] } },
+      where: {
+        deletedAt: null,
+        statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
+      },
       select: {
         dateReception: true,
         dateTraitement: true,
         dateExpedition: true,
         dateLivraison: true,
+        statut: true,
       },
     });
 
@@ -188,6 +209,8 @@ export class DashboardService {
       traitementToExpedition: cntTTE > 0 ? toDays(sumTTE / cntTTE) : null,
       expeditionToLivraison: cntETL > 0 ? toDays(sumETL / cntETL) : null,
       totalCommandesAnalysees: commandes.length,
+      nbTraitees: cntTTE,
+      nbLivrees: cntETL,
     };
   }
 
@@ -214,6 +237,7 @@ export class DashboardService {
   async getResumeCommandes() {
     const par_statut = await this.prisma.commande.groupBy({
       by: ['statut'],
+      where: { deletedAt: null },
       _count: { id: true },
     });
     return par_statut.map(s => ({ statut: s.statut, count: s._count.id }));

@@ -121,6 +121,15 @@ export class LivraisonsService {
     });
   }
 
+  async supprimerDefinitivement(id: string) {
+    // LigneLivraison a onDelete: Cascade → supprimées automatiquement
+    return this.prisma.livraison.delete({ where: { id } });
+  }
+
+  async viderCorbeille() {
+    return this.prisma.livraison.deleteMany({ where: { NOT: { deletedAt: null } } });
+  }
+
   async findCorbeille() {
     return this.prisma.livraison.findMany({
       where: { NOT: { deletedAt: null } },

@@ -106,6 +106,8 @@ export const commandesApi = {
     api.get('/commandes', { params }).then(r => r.data),
   corbeille: () => api.get('/commandes/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/commandes/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/commandes/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/commandes/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/commandes/${id}`).then(r => r.data),
   create: (data: any) => api.post('/commandes', data).then(r => r.data),
   valider: (id: string, data: any) =>
@@ -143,6 +145,8 @@ export const livraisonsApi = {
     api.get('/livraisons', { params }).then(r => r.data),
   corbeille: () => api.get('/livraisons/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/livraisons/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/livraisons/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/livraisons/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/livraisons/${id}`).then(r => r.data),
   create: (data: any) => api.post('/livraisons', data).then(r => r.data),
   updateStatut: (id: string, data: any) =>
@@ -189,6 +193,8 @@ export const commandesTSApi = {
   list: () => api.get('/commandes-ts').then(r => r.data),
   corbeille: () => api.get('/commandes-ts/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/commandes-ts/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/commandes-ts/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/commandes-ts/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/commandes-ts/${id}`).then(r => r.data),
   kpis: (id: string) => api.get(`/commandes-ts/${id}/kpis`).then(r => r.data),
   create: (data: any) => api.post('/commandes-ts', data).then(r => r.data),

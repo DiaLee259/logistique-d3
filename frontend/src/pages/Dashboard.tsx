@@ -145,10 +145,15 @@ export default function Dashboard() {
 
       {/* KPIs commandes */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard title="Articles actifs" value={kpis?.articlesActifs ?? 0} icon={Package} />
         <KpiCard title="Cmd en attente" value={kpis?.commandesEnAttente ?? 0} icon={ClipboardList} variant={kpis?.commandesEnAttente && kpis.commandesEnAttente > 0 ? 'warning' : 'success'} />
         <KpiCard title="Cmd expédiées" value={kpis?.commandesExpediees ?? 0} icon={Truck} variant="info" />
-        <KpiCard title="Taux de service" value={`${kpis?.tauxService ?? 0}%`} icon={CheckCircle} variant="success" />
+        <KpiCard title="Cmd livrées" value={kpis?.commandesLivrees ?? 0} icon={CheckCircle} variant="success" />
+        <KpiCard
+          title="Taux de traitement"
+          value={kpis?.commandesTotal ? `${Math.round(((kpis.commandesTraitees ?? 0) / kpis.commandesTotal) * 100)}%` : '—'}
+          icon={Activity}
+          variant="success"
+        />
       </div>
 
       {/* KPIs délais */}

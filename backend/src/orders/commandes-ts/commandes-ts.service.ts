@@ -149,6 +149,15 @@ export class CommandesTSService {
     });
   }
 
+  async supprimerDefinitivement(id: string) {
+    // LigneCommandeTS et RepartitionCommandeTS ont onDelete: Cascade
+    return this.prisma.commandeTS.delete({ where: { id } });
+  }
+
+  async viderCorbeille() {
+    return this.prisma.commandeTS.deleteMany({ where: { NOT: { deletedAt: null } } });
+  }
+
   async findCorbeille() {
     return this.prisma.commandeTS.findMany({
       where: { NOT: { deletedAt: null } },

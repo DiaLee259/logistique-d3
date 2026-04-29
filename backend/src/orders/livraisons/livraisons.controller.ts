@@ -11,6 +11,19 @@ export class LivraisonsController {
   @Get()
   findAll(@Query() filters: any) { return this.service.findAll(filters); }
 
+  // ── Corbeille — AVANT :id ─────────────────────────────────────────────────
+
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @Delete('corbeille/vider')
+  viderCorbeille() { return this.service.viderCorbeille(); }
+
+  @Delete('corbeille/:id')
+  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
+
+  // ── Routes par :id ────────────────────────────────────────────────────────
+
   @Get(':id')
   findById(@Param('id') id: string) { return this.service.findById(id); }
 
@@ -23,9 +36,6 @@ export class LivraisonsController {
   updateStatut(@Param('id') id: string, @Body() body: { statut: any; bonLivraisonUrl?: string; bonCommandeUrl?: string }) {
     return this.service.updateStatut(id, body.statut, body);
   }
-
-  @Get('corbeille')
-  findCorbeille() { return this.service.findCorbeille(); }
 
   @Patch(':id/restaurer')
   restore(@Param('id') id: string) { return this.service.restore(id); }
