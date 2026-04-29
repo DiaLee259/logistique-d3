@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import logoTs from '@/assets/logo-ts.jpg';
+import Logo from '@/components/Logo';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -35,25 +35,17 @@ export default function AppSidebar() {
       collapsed ? 'w-14' : 'w-56',
     )}>
       {/* Logo TechnoSmart */}
-      <div className="flex items-center border-b border-sidebar-border overflow-hidden" style={{ background: '#181d2e', minHeight: 56 }}>
+      <div
+        className="flex items-center border-b border-sidebar-border overflow-hidden"
+        style={{ background: '#181d2e', minHeight: 56 }}
+      >
         {collapsed ? (
-          /* Mode réduit : juste le symbole TS */
           <div className="w-14 flex items-center justify-center py-3">
-            <img
-              src={logoTs}
-              alt="TS"
-              className="w-9 h-9 rounded object-cover"
-              style={{ objectPosition: '0% center' }}
-            />
+            <Logo variant="icon" height={34} />
           </div>
         ) : (
-          /* Mode déployé : logo complet */
-          <div className="flex-1 px-2 py-2">
-            <img
-              src={logoTs}
-              alt="TechnoSmart"
-              className="h-10 w-full object-contain object-left"
-            />
+          <div className="flex-1 px-3 py-2.5">
+            <Logo variant="full" height={38} />
           </div>
         )}
       </div>

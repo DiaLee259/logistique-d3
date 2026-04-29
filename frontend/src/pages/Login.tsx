@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Wifi, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import Logo from '@/components/Logo';
 
 const schema = z.object({
   email: z.string().email('Email invalide'),
@@ -35,42 +36,42 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0f1523 0%, #181d2e 50%, #0f1523 100%)' }}>
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4 shadow-lg shadow-primary/30">
-            <Wifi className="w-7 h-7 text-white" />
+
+        {/* Logo TechnoSmart */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="rounded-xl overflow-hidden mb-4 px-6 py-3" style={{ background: '#181d2e' }}>
+            <Logo height={52} />
           </div>
-          <h1 className="text-2xl font-bold text-white">Logistique D3</h1>
-          <p className="text-blue-300/70 text-sm mt-1">Gestion stock fibre optique</p>
+          <p className="text-blue-300/60 text-xs tracking-wide uppercase">Logistique · Fibre Optique</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 shadow-2xl">
-          <h2 className="text-lg font-semibold text-white mb-5">Connexion</h2>
+        {/* Card connexion */}
+        <div className="rounded-2xl p-6 shadow-2xl border border-white/10" style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'blur(12px)' }}>
+          <h2 className="text-base font-semibold text-white mb-5">Connexion</h2>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Email */}
             <div>
-              <label className="block text-xs font-medium text-blue-200 mb-1.5">Adresse email</label>
+              <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Adresse email</label>
               <input
                 {...register('email')}
                 type="email"
-                placeholder="vous@logistique-d3.fr"
+                placeholder="prenom.nom@technosmart.fr"
                 autoComplete="email"
                 className={cn(
-                  'w-full px-3 py-2.5 rounded-lg bg-white/10 border text-white placeholder-white/30 text-sm outline-none transition-colors',
-                  'focus:border-primary focus:ring-1 focus:ring-primary',
-                  errors.email ? 'border-red-400' : 'border-white/20',
+                  'w-full px-3 py-2.5 rounded-lg bg-white/8 border text-white placeholder-white/25 text-sm outline-none transition-colors',
+                  'focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30',
+                  errors.email ? 'border-red-400' : 'border-white/15',
                 )}
               />
               {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
             </div>
 
-            {/* Password */}
+            {/* Mot de passe */}
             <div>
-              <label className="block text-xs font-medium text-blue-200 mb-1.5">Mot de passe</label>
+              <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Mot de passe</label>
               <div className="relative">
                 <input
                   {...register('password')}
@@ -78,15 +79,15 @@ export default function Login() {
                   placeholder="••••••••"
                   autoComplete="current-password"
                   className={cn(
-                    'w-full px-3 py-2.5 pr-10 rounded-lg bg-white/10 border text-white placeholder-white/30 text-sm outline-none transition-colors',
-                    'focus:border-primary focus:ring-1 focus:ring-primary',
-                    errors.password ? 'border-red-400' : 'border-white/20',
+                    'w-full px-3 py-2.5 pr-10 rounded-lg bg-white/8 border text-white placeholder-white/25 text-sm outline-none transition-colors',
+                    'focus:border-blue-400 focus:ring-1 focus:ring-blue-400/30',
+                    errors.password ? 'border-red-400' : 'border-white/15',
                   )}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -97,30 +98,29 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-white font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: loading ? '#1e3a8a' : 'linear-gradient(90deg,#1d4ed8,#2563eb)', color: '#fff' }}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? 'Connexion…' : 'Se connecter'}
             </button>
           </form>
 
           {/* Comptes de démo */}
-          <div className="mt-5 pt-5 border-t border-white/10">
-            <p className="text-xs text-white/40 text-center mb-3">Comptes de démonstration</p>
+          <div className="mt-5 pt-4 border-t border-white/10">
+            <p className="text-xs text-white/30 text-center mb-3">Accès rapide (démo)</p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Log. 1', email: 'log1@logistique-d3.fr' },
-                { label: 'Log. 2', email: 'log2@logistique-d3.fr' },
-                { label: 'Chef projet', email: 'chef@logistique-d3.fr' },
-                { label: 'Admin', email: 'admin@logistique-d3.fr' },
+                { label: 'Log. Backoffice', email: 'log1@logistique-d3.fr' },
+                { label: 'Log. Terrain',    email: 'log2@logistique-d3.fr' },
+                { label: 'Chef de projet',  email: 'chef@logistique-d3.fr' },
+                { label: 'Admin',           email: 'admin@logistique-d3.fr' },
               ].map(({ label, email }) => (
                 <button
                   key={email}
                   type="button"
-                  onClick={() => {
-                    login(email, 'password123').catch(() => {});
-                  }}
-                  className="text-xs py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 border border-white/10 transition-colors text-left"
+                  onClick={() => login(email, 'password123').catch(() => {})}
+                  className="text-xs py-1.5 px-2 rounded-lg border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/8 transition-colors text-left"
                 >
                   <span className="font-medium">{label}</span>
                 </button>
@@ -128,6 +128,10 @@ export default function Login() {
             </div>
           </div>
         </div>
+
+        <p className="text-center text-white/20 text-xs mt-6">
+          TechnoSmart — La puissance du réseau intelligent
+        </p>
       </div>
     </div>
   );
