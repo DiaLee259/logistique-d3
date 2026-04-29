@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { LivraisonsService } from './livraisons.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
@@ -21,5 +21,10 @@ export class LivraisonsController {
   @Patch(':id/statut')
   updateStatut(@Param('id') id: string, @Body() body: { statut: any; bonLivraisonUrl?: string; bonCommandeUrl?: string }) {
     return this.service.updateStatut(id, body.statut, body);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.service.delete(id);
   }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { livraisonsApi, articlesApi, entrepotsApi, uploadsApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -31,6 +31,7 @@ export default function Livraisons() {
   const [lignes, setLignes] = useState([{ articleId: '', quantiteRecue: 1 }]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Filters
   const [filterSearch, setFilterSearch] = useState('');
@@ -72,6 +73,15 @@ export default function Livraisons() {
   const updateStatutMut = useMutation({
     mutationFn: ({ id, statut }: { id: string; statut: string }) => livraisonsApi.updateStatut(id, { statut }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['livraisons'] }); toast.success('Statut mis à jour'); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => livraisonsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['livraisons'] });
+      toast.success('Livraison supprimée');
+      setConfirmDeleteId(null);
+    },
   });
 
   const closeDialog = () => {
@@ -186,12 +196,18 @@ export default function Livraisons() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      {l.statut !== 'LIVREE' && (
-                        <button onClick={e => { e.stopPropagation(); updateStatutMut.mutate({ id: l.id, statut: 'LIVREE' }); }}
-                          className="flex items-center gap-1 text-xs text-green-700 hover:underline">
-                          <CheckCircle className="w-3 h-3" /> Confirmer
+                      <div className="flex items-center gap-1">
+                        {l.statut !== 'LIVREE' && (
+                          <button onClick={e => { e.stopPropagation(); updateStatutMut.mutate({ id: l.id, statut: 'LIVREE' }); }}
+                            className="flex items-center gap-1 text-xs text-green-700 hover:underline">
+                            <CheckCircle className="w-3 h-3" /> Confirmer
+                          </button>
+                        )}
+                        <button onClick={e => { e.stopPropagation(); setConfirmDeleteId(l.id); }}
+                          className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                   {expandedId === l.id && (
@@ -228,6 +244,35 @@ export default function Livraisons() {
           </table>
         </div>
       </div>
+
+      {/* Dialog confirmation suppression */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Supprimer la livraison ?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {filtered.find(l => l.id === confirmDeleteId)?.numero} — Cette action est irréversible.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted transition-colors">
+                Annuler
+              </button>
+              <button onClick={() => deleteMut.mutate(confirmDeleteId)} disabled={deleteMut.isPending}
+                className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+                {deleteMut.isPending ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog */}
       {dialogOpen && (

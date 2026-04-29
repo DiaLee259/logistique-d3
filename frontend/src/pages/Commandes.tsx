@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, FileSpreadsheet, Eye, X,
-  Link2, Copy, Check, ChevronDown, ChevronUp, Calendar,
+  Link2, Copy, Check, ChevronDown, ChevronUp, Calendar, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesApi, articlesApi, uploadsApi } from '@/lib/api';
@@ -35,6 +35,7 @@ export default function Commandes() {
   const [nomLien, setNomLien] = useState('');
   const [expireDays, setExpireDays] = useState('30');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Form nouvelle commande
   const [formData, setFormData] = useState({
@@ -98,6 +99,15 @@ export default function Commandes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['liens-prestataire'] });
       toast.success('Lien désactivé');
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => commandesApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      toast.success('Commande supprimée');
+      setConfirmDeleteId(null);
     },
   });
 
@@ -288,10 +298,16 @@ export default function Commandes() {
                   <td className="px-3 py-2.5 text-muted-foreground">{c.lignes?.length ?? 0} art.</td>
                   <td className="px-3 py-2.5"><StatusBadge statut={c.statut} /></td>
                   <td className="px-3 py-2.5">
-                    <button onClick={e => { e.stopPropagation(); navigate(`/commandes/${c.id}`); }}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={e => { e.stopPropagation(); navigate(`/commandes/${c.id}`); }}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -304,6 +320,35 @@ export default function Commandes() {
           </div>
         )}
       </div>
+
+      {/* Dialog confirmation suppression */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Supprimer la commande ?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {commandes.find(c => c.id === confirmDeleteId)?.numero} — Cette action est irréversible.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted transition-colors">
+                Annuler
+              </button>
+              <button onClick={() => deleteMut.mutate(confirmDeleteId)} disabled={deleteMut.isPending}
+                className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+                {deleteMut.isPending ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog nouvelle commande manuelle */}
       {newDialogOpen && (

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { CommandesService } from './commandes.service';
 import { CreateCommandeDto } from './dto/create-commande.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -116,5 +116,12 @@ export class CommandesController {
   @Patch(':id/annuler')
   annuler(@Param('id') id: string) {
     return this.service.annuler(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.service.delete(id);
   }
 }

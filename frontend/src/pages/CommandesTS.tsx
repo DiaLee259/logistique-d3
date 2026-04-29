@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, ChevronDown, ChevronRight, Check, Archive } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesTSApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -15,6 +15,7 @@ export default function CommandesTS() {
   const canEdit = hasRole('ADMIN', 'LOGISTICIEN_1');
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [titre, setTitre] = useState('');
   const [dateDebut, setDateDebut] = useState('');
@@ -55,6 +56,15 @@ export default function CommandesTS() {
   const updateRepartitionMut = useMutation({
     mutationFn: ({ repartitionId, data }: { repartitionId: string; data: any }) => commandesTSApi.updateRepartition(repartitionId, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commandes-ts'] }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => commandesTSApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['commandes-ts'] });
+      toast.success('Commande TS supprimée');
+      setConfirmDeleteId(null);
+    },
   });
 
   const closeCreate = () => {
@@ -153,6 +163,12 @@ export default function CommandesTS() {
                       <Archive className="w-3 h-3" /> Clôturer
                     </button>
                   )}
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs border border-red-200 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" /> Supprimer
+                  </button>
                 </div>
               </div>
 
@@ -230,6 +246,35 @@ export default function CommandesTS() {
           );
         })}
       </div>
+
+      {/* Dialog confirmation suppression */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Supprimer la commande TS ?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {commandesTS.find(c => c.id === confirmDeleteId)?.numero} — Cette action est irréversible.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted transition-colors">
+                Annuler
+              </button>
+              <button onClick={() => deleteMut.mutate(confirmDeleteId)} disabled={deleteMut.isPending}
+                className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+                {deleteMut.isPending ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog création */}
       {createOpen && (

@@ -100,4 +100,9 @@ export class LivraisonsService {
       data: { statut, ...urls },
     });
   }
+
+  async delete(id: string) {
+    await this.findById(id);
+    return this.prisma.livraison.delete({ where: { id } });
+  }
 }

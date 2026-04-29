@@ -113,6 +113,7 @@ export const commandesApi = {
     api.patch(`/commandes/${id}/email-envoye`).then(r => r.data),
   marquerBonRetourRecu: (id: string, url?: string) =>
     api.patch(`/commandes/${id}/bon-retour`, { url }).then(r => r.data),
+  delete: (id: string) => api.delete(`/commandes/${id}`).then(r => r.data),
   fichePerception: (id: string) =>
     api.get(`/commandes/${id}/fiche-perception`, { responseType: 'blob' }).then(r => r.data),
   // Liens prestataire
@@ -138,6 +139,7 @@ export const livraisonsApi = {
   create: (data: any) => api.post('/livraisons', data).then(r => r.data),
   updateStatut: (id: string, data: any) =>
     api.patch(`/livraisons/${id}/statut`, data).then(r => r.data),
+  delete: (id: string) => api.delete(`/livraisons/${id}`).then(r => r.data),
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────

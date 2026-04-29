@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus, X, Check, ClipboardCheck, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Plus, X, Check, ClipboardCheck, ChevronDown, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventairesApi, entrepotsApi, articlesApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -8,6 +8,7 @@ import type { Entrepot, Article } from '@/lib/types';
 
 export default function Inventaire() {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<'etat' | 'historique'>('etat');
   const [selectedEntrepot, setSelectedEntrepot] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogEntrepotId, setDialogEntrepotId] = useState('');
@@ -26,6 +27,12 @@ export default function Inventaire() {
   const { data: alertes = [] } = useQuery<{ entrepot: Entrepot; dernierInventaire: string | null; enAlerte: boolean }[]>({
     queryKey: ['inventaires-alertes'],
     queryFn: inventairesApi.alertes,
+  });
+
+  const { data: historique = [] } = useQuery<any[]>({
+    queryKey: ['inventaires-historique'],
+    queryFn: () => inventairesApi.list(),
+    enabled: tab === 'historique',
   });
 
   const { data: etat = [], isLoading: etatLoading } = useQuery<any[]>({
@@ -66,8 +73,94 @@ export default function Inventaire() {
 
   const entrepotSelectionne = entrepots.find(e => e.id === selectedEntrepot);
 
+  // Grouper l'historique par session (entrepôt + date arrondie à la minute)
+  const sessions = historique.reduce((acc: any[], inv: any) => {
+    const key = `${inv.entrepotId}_${new Date(inv.date).toISOString().slice(0, 16)}`;
+    const existing = acc.find(s => s.key === key);
+    if (existing) {
+      existing.lignes.push(inv);
+    } else {
+      acc.push({ key, entrepotId: inv.entrepotId, date: inv.date, lignes: [inv] });
+    }
+    return acc;
+  }, []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   return (
     <div className="space-y-4">
+      {/* Onglets */}
+      <div className="flex gap-1 bg-muted/30 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setTab('etat')}
+          className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
+            tab === 'etat' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+          <ClipboardCheck className="w-3.5 h-3.5" /> État des stocks
+        </button>
+        <button
+          onClick={() => setTab('historique')}
+          className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
+            tab === 'historique' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+          <History className="w-3.5 h-3.5" /> Historique
+        </button>
+      </div>
+
+      {/* Vue Historique */}
+      {tab === 'historique' && (
+        <div className="space-y-3">
+          {sessions.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center">
+              <History className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">Aucun inventaire enregistré pour le moment.</p>
+            </div>
+          ) : sessions.map(session => {
+            const entrepot = entrepots.find(e => e.id === session.entrepotId);
+            return (
+              <div key={session.key} className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <ClipboardCheck className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{entrepot?.code ?? '—'} — {entrepot?.nom}</p>
+                      <p className="text-xs text-muted-foreground">{session.lignes.length} article(s) comptés</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-primary">{formatDate(session.date)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(session.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/40">
+                        <th className="text-left px-4 py-2 font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
+                        <th className="text-left px-4 py-2 font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
+                        <th className="text-right px-4 py-2 font-semibold text-muted-foreground uppercase tracking-wide">Qté comptée</th>
+                        <th className="text-left px-4 py-2 font-semibold text-muted-foreground uppercase tracking-wide">Commentaire</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {session.lignes.map((ligne: any) => (
+                        <tr key={ligne.id} className="border-t border-border/20 hover:bg-muted/10">
+                          <td className="px-4 py-2 font-medium">{ligne.article?.nom ?? '—'}</td>
+                          <td className="px-4 py-2 font-mono text-muted-foreground">{ligne.article?.reference}</td>
+                          <td className="px-4 py-2 text-right font-bold text-primary">{formatNumber(ligne.quantite)}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{ligne.commentaire || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === 'etat' && <>
       {/* Alertes */}
       {alertesActives.length > 0 && (
         <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
@@ -204,6 +297,8 @@ export default function Inventaire() {
       )}
 
       {/* Dialog saisie inventaire */}
+      </> }
+
       {dialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl border border-border max-h-[90vh] overflow-y-auto">

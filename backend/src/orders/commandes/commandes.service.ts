@@ -310,6 +310,13 @@ export class CommandesService {
     return this.prisma.lienPrestataire.update({ where: { id }, data: { actif: false } });
   }
 
+  async delete(id: string) {
+    // Dissocier les mouvements et livraisons avant suppression
+    await this.prisma.mouvement.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
+    await this.prisma.livraison.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
+    return this.prisma.commande.delete({ where: { id } });
+  }
+
   async getLienPublic(token: string) {
     const lien = await this.prisma.lienPrestataire.findUnique({ where: { token } });
     if (!lien || !lien.actif) throw new NotFoundException('Lien invalide ou expiré');
