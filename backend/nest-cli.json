@@ -4,6 +4,10 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "plugins": []
+    "plugins": [],
+    "assets": [
+      { "include": "**/*.jpg", "watchAssets": true },
+      { "include": "**/*.png", "watchAssets": true }
+    ]
   }
 }

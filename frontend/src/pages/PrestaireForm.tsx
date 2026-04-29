@@ -102,10 +102,13 @@ export default function PrestaireForm() {
 
   if (submitted) return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-blue-900 text-white px-4 py-5">
-        <div className="max-w-2xl mx-auto">
-          <p className="text-blue-300 text-xs mb-1">Logistique Fibre Optique D3</p>
-          <h1 className="text-lg font-bold">Commande soumise</h1>
+      <div className="px-4 py-4" style={{ background: '#181d2e' }}>
+        <div className="max-w-2xl mx-auto flex items-center gap-4">
+          <img src="/logo-ts.jpg" alt="TechnoSmart" className="h-10 object-contain" />
+          <div>
+            <p className="text-gray-400 text-xs">Logistique Fibre Optique</p>
+            <h1 className="text-white text-lg font-bold">Commande soumise</h1>
+          </div>
         </div>
       </div>
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -133,16 +136,19 @@ export default function PrestaireForm() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-blue-900 text-white px-4 py-5">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-blue-300 text-xs mb-1">Logistique Fibre Optique D3</p>
-          <h1 className="text-lg font-bold">Formulaire de commande matériel</h1>
+      <div className="px-4 py-4" style={{ background: '#181d2e' }}>
+        <div className="max-w-3xl mx-auto flex items-center gap-4">
+          <img src="/logo-ts.jpg" alt="TechnoSmart" className="h-11 object-contain" />
+          <div>
+            <p className="text-gray-400 text-xs">Logistique Fibre Optique</p>
+            <h1 className="text-white text-lg font-bold">Formulaire de commande matériel</h1>
           {lien && (
-            <p className="text-blue-200 text-xs mt-1">
-              Portail : <span className="font-semibold">{lien.nom}</span>
+            <p className="text-gray-400 text-xs mt-0.5">
+              Portail : <span className="text-gray-200 font-semibold">{lien.nom}</span>
               {lien.expiresAt && ` · Expire le ${new Date(lien.expiresAt).toLocaleDateString('fr-FR')}`}
             </p>
           )}
+          </div>
         </div>
       </div>
 

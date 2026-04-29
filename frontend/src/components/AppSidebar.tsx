@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ArrowLeftRight, ClipboardList,
-  Truck, ChevronLeft, ChevronRight, Wifi, Settings, CalendarRange, ClipboardCheck, BookOpen, Trash2
+  Truck, ChevronLeft, ChevronRight, Settings, CalendarRange, ClipboardCheck, BookOpen, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,15 +33,26 @@ export default function AppSidebar() {
       'flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out',
       collapsed ? 'w-14' : 'w-56',
     )}>
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-3 py-4 border-b border-sidebar-border">
-        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-          <Wifi className="w-4 h-4 text-white" />
-        </div>
-        {!collapsed && (
-          <div className="overflow-hidden">
-            <p className="text-xs font-bold text-sidebar-foreground leading-tight truncate">Logistique D3</p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">Fibre Optique</p>
+      {/* Logo TechnoSmart */}
+      <div className="flex items-center border-b border-sidebar-border overflow-hidden" style={{ background: '#181d2e', minHeight: 56 }}>
+        {collapsed ? (
+          /* Mode réduit : juste le symbole TS */
+          <div className="w-14 flex items-center justify-center py-3">
+            <img
+              src="/logo-ts.jpg"
+              alt="TS"
+              className="w-9 h-9 rounded object-cover"
+              style={{ objectPosition: '0% center' }}
+            />
+          </div>
+        ) : (
+          /* Mode déployé : logo complet */
+          <div className="flex-1 px-2 py-2">
+            <img
+              src="/logo-ts.jpg"
+              alt="TechnoSmart"
+              className="h-10 w-full object-contain object-left"
+            />
           </div>
         )}
       </div>

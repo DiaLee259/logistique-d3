@@ -59,7 +59,11 @@
       "PowerShell(cd \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\"; $env:DATABASE_URL = \"postgresql://neondb_owner:npg_kUmv1yX8hGeB@ep-dark-pond-abpc8js8.eu-west-2.aws.neon.tech/neondb?sslmode=require\"; npx ts-node src/seed/reset-articles.ts 2>&1)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(copy \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\frontend\\\\public\\\\logo-ts.jpg\")",
+      "Bash(copy \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\\\\src\\\\pdf\\\\logo-ts.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\frontend\\\\public\\\\logo-ts.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\\\\src\\\\pdf\\\\logo-ts.jpg\")"
     ]
   }
 }
