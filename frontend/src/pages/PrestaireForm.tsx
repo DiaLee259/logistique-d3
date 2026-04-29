@@ -24,7 +24,8 @@ export default function PrestaireForm() {
 
   const [formData, setFormData] = useState({
     departement: '', demandeur: '', emailDemandeur: '',
-    societe: '', manager: '', nombreGrilles: '', typeGrille: '', commentaire: '',
+    societe: '', manager: '', nombreGrilles: '', typeGrille: '',
+    telephoneDestinataire: '', adresseLivraison: '', commentaire: '',
   });
 
   // Tracking
@@ -158,8 +159,9 @@ export default function PrestaireForm() {
               { field: 'demandeur',      label: 'Nom et prénom *',              placeholder: 'Jean Dupont',            type: 'text',  col: '2' },
               { field: 'societe',        label: 'Société / Entreprise',         placeholder: 'BTP Telecom 49',         type: 'text',  col: '1' },
               { field: 'emailDemandeur', label: 'Email',                        placeholder: 'jean@exemple.fr',        type: 'email', col: '1' },
-              { field: 'departement',    label: 'Département *',                placeholder: 'Ex: 49, 75, Loire...',   type: 'text',  col: '1' },
-              { field: 'manager',        label: 'Responsable / Interlocuteur',  placeholder: 'Nom du responsable',     type: 'text',  col: '1' },
+              { field: 'departement',         label: 'Département *',                placeholder: 'Ex: 49, 75, Loire...',        type: 'text',  col: '1' },
+              { field: 'manager',             label: 'Responsable / Interlocuteur',  placeholder: 'Nom du responsable',          type: 'text',  col: '1' },
+              { field: 'telephoneDestinataire', label: 'Téléphone',                  placeholder: '06 XX XX XX XX',              type: 'tel',   col: '1' },
             ].map(({ field, label, placeholder, type, col }) => (
               <div key={field} className={col === '2' ? 'col-span-2' : ''}>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
@@ -178,9 +180,20 @@ export default function PrestaireForm() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Type de grille</label>
-              <input type="text" value={formData.typeGrille}
+              <select value={formData.typeGrille}
                 onChange={e => setFormData(prev => ({ ...prev, typeGrille: e.target.value }))}
-                placeholder="Ex: G1, G2..."
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all">
+                <option value="">— Choisir —</option>
+                <option value="PROD">PROD</option>
+                <option value="SAV">SAV</option>
+                <option value="Mixte">Mixte</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Adresse de livraison</label>
+              <input type="text" value={formData.adresseLivraison}
+                onChange={e => setFormData(prev => ({ ...prev, adresseLivraison: e.target.value }))}
+                placeholder="12 rue de l'industrie, 49000 Angers"
                 className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all" />
             </div>
           </div>

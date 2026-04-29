@@ -15,6 +15,7 @@ import PrestaireForm from '@/pages/PrestaireForm';
 import CommandesTS from '@/pages/CommandesTS';
 import Inventaire from '@/pages/Inventaire';
 import Guide from '@/pages/Guide';
+import Corbeille from '@/pages/Corbeille';
 import NotFound from '@/pages/NotFound';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -47,6 +48,7 @@ function AppRoutes() {
         <Route path="commandes-ts" element={<CommandesTS />} />
         <Route path="inventaire" element={<Inventaire />} />
         <Route path="guide" element={<Guide />} />
+        <Route path="corbeille" element={<Corbeille />} />
         <Route path="parametres" element={<Parametres />} />
       </Route>
       <Route path="*" element={<NotFound />} />

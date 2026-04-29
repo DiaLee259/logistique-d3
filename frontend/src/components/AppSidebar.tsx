@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ArrowLeftRight, ClipboardList,
-  Truck, ChevronLeft, ChevronRight, Wifi, Settings, CalendarRange, ClipboardCheck, BookOpen
+  Truck, ChevronLeft, ChevronRight, Wifi, Settings, CalendarRange, ClipboardCheck, BookOpen, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,6 +16,7 @@ const navItems = [
   { path: '/commandes-ts', icon: CalendarRange, label: 'Commandes TS' },
   { path: '/inventaire', icon: ClipboardCheck, label: 'Inventaire' },
   { path: '/guide', icon: BookOpen, label: 'Guide' },
+  { path: '/corbeille', icon: Trash2, label: 'Corbeille' },
   { path: '/parametres', icon: Settings, label: 'Paramètres' },
 ];
 

@@ -58,6 +58,14 @@ export class CreateCommandeDto {
   @IsOptional()
   fichierExcelUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  telephoneDestinataire?: string;
+
+  @IsString()
+  @IsOptional()
+  adresseLivraison?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LigneCommandeDto)

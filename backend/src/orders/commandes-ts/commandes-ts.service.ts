@@ -26,6 +26,7 @@ export class CommandesTSService {
 
   async findAll() {
     const commandes = await this.prisma.commandeTS.findMany({
+      where: { deletedAt: null },
       include: {
         createdBy: { select: { id: true, nom: true, prenom: true } },
         lignes: {
@@ -128,8 +129,34 @@ export class CommandesTSService {
     return this.prisma.commandeTS.update({ where: { id }, data: { statut: 'CLOTUREE' } });
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     await this.findById(id);
-    return this.prisma.commandeTS.delete({ where: { id } });
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    return this.prisma.commandeTS.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId, deletedByName },
+    });
+  }
+
+  async restore(id: string) {
+    return this.prisma.commandeTS.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+  }
+
+  async findCorbeille() {
+    return this.prisma.commandeTS.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: {
+        id: true, numero: true, titre: true, dateDebut: true, dateFin: true,
+        deletedAt: true, deletedByName: true,
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
   }
 }

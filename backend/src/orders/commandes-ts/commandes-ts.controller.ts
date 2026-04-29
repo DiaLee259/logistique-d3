@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { CommandesTSService } from './commandes-ts.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
@@ -36,6 +36,14 @@ export class CommandesTSController {
     return this.service.updateRepartition(repartitionId, dto);
   }
 
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @Patch(':id/restaurer')
+  restore(@Param('id') id: string) { return this.service.restore(id); }
+
   @Delete(':id')
-  delete(@Param('id') id: string) { return this.service.delete(id); }
+  delete(@Param('id') id: string, @Request() req: any) {
+    return this.service.delete(id, req.user?.id);
+  }
 }

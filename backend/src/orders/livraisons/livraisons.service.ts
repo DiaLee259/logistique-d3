@@ -11,7 +11,7 @@ export class LivraisonsService {
   ) {}
 
   async findAll(filters: any) {
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.entrepotId) where.entrepotId = filters.entrepotId;
     if (filters.mois) {
@@ -101,8 +101,35 @@ export class LivraisonsService {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     await this.findById(id);
-    return this.prisma.livraison.delete({ where: { id } });
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    return this.prisma.livraison.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId, deletedByName },
+    });
+  }
+
+  async restore(id: string) {
+    return this.prisma.livraison.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+  }
+
+  async findCorbeille() {
+    return this.prisma.livraison.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: {
+        id: true, numero: true, fournisseur: true, dateLivraison: true,
+        deletedAt: true, deletedByName: true,
+        lignes: { select: { quantiteRecue: true, article: { select: { nom: true } } } },
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
   }
 }

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards } from '@nestjs/common';
+
 import { CommandesService } from './commandes.service';
 import { CreateCommandeDto } from './dto/create-commande.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -118,10 +119,18 @@ export class CommandesController {
     return this.service.annuler(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/restaurer')
+  restore(@Param('id') id: string) { return this.service.restore(id); }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.service.delete(id);
+  delete(@Param('id') id: string, @Request() req: any) {
+    return this.service.delete(id, req.user?.id);
   }
 }

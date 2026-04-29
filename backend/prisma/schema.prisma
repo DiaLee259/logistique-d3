@@ -197,9 +197,14 @@ model Commande {
   dateEmailEnvoye      DateTime?
   bonRetourRecu        Boolean        @default(false)
   dateBonRetourRecu    DateTime?
-  tokenPublic          String?        @unique // token pour lien prestataire
-  valideurId           String?
-  expediteurId         String?
+  tokenPublic              String?        @unique
+  telephoneDestinataire    String?
+  adresseLivraison         String?
+  deletedAt                DateTime?
+  deletedById              String?
+  deletedByName            String?
+  valideurId               String?
+  expediteurId             String?
 
   valideur   User? @relation("ValideurLog1", fields: [valideurId], references: [id])
   expediteur User? @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
@@ -258,6 +263,9 @@ model Livraison {
   bonCommandeUrl  String?
   commentaire     String?
   commandeId      String?
+  deletedAt       DateTime?
+  deletedById     String?
+  deletedByName   String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -325,11 +333,14 @@ model CommandeTS {
   titre       String
   dateDebut   DateTime
   dateFin     DateTime
-  statut      String   @default("EN_COURS") // EN_COURS, CLOTUREE
-  commentaire String?
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  statut        String   @default("EN_COURS") // EN_COURS, CLOTUREE
+  commentaire   String?
+  createdById   String?
+  deletedAt     DateTime?
+  deletedById   String?
+  deletedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   createdBy User?           @relation(fields: [createdById], references: [id])
   lignes    LigneCommandeTS[]

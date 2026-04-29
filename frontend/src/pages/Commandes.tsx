@@ -116,7 +116,8 @@ export default function Commandes() {
   // Form nouvelle commande
   const [formData, setFormData] = useState({
     departement: '', demandeur: '', emailDemandeur: '', societe: '',
-    manager: '', nombreGrilles: '', commentaire: '',
+    manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '',
+    adresseLivraison: '', commentaire: '',
   });
   const [lignes, setLignes] = useState<{ articleId: string; quantiteDemandee: number; commentaire: string }[]>([
     { articleId: '', quantiteDemandee: 1, commentaire: '' },
@@ -188,7 +189,7 @@ export default function Commandes() {
   });
 
   const resetForm = () => {
-    setFormData({ departement: '', demandeur: '', emailDemandeur: '', societe: '', manager: '', nombreGrilles: '', commentaire: '' });
+    setFormData({ departement: '', demandeur: '', emailDemandeur: '', societe: '', manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '', adresseLivraison: '', commentaire: '' });
     setLignes([{ articleId: '', quantiteDemandee: 1, commentaire: '' }]);
   };
 
@@ -443,6 +444,7 @@ export default function Commandes() {
                   { field: 'emailDemandeur', label: 'Email', placeholder: 'email@domain.fr' },
                   { field: 'manager', label: 'Manager / Interlocuteur', placeholder: 'Responsable' },
                   { field: 'nombreGrilles', label: 'Nombre de grilles', placeholder: '0' },
+                  { field: 'telephoneDestinataire', label: 'Téléphone destinataire', placeholder: '06 XX XX XX XX' },
                 ].map(({ field, label, placeholder }) => (
                   <div key={field}>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
@@ -454,6 +456,23 @@ export default function Commandes() {
                     />
                   </div>
                 ))}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Type de grille</label>
+                  <select value={formData.typeGrille} onChange={e => setFormData(p => ({ ...p, typeGrille: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
+                    <option value="">— Choisir —</option>
+                    <option value="PROD">PROD</option>
+                    <option value="SAV">SAV</option>
+                    <option value="Mixte">Mixte</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Adresse de livraison</label>
+                <input value={formData.adresseLivraison}
+                  onChange={e => setFormData(p => ({ ...p, adresseLivraison: e.target.value }))}
+                  placeholder="12 rue de l'industrie, 49000 Angers"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
 
               <div>

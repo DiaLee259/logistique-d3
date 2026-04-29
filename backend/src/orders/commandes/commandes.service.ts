@@ -13,7 +13,7 @@ export class CommandesService {
   ) {}
 
   async findAll(filters: any) {
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
     if (filters.entrepotId) {
@@ -72,7 +72,7 @@ export class CommandesService {
         livraisons: true,
       },
     });
-    if (!c) throw new NotFoundException('Commande introuvable');
+    if (!c || c.deletedAt) throw new NotFoundException('Commande introuvable');
     return c;
   }
 
@@ -80,7 +80,7 @@ export class CommandesService {
     const count = await this.prisma.commande.count();
     const numero = `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
-    return this.prisma.commande.create({
+    const commande = await this.prisma.commande.create({
       data: {
         numero,
         departement: dto.departement,
@@ -91,6 +91,8 @@ export class CommandesService {
         manager: dto.manager,
         nombreGrilles: dto.nombreGrilles,
         typeGrille: dto.typeGrille,
+        telephoneDestinataire: (dto as any).telephoneDestinataire,
+        adresseLivraison: (dto as any).adresseLivraison,
         dateCommande: dto.dateCommande ? new Date(dto.dateCommande) : undefined,
         commentaire: dto.commentaire,
         fichierExcelUrl: dto.fichierExcelUrl,
@@ -104,6 +106,18 @@ export class CommandesService {
       },
       include: { lignes: { include: { article: true } } },
     });
+
+    // Notification broadcast
+    await this.prisma.notification.create({
+      data: {
+        type: 'NOUVELLE_COMMANDE',
+        titre: 'Nouvelle commande reçue',
+        message: `${numero} — Dept. ${dto.departement}${dto.demandeur ? ` — ${dto.demandeur}` : ''}${dto.societe ? ` (${dto.societe})` : ''}`,
+        lien: `/commandes/${commande.id}`,
+      },
+    });
+
+    return commande;
   }
 
   // Suivi public d'une commande par numéro
@@ -154,6 +168,8 @@ export class CommandesService {
         manager: dto.manager,
         nombreGrilles: dto.nombreGrilles ? parseInt(dto.nombreGrilles) : undefined,
         typeGrille: dto.typeGrille,
+        telephoneDestinataire: dto.telephoneDestinataire,
+        adresseLivraison: dto.adresseLivraison,
         commentaire: dto.commentaire,
         statut: StatutCommande.EN_ATTENTE,
         lignes: {
@@ -171,6 +187,16 @@ export class CommandesService {
     await this.prisma.lienPrestataire.update({
       where: { token },
       data: { utilisations: { increment: 1 } },
+    });
+
+    // Notification broadcast
+    await this.prisma.notification.create({
+      data: {
+        type: 'NOUVELLE_COMMANDE',
+        titre: 'Nouvelle commande reçue (prestataire)',
+        message: `${numero} — Dept. ${dto.departement || 'NC'}${dto.demandeur ? ` — ${dto.demandeur}` : ''}${dto.societe ? ` (${dto.societe})` : ''}`,
+        lien: `/commandes/${commande.id}`,
+      },
     });
 
     return commande;
@@ -323,11 +349,35 @@ export class CommandesService {
     return this.prisma.lienPrestataire.update({ where: { id }, data: { actif: false } });
   }
 
-  async delete(id: string) {
-    // Dissocier les mouvements et livraisons avant suppression
-    await this.prisma.mouvement.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
-    await this.prisma.livraison.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
-    return this.prisma.commande.delete({ where: { id } });
+  async delete(id: string, userId?: string) {
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    return this.prisma.commande.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId, deletedByName },
+    });
+  }
+
+  async restore(id: string) {
+    return this.prisma.commande.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+  }
+
+  async findCorbeille() {
+    return this.prisma.commande.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: {
+        id: true, numero: true, departement: true, demandeur: true, societe: true,
+        deletedAt: true, deletedByName: true,
+        lignes: { select: { quantiteDemandee: true, article: { select: { nom: true } } } },
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
   }
 
   async getLienPublic(token: string) {
