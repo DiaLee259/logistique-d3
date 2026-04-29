@@ -63,7 +63,8 @@
       "Bash(copy \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\frontend\\\\public\\\\logo-ts.jpg\")",
       "Bash(copy \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\\\\src\\\\pdf\\\\logo-ts.jpg\")",
       "Bash(cp \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\frontend\\\\public\\\\logo-ts.jpg\")",
-      "Bash(cp \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\\\\src\\\\pdf\\\\logo-ts.jpg\")"
+      "Bash(cp \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Logo TS.jpg\" \"C:\\\\Users\\\\candl\\\\Desktop\\\\Claude apprentissage\\\\Claude code\\\\backend\\\\src\\\\pdf\\\\logo-ts.jpg\")",
+      "Bash(git commit *)"
     ]
   }
 }

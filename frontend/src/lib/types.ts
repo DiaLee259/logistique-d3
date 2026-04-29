@@ -163,8 +163,12 @@ export interface DashboardKpis {
   soldeNet: number;
   articlesActifs: number;
   commandesEnAttente: number;
+  commandesAttLog2: number;
   commandesValidees: number;
   commandesExpediees: number;
+  commandesLivrees: number;
+  commandesTraitees: number;
+  commandesTotal: number;
   stocksEnAlerte: number;
   tauxService: number;
 }
