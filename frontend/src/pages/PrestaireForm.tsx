@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Send, CheckCircle, AlertCircle, Search, Package } from 'lucide-react';
+import logoTs from '@/assets/logo-ts.jpg';
 import { toast } from 'sonner';
 import { commandesApi } from '@/lib/api';
 
@@ -104,7 +105,7 @@ export default function PrestaireForm() {
     <div className="min-h-screen bg-gray-50">
       <div className="px-4 py-4" style={{ background: '#181d2e' }}>
         <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <img src="/logo-ts.jpg" alt="TechnoSmart" className="h-10 object-contain" />
+          <img src={logoTs} alt="TechnoSmart" className="h-10 object-contain" />
           <div>
             <p className="text-gray-400 text-xs">Logistique Fibre Optique</p>
             <h1 className="text-white text-lg font-bold">Commande soumise</h1>
@@ -138,7 +139,7 @@ export default function PrestaireForm() {
     <div className="min-h-screen bg-gray-50">
       <div className="px-4 py-4" style={{ background: '#181d2e' }}>
         <div className="max-w-3xl mx-auto flex items-center gap-4">
-          <img src="/logo-ts.jpg" alt="TechnoSmart" className="h-11 object-contain" />
+          <img src={logoTs} alt="TechnoSmart" className="h-11 object-contain" />
           <div>
             <p className="text-gray-400 text-xs">Logistique Fibre Optique</p>
             <h1 className="text-white text-lg font-bold">Formulaire de commande matériel</h1>
