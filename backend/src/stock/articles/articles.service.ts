@@ -7,16 +7,16 @@ import { UpdateArticleDto } from './dto/update-article.dto';
 export class ArticlesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(entrepotId?: string) {
+  async findAll(entrepotId?: string, includeInactif = false) {
     const articles = await this.prisma.article.findMany({
-      where: { actif: true },
+      where: includeInactif ? undefined : { actif: true },
       include: {
         stocks: {
           where: entrepotId ? { entrepotId } : undefined,
           include: { entrepot: { select: { id: true, code: true, nom: true } } },
         },
       },
-      orderBy: { nom: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
 
     return articles.map(a => ({
@@ -111,7 +111,7 @@ export class ArticlesService {
           include: { entrepot: { select: { id: true, code: true, nom: true } } },
         },
       },
-      orderBy: { nom: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
 
     return articles.map(a => {

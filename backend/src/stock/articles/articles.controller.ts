@@ -12,8 +12,11 @@ export class ArticlesController {
   constructor(private service: ArticlesService) {}
 
   @Get()
-  findAll(@Query('entrepotId') entrepotId?: string) {
-    return this.service.findAll(entrepotId);
+  findAll(
+    @Query('entrepotId') entrepotId?: string,
+    @Query('includeInactif') includeInactif?: string,
+  ) {
+    return this.service.findAll(entrepotId, includeInactif === 'true');
   }
 
   @Get('stock')

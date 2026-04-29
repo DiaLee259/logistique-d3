@@ -116,10 +116,27 @@ export default function Parametres() {
   };
 
   // ── Catalogue Articles ────────────────────────────────────────────────────
+  const [catalogueFilter, setCatalogueFilter] = useState<'all' | 'actif' | 'inactif'>('all');
+
   const { data: articles = [] } = useQuery<Article[]>({
-    queryKey: ['articles'],
-    queryFn: () => articlesApi.list(),
+    queryKey: ['articles-all'],
+    queryFn: () => articlesApi.listAll(),
     enabled: tab === 'catalogue',
+  });
+
+  const toggleArticleMut = useMutation({
+    mutationFn: ({ id, actif }: { id: string; actif: boolean }) => articlesApi.toggleActif(id, actif),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['articles-all'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success('Article mis à jour');
+    },
+  });
+
+  const articlesFiltres = articles.filter(a => {
+    if (catalogueFilter === 'actif') return a.actif;
+    if (catalogueFilter === 'inactif') return !a.actif;
+    return true;
   });
 
   const roles = [
@@ -310,45 +327,65 @@ export default function Parametres() {
       {/* ── TAB CATALOGUE ── */}
       {tab === 'catalogue' && (
         <div className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold">Catalogue des articles</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Définitions, usages et méthodes de calcul. Pour ajouter/modifier des articles, allez dans <strong>Articles & Stock</strong>.
-            </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold">Catalogue des articles</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {articles.filter(a => a.actif).length} actif(s) · {articles.filter(a => !a.actif).length} inactif(s)
+              </p>
+            </div>
+            <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
+              {(['all', 'actif', 'inactif'] as const).map(f => (
+                <button key={f} onClick={() => setCatalogueFilter(f)}
+                  className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
+                    catalogueFilter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                  {f === 'all' ? 'Tous' : f === 'actif' ? 'Actifs' : 'Inactifs'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="space-y-2">
-            {articles.map(a => (
-              <div key={a.id} className="bg-card rounded-xl border border-border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{a.reference}</span>
-                      <h3 className="text-xs font-semibold">{a.nom}</h3>
-                      <span className="text-xs text-muted-foreground">({a.unite})</span>
-                    </div>
-                    {a.description && (
-                      <p className="text-xs text-muted-foreground mb-1.5">📋 <strong>Définition :</strong> {a.description}</p>
-                    )}
-                    {a.regleConsommation && (
-                      <p className="text-xs text-muted-foreground mb-1.5">🔧 <strong>Méthode de calcul :</strong> {a.regleConsommation}</p>
-                    )}
-                    {a.facteurConsommation && (
-                      <p className="text-xs text-blue-600">📊 <strong>Facteur :</strong> {a.facteurConsommation} {a.unite} par intervention</p>
-                    )}
-                    {!a.description && !a.regleConsommation && (
-                      <p className="text-xs text-muted-foreground/50 italic">Aucune définition renseignée — à compléter dans Articles & Stock</p>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className={cn('text-xs px-2 py-0.5 rounded-full', a.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-                      {a.actif ? 'Actif' : 'Inactif'}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">Seuil alerte: {a.seuilAlerte}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  {['Référence', 'Désignation', 'Unité', 'Seuil alerte', 'Statut', ''].map(h => (
+                    <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {articlesFiltres.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Aucun article</td></tr>
+                ) : articlesFiltres.map(a => (
+                  <tr key={a.id} className={cn('border-b border-border/50', !a.actif && 'opacity-50')}>
+                    <td className="px-3 py-2.5 font-mono text-muted-foreground">{a.reference}</td>
+                    <td className="px-3 py-2.5 font-medium">{a.nom}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{a.unite}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{a.seuilAlerte}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                        a.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                        {a.actif ? 'Actif' : 'Inactif'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                        <button
+                          onClick={() => toggleArticleMut.mutate({ id: a.id, actif: !a.actif })}
+                          disabled={toggleArticleMut.isPending}
+                          className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
+                            a.actif
+                              ? 'border-red-200 text-red-600 hover:bg-red-50'
+                              : 'border-green-200 text-green-600 hover:bg-green-50')}>
+                          {a.actif ? 'Désactiver' : 'Activer'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

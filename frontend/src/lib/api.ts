@@ -58,6 +58,10 @@ export const dashboardApi = {
 export const articlesApi = {
   list: (params?: Record<string, string>) =>
     api.get('/articles', { params }).then(r => r.data),
+  listAll: () =>
+    api.get('/articles', { params: { includeInactif: 'true' } }).then(r => r.data),
+  toggleActif: (id: string, actif: boolean) =>
+    api.put(`/articles/${id}`, { actif }).then(r => r.data),
   stats: (params?: Record<string, string>) =>
     api.get('/articles/stats', { params }).then(r => r.data),
   get: (id: string) => api.get(`/articles/${id}`).then(r => r.data),

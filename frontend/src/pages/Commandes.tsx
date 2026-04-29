@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,6 +11,82 @@ import { cn, formatDate, statutCommandeLabel, statutCommandeColor } from '@/lib/
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Commande, Article } from '@/lib/types';
+
+// ── Combobox article avec recherche ──────────────────────────────────────────
+function ArticleCombobox({
+  articles,
+  value,
+  onChange,
+}: {
+  articles: Article[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = articles.find(a => a.id === value);
+
+  // Fermer au clic extérieur
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = articles.filter(a => {
+    const q = search.toLowerCase();
+    return a.nom.toLowerCase().includes(q) || a.reference.toLowerCase().includes(q);
+  });
+
+  return (
+    <div ref={ref} className="relative flex-1">
+      <div
+        onClick={() => { setOpen(v => !v); setSearch(''); }}
+        className="flex items-center gap-2 px-3 py-2 text-xs border border-border rounded-lg cursor-pointer hover:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 bg-card"
+      >
+        {open ? (
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher par nom ou référence…"
+            className="flex-1 bg-transparent outline-none text-xs"
+            onClick={e => e.stopPropagation()}
+          />
+        ) : (
+          <span className={cn('flex-1 truncate', !selected && 'text-muted-foreground')}>
+            {selected ? `${selected.nom} (${selected.reference})` : 'Choisir article…'}
+          </span>
+        )}
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      </div>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Aucun article trouvé</p>
+          ) : filtered.map(a => (
+            <div
+              key={a.id}
+              onMouseDown={() => { onChange(a.id); setOpen(false); setSearch(''); }}
+              className={cn(
+                'px-3 py-2 text-xs cursor-pointer hover:bg-muted/50 transition-colors',
+                a.id === value && 'bg-primary/10 text-primary font-medium',
+              )}
+            >
+              <span className="font-mono text-muted-foreground mr-2">{a.reference}</span>
+              {a.nom}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Commandes() {
   const qc = useQueryClient();
@@ -396,11 +472,11 @@ export default function Commandes() {
                 <div className="space-y-1.5">
                   {lignes.map((ligne, i) => (
                     <div key={i} className="flex gap-2 items-center">
-                      <select value={ligne.articleId} onChange={e => setLignes(prev => prev.map((l, j) => j === i ? { ...l, articleId: e.target.value } : l))}
-                        className="flex-1 px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20">
-                        <option value="">Choisir article…</option>
-                        {articles.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
-                      </select>
+                      <ArticleCombobox
+                        articles={articles}
+                        value={ligne.articleId}
+                        onChange={id => setLignes(prev => prev.map((l, j) => j === i ? { ...l, articleId: id } : l))}
+                      />
                       <input type="number" min={1} value={ligne.quantiteDemandee}
                         onChange={e => setLignes(prev => prev.map((l, j) => j === i ? { ...l, quantiteDemandee: parseInt(e.target.value) || 1 } : l))}
                         className="w-16 px-2 py-2 text-xs border border-border rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -473,12 +549,13 @@ export default function Commandes() {
                         {auto && !overrideId ? (
                           <p className="text-green-700 text-xs pl-5">✓ Associé à : <strong>{auto.nom}</strong> ({auto.reference})</p>
                         ) : (
-                          <select value={overrideId || ''}
-                            onChange={e => setExcelMapping(prev => ({ ...prev, [i]: e.target.value }))}
-                            className="w-full mt-1 px-2 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20">
-                            <option value="">{auto ? `Auto: ${auto.nom}` : '— Choisir un article —'}</option>
-                            {articles.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
-                          </select>
+                          <div className="mt-1">
+                            <ArticleCombobox
+                              articles={articles}
+                              value={overrideId || auto?.id || ''}
+                              onChange={id => setExcelMapping(prev => ({ ...prev, [i]: id }))}
+                            />
+                          </div>
                         )}
                       </div>
                     );

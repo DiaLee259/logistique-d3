@@ -221,12 +221,31 @@ export class CommandesService {
         where: { articleId: ligne.articleId },
         orderBy: { quantite: 'desc' },
       });
-      if (!stock) continue;
+
+      let entrepotId: string;
+
+      if (stock) {
+        entrepotId = stock.entrepotId;
+        // Décrémenter le stock existant
+        await this.prisma.stock.update({
+          where: { id: stock.id },
+          data: { quantite: { decrement: qty } },
+        });
+      } else {
+        // Pas de stock pour cet article → fallback sur le premier entrepôt actif
+        const entrepot = await this.prisma.entrepot.findFirst({ where: { actif: true } });
+        if (!entrepot) continue; // Aucun entrepôt configuré, on ne peut pas créer de mouvement
+        entrepotId = entrepot.id;
+        // Créer l'entrée stock (négatif = dette à régulariser via un inventaire)
+        await this.prisma.stock.create({
+          data: { articleId: ligne.articleId, entrepotId, quantite: -qty },
+        });
+      }
 
       await this.prisma.mouvement.create({
         data: {
           articleId: ligne.articleId,
-          entrepotId: stock.entrepotId,
+          entrepotId,
           type: 'SORTIE' as any,
           quantiteDemandee: (ligne as any).quantiteDemandee,
           quantiteFournie: qty,
@@ -235,12 +254,6 @@ export class CommandesService {
           sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
           commandeId: id,
         },
-      });
-
-      // Décrémenter le stock
-      await this.prisma.stock.update({
-        where: { id: stock.id },
-        data: { quantite: { decrement: qty } },
       });
     }
 
@@ -325,7 +338,7 @@ export class CommandesService {
     const articles = await this.prisma.article.findMany({
       where: { actif: true },
       select: { id: true, nom: true, reference: true, unite: true, description: true },
-      orderBy: { nom: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
 
     return { lien: { nom: lien.nom, expiresAt: lien.expiresAt }, articles };
