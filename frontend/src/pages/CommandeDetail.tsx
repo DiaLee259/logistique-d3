@@ -110,7 +110,7 @@ export default function CommandeDetail() {
     },
     {
       key: 'EN_ATTENTE_LOG2',
-      label: 'Log1 validé',
+      label: 'Validée',
       done: ['EN_ATTENTE_LOG2', 'VALIDEE', 'EXPEDIEE', 'LIVREE'].includes(commande.statut),
       date: commande.dateTraitement,
       icon: '✅',

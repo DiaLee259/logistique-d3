@@ -35,14 +35,14 @@ export default function AppSidebar() {
       collapsed ? 'w-14' : 'w-56',
     )}>
       {/* Logo TechnoSmart */}
-      <div className="flex items-center border-b border-sidebar-border overflow-hidden bg-sidebar" style={{ minHeight: 68 }}>
+      <div className="flex items-center border-b border-sidebar-border overflow-hidden bg-sidebar" style={{ minHeight: 76 }}>
         {collapsed ? (
           <div className="w-14 flex items-center justify-center py-3">
-            <Logo variant="icon" height={40} />
+            <Logo variant="icon" height={44} />
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center px-4 py-3">
-            <Logo variant="full" height={52} />
+          <div className="flex-1 flex items-center justify-center px-3 py-3">
+            <Logo variant="full" height={62} />
           </div>
         )}
       </div>

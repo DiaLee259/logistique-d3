@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { livraisonsApi, articlesApi, entrepotsApi, uploadsApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -32,6 +32,8 @@ export default function Livraisons() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [vue, setVue] = useState<'liste' | 'matrice'>('liste');
+  const [filterStatut, setFilterStatut] = useState('');
 
   // Filters
   const [filterSearch, setFilterSearch] = useState('');
@@ -56,6 +58,7 @@ export default function Livraisons() {
   const filtered = livraisons.filter(l => {
     if (filterSearch && !l.numero.toLowerCase().includes(filterSearch.toLowerCase()) && !l.fournisseur.toLowerCase().includes(filterSearch.toLowerCase())) return false;
     if (filterArticleId && !l.lignes?.some(li => li.articleId === filterArticleId)) return false;
+    if (filterStatut && l.statut !== filterStatut) return false;
     return true;
   });
 
@@ -143,13 +146,98 @@ export default function Livraisons() {
         </select>
         <input type="month" value={filterMois} onChange={e => setFilterMois(e.target.value)}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none" />
+        <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
+          className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none">
+          <option value="">Tous statuts</option>
+          {Object.entries(statutLivraisonLabel).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        {(filterSearch || filterEntrepot || filterArticleId || filterMois || filterStatut) && (
+          <button onClick={() => { setFilterSearch(''); setFilterEntrepot(''); setFilterArticleId(''); setFilterMois(''); setFilterStatut(''); }}
+            className="px-2.5 py-2 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted">✕</button>
+        )}
+        <div className="flex gap-1 bg-muted/30 rounded-lg p-0.5">
+          <button onClick={() => setVue('liste')}
+            className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition-colors',
+              vue === 'liste' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <List className="w-3.5 h-3.5" /> Liste
+          </button>
+          <button onClick={() => setVue('matrice')}
+            className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition-colors',
+              vue === 'matrice' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <LayoutGrid className="w-3.5 h-3.5" /> Matrice
+          </button>
+        </div>
         <button onClick={() => setDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors ml-auto">
+          className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
           <Plus className="w-3.5 h-3.5" /> Nouvelle livraison
         </button>
       </div>
 
-      {/* Tableau */}
+      {/* ── Vue Matrice ── */}
+      {vue === 'matrice' && (() => {
+        const livrSorted = [...filtered].sort((a, b) => new Date(a.dateLivraison).getTime() - new Date(b.dateLivraison).getTime());
+        const artMap = new Map<string, string>();
+        livrSorted.forEach(l => l.lignes?.forEach(li => { if (li.article && !artMap.has(li.articleId)) artMap.set(li.articleId, li.article.nom ?? li.articleId); }));
+        const artsMatrice = [...artMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        const lookup = new Map<string, number>();
+        livrSorted.forEach(l => l.lignes?.forEach(li => { lookup.set(`${li.articleId}_${l.id}`, li.quantiteRecue); }));
+
+        return (
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            {artsMatrice.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground">Aucune donnée pour ce filtre.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/30 min-w-[200px]">Article</th>
+                      {livrSorted.map(l => {
+                        const ent = entrepots.find(e => e.id === l.entrepotId);
+                        return (
+                          <th key={l.id} className="text-center px-2 py-2.5 font-semibold text-muted-foreground min-w-[120px]">
+                            <div className="text-primary font-bold">{formatDate(l.dateLivraison)}</div>
+                            <div className="text-muted-foreground/70 font-normal truncate max-w-[120px]" title={l.fournisseur}>{l.fournisseur}</div>
+                            <div className="text-muted-foreground/60 font-normal">{ent?.code ?? '?'}</div>
+                          </th>
+                        );
+                      })}
+                      <th className="text-center px-2 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide min-w-[80px]">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {artsMatrice.map(([artId, nom]) => {
+                      const total = livrSorted.reduce((s, l) => s + (lookup.get(`${artId}_${l.id}`) ?? 0), 0);
+                      return (
+                        <tr key={artId} className="border-t border-border/30 hover:bg-muted/10">
+                          <td className="px-3 py-2 sticky left-0 bg-card border-r border-border/30">
+                            <p className="font-medium">{nom}</p>
+                            <p className="font-mono text-muted-foreground">{articles.find(a => a.id === artId)?.reference ?? ''}</p>
+                          </td>
+                          {livrSorted.map(l => {
+                            const qte = lookup.get(`${artId}_${l.id}`);
+                            return (
+                              <td key={l.id} className="px-2 py-2 text-center">
+                                {qte !== undefined && qte > 0
+                                  ? <span className="font-bold text-green-700">{qte}</span>
+                                  : <span className="text-muted-foreground/30">—</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="px-2 py-2 text-center font-bold text-primary">{total > 0 ? total : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Tableau Liste */}
+      {vue === 'liste' && <>
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -244,6 +332,7 @@ export default function Livraisons() {
           </table>
         </div>
       </div>
+      </>}
 
       {/* Dialog confirmation suppression */}
       {confirmDeleteId && (

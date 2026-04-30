@@ -159,8 +159,8 @@ export default function Dashboard() {
       {/* KPIs délais */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Délai moyen réception → traitement', value: delaiLabel(delais?.receptionToTraitement), desc: 'Log1 validation', color: 'text-blue-600' },
-          { label: 'Délai moyen traitement → expédition', value: delaiLabel(delais?.traitementToExpedition), desc: 'Log2 préparation', color: 'text-purple-600' },
+          { label: 'Délai moyen réception → traitement', value: delaiLabel(delais?.receptionToTraitement), desc: 'Validation backoffice', color: 'text-blue-600' },
+          { label: 'Délai moyen traitement → expédition', value: delaiLabel(delais?.traitementToExpedition), desc: 'Préparation terrain', color: 'text-purple-600' },
           { label: 'Délai moyen expédition → livraison', value: delaiLabel(delais?.expeditionToLivraison), desc: 'Transport', color: 'text-green-600' },
         ].map(d => (
           <div key={d.label} className="bg-card border border-border rounded-xl p-3 flex items-center gap-3">

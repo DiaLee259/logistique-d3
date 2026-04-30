@@ -104,11 +104,11 @@ export default function Mouvements() {
       {/* Tableau */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-max w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 {['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Fourni', 'Dép.', 'Manager', 'N° Op.', 'Source', ''].map(h => (
-                  <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -119,22 +119,22 @@ export default function Mouvements() {
                 <tr><td colSpan={13} className="text-center py-12 text-muted-foreground">Aucun mouvement</td></tr>
               ) : mouvements.map(m => (
                 <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                  <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap text-xs">{formatDate(m.date)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.article?.reference}</td>
-                  <td className="px-3 py-2.5 text-xs font-medium text-foreground">{m.article?.nom}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.entrepot?.code}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', m.type === 'ENTREE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
+                  <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap text-xs">{formatDate(m.date)}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.article?.reference}</td>
+                  <td className="px-3 py-1.5 text-xs font-medium text-foreground whitespace-nowrap max-w-[220px] truncate" title={m.article?.nom}>{m.article?.nom}</td>
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.entrepot?.code}</td>
+                  <td className="px-3 py-1.5">
+                    <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap', m.type === 'ENTREE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
                       {m.type === 'ENTREE' ? '↑ Entrée' : '↓ Sortie'}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right text-xs text-muted-foreground">{formatNumber(m.quantiteDemandee)}</td>
-                  <td className="px-3 py-2.5 text-right text-xs font-medium">{formatNumber(m.quantiteFournie)}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.departement ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.manager ?? '—'}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{m.numeroOperation ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{m.sourceDestination ?? '—'}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-1.5 text-right text-xs text-muted-foreground">{formatNumber(m.quantiteDemandee)}</td>
+                  <td className="px-3 py-1.5 text-right text-xs font-medium">{formatNumber(m.quantiteFournie)}</td>
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.departement ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.manager ?? '—'}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.numeroOperation ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.sourceDestination ?? '—'}</td>
+                  <td className="px-3 py-1.5">
                     <button onClick={() => { if (confirm('Supprimer ce mouvement ?')) deleteMut.mutate(m.id); }}
                       className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
                       <Trash2 className="w-3.5 h-3.5" />

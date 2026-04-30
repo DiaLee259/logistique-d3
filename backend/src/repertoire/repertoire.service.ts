@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class RepertoireService {
@@ -75,5 +76,76 @@ export class RepertoireService {
 
   async deleteIntervenant(id: string) {
     return this.prisma.intervenant.delete({ where: { id } });
+  }
+
+  // ── Import Excel ──────────────────────────────────────────────────────────────
+
+  async importSocietes(buffer: Buffer) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = wb.worksheets[0];
+
+    const rows: any[] = [];
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return; // skip header
+      const nom = String(row.getCell(1).value ?? '').trim();
+      const code = String(row.getCell(2).value ?? '').trim() || undefined;
+      const adresse = String(row.getCell(3).value ?? '').trim() || undefined;
+      const telephone = String(row.getCell(4).value ?? '').trim() || undefined;
+      const email = String(row.getCell(5).value ?? '').trim() || undefined;
+      if (!nom) return;
+      rows.push({ nom, code, adresse, telephone, email });
+    });
+
+    if (rows.length === 0) throw new BadRequestException('Aucune ligne valide dans le fichier');
+
+    let created = 0, skipped = 0;
+    for (const data of rows) {
+      try {
+        await this.prisma.societe.create({ data });
+        created++;
+      } catch {
+        skipped++; // code unique en conflit ou autre erreur
+      }
+    }
+
+    return { created, skipped, total: rows.length };
+  }
+
+  async importIntervenants(buffer: Buffer) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = wb.worksheets[0];
+
+    const rows: any[] = [];
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return;
+      const prenom = String(row.getCell(1).value ?? '').trim();
+      const nom = String(row.getCell(2).value ?? '').trim();
+      const email = String(row.getCell(3).value ?? '').trim() || undefined;
+      const telephone = String(row.getCell(4).value ?? '').trim() || undefined;
+      const codeSociete = String(row.getCell(5).value ?? '').trim() || undefined;
+      if (!nom || !prenom) return;
+      rows.push({ prenom, nom, email, telephone, codeSociete });
+    });
+
+    if (rows.length === 0) throw new BadRequestException('Aucune ligne valide dans le fichier');
+
+    // Résoudre les codes sociétés
+    const societes = await this.prisma.societe.findMany({ select: { id: true, code: true } });
+    const societeByCode = new Map(societes.filter(s => s.code).map(s => [s.code, s.id]));
+
+    let created = 0, skipped = 0;
+    for (const { codeSociete, ...data } of rows) {
+      const societeId = codeSociete ? societeByCode.get(codeSociete) : undefined;
+      try {
+        await this.prisma.intervenant.create({ data: { ...data, societeId: societeId ?? null } });
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { created, skipped, total: rows.length };
   }
 }

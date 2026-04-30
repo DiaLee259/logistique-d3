@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2 } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { usersApi, articlesApi, entrepotsApi, repertoireApi } from '@/lib/api';
+import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
 import type { User, Article, Entrepot, Societe, Intervenant } from '@/lib/types';
@@ -221,6 +222,20 @@ export default function Parametres() {
     mutationFn: ({ id, actif }: { id: string; actif: boolean }) => repertoireApi.updateIntervenant(id, { actif }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['intervenants'] }),
   });
+
+  const importSocieteMut = useMutation({
+    mutationFn: (file: File) => repertoireApi.importSocietes(file),
+    onSuccess: (res: any) => { qc.invalidateQueries({ queryKey: ['societes'] }); toast.success(`Import terminé : ${res.created} créées, ${res.skipped} ignorées`); },
+    onError: () => toast.error('Erreur lors de l\'import'),
+  });
+  const importIntervenantMut = useMutation({
+    mutationFn: (file: File) => repertoireApi.importIntervenants(file),
+    onSuccess: (res: any) => { qc.invalidateQueries({ queryKey: ['intervenants'] }); toast.success(`Import terminé : ${res.created} ajoutés, ${res.skipped} ignorés`); },
+    onError: () => toast.error('Erreur lors de l\'import'),
+  });
+
+  const fileInputSocieteRef = useRef<HTMLInputElement>(null);
+  const fileInputIntervenantRef = useRef<HTMLInputElement>(null);
 
   const openCreateSociete = () => {
     setEditSociete(null);
@@ -623,10 +638,23 @@ export default function Parametres() {
                   <p className="text-xs text-muted-foreground mt-0.5">Prestataires et sous-traitants référencés</p>
                 </div>
                 {hasRole('ADMIN', 'LOGISTICIEN_1') && (
-                  <button onClick={openCreateSociete}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-                    <Plus className="w-3.5 h-3.5" /> Nouvelle société
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a href={repertoireApi.templateSocietes()} download
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
+                      <Download className="w-3.5 h-3.5" /> Modèle Excel
+                    </a>
+                    <button onClick={() => fileInputSocieteRef.current?.click()}
+                      disabled={importSocieteMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-60">
+                      <Upload className="w-3.5 h-3.5" /> {importSocieteMut.isPending ? 'Import…' : 'Importer'}
+                    </button>
+                    <input ref={fileInputSocieteRef} type="file" accept=".xlsx,.xls" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { importSocieteMut.mutate(f); e.target.value = ''; } }} />
+                    <button onClick={openCreateSociete}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                      <Plus className="w-3.5 h-3.5" /> Nouvelle société
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -701,10 +729,23 @@ export default function Parametres() {
                   <p className="text-xs text-muted-foreground mt-0.5">Techniciens et contacts rattachés aux sociétés</p>
                 </div>
                 {hasRole('ADMIN', 'LOGISTICIEN_1') && (
-                  <button onClick={openCreateIntervenant}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-                    <Plus className="w-3.5 h-3.5" /> Nouvel intervenant
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a href={repertoireApi.templateIntervenants()} download
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
+                      <Download className="w-3.5 h-3.5" /> Modèle Excel
+                    </a>
+                    <button onClick={() => fileInputIntervenantRef.current?.click()}
+                      disabled={importIntervenantMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-60">
+                      <Upload className="w-3.5 h-3.5" /> {importIntervenantMut.isPending ? 'Import…' : 'Importer'}
+                    </button>
+                    <input ref={fileInputIntervenantRef} type="file" accept=".xlsx,.xls" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { importIntervenantMut.mutate(f); e.target.value = ''; } }} />
+                    <button onClick={openCreateIntervenant}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                      <Plus className="w-3.5 h-3.5" /> Nouvel intervenant
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2, LayoutGrid, List, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesTSApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -73,6 +73,52 @@ export default function CommandesTS() {
     setSelectedArticles(new Set()); setLignesForm({}); setEntrepotRepartitions({});
   };
 
+  // Ouvre le dialog et pré-coche tous les articles actifs
+  const openCreate = () => {
+    const actifs = articles.filter(a => a.actif);
+    const allIds = new Set(actifs.map(a => a.id));
+    const allForms: Record<string, LigneForm> = {};
+    actifs.forEach(a => {
+      allForms[a.id] = { articleId: a.id, qteProd: 0, qteSav: 0, qteMalfacon: 0, repartitions: entrepots.map(e => ({ entrepotId: e.id, tauxRepartition: 0 })) };
+    });
+    setSelectedArticles(allIds);
+    setLignesForm(allForms);
+    setCreateOpen(true);
+  };
+
+  // Export Excel de toutes les Commandes TS
+  const exportExcel = () => {
+    // Construction CSV propre
+    const cmdsSorted = [...commandesTS].sort((a, b) => new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime());
+
+    // Collecte tous les articles uniques
+    const artMap = new Map<string, string>();
+    cmdsSorted.forEach(c => c.lignes?.forEach(l => { if (l.article) artMap.set(l.articleId, l.article.nom); }));
+    const artIds = [...artMap.keys()];
+
+    // Header
+    const headers = ['Article', ...cmdsSorted.flatMap(c => [`${c.titre} PROD`, `${c.titre} SAV`, `${c.titre} MALFACON`])];
+
+    const rows = artIds.map(artId => {
+      const nom = artMap.get(artId) ?? artId;
+      const cells = cmdsSorted.flatMap(c => {
+        const l = c.lignes?.find(l => l.articleId === artId);
+        return [l?.qteProd ?? 0, l?.qteSav ?? 0, l?.qteMalfacon ?? 0];
+      });
+      return [nom, ...cells];
+    });
+
+    // Génère CSV
+    const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `commandes-ts-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const toggleArticle = (articleId: string) => {
     const next = new Set(selectedArticles);
     if (next.has(articleId)) {
@@ -116,8 +162,14 @@ export default function CommandesTS() {
               <LayoutGrid className="w-3.5 h-3.5" /> Matrice
             </button>
           </div>
+          {commandesTS.length > 0 && (
+            <button onClick={exportExcel}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
+              <Download className="w-3.5 h-3.5" /> Export CSV
+            </button>
+          )}
           {canEdit && (
-            <button onClick={() => setCreateOpen(true)}
+            <button onClick={openCreate}
               className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
               <Plus className="w-3.5 h-3.5" /> Nouvelle commande TS
             </button>

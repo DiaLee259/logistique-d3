@@ -213,12 +213,16 @@ export const repertoireApi = {
   createSociete: (data: any) => api.post('/repertoire/societes', data).then(r => r.data),
   updateSociete: (id: string, data: any) => api.put(`/repertoire/societes/${id}`, data).then(r => r.data),
   deleteSociete: (id: string) => api.delete(`/repertoire/societes/${id}`).then(r => r.data),
+  templateSocietes: () => `${api.defaults.baseURL}/repertoire/societes/template`,
+  importSocietes: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/repertoire/societes/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
   // Intervenants
   listIntervenants: (societeId?: string) => api.get('/repertoire/intervenants', { params: societeId ? { societeId } : {} }).then(r => r.data),
   listIntervenantsActifs: () => api.get('/repertoire/intervenants/actifs').then(r => r.data),
   createIntervenant: (data: any) => api.post('/repertoire/intervenants', data).then(r => r.data),
   updateIntervenant: (id: string, data: any) => api.put(`/repertoire/intervenants/${id}`, data).then(r => r.data),
   deleteIntervenant: (id: string) => api.delete(`/repertoire/intervenants/${id}`).then(r => r.data),
+  templateIntervenants: () => `${api.defaults.baseURL}/repertoire/intervenants/template`,
+  importIntervenants: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/repertoire/intervenants/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
