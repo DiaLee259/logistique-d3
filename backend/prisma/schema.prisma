@@ -378,6 +378,40 @@ model RepartitionCommandeTS {
   @@map("repartitions_commandes_ts")
 }
 
+// ─── RÉPERTOIRE SOCIÉTÉS / INTERVENANTS ──────────────────────────────────────
+
+model Societe {
+  id          String   @id @default(uuid())
+  nom         String
+  code        String?  @unique
+  adresse     String?
+  telephone   String?
+  email       String?
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  intervenants Intervenant[]
+
+  @@map("societes")
+}
+
+model Intervenant {
+  id         String   @id @default(uuid())
+  nom        String
+  prenom     String
+  email      String?
+  telephone  String?
+  societeId  String?
+  actif      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  societe Societe? @relation(fields: [societeId], references: [id])
+
+  @@map("intervenants")
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 model Notification {

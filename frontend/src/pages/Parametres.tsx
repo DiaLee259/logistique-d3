@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { usersApi, articlesApi, entrepotsApi } from '@/lib/api';
+import { usersApi, articlesApi, entrepotsApi, repertoireApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
-import type { User, Article, Entrepot } from '@/lib/types';
+import type { User, Article, Entrepot, Societe, Intervenant } from '@/lib/types';
 
-type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'workflow';
+type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow';
 
 export default function Parametres() {
   const { hasRole } = useAuth();
@@ -159,6 +159,119 @@ export default function Parametres() {
     return true;
   });
 
+  // ── Répertoire Sociétés / Intervenants ───────────────────────────────────────
+  const [repertoireSection, setRepertoireSection] = useState<'societes' | 'intervenants'>('societes');
+  const [societeDialog, setSocieteDialog] = useState(false);
+  const [editSociete, setEditSociete] = useState<Societe | null>(null);
+  const [societeForm, setSocieteForm] = useState({ nom: '', code: '', adresse: '', telephone: '', email: '' });
+
+  const [intervenantDialog, setIntervenantDialog] = useState(false);
+  const [editIntervenant, setEditIntervenant] = useState<Intervenant | null>(null);
+  const [intervenantForm, setIntervenantForm] = useState({ nom: '', prenom: '', email: '', telephone: '', societeId: '' });
+
+  const { data: societes = [] } = useQuery<Societe[]>({
+    queryKey: ['societes'],
+    queryFn: repertoireApi.listSocietes,
+    enabled: tab === 'repertoire',
+  });
+
+  const { data: intervenants = [] } = useQuery<Intervenant[]>({
+    queryKey: ['intervenants'],
+    queryFn: () => repertoireApi.listIntervenants(),
+    enabled: tab === 'repertoire',
+  });
+
+  const createSocieteMut = useMutation({
+    mutationFn: repertoireApi.createSociete,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['societes'] }); toast.success('Société créée'); setSocieteDialog(false); setEditSociete(null); },
+    onError: () => toast.error('Erreur — le code existe peut-être déjà'),
+  });
+
+  const updateSocieteMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => repertoireApi.updateSociete(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['societes'] }); toast.success('Société mise à jour'); setSocieteDialog(false); setEditSociete(null); },
+  });
+
+  const deleteSocieteMut = useMutation({
+    mutationFn: repertoireApi.deleteSociete,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['societes'] }); qc.invalidateQueries({ queryKey: ['intervenants'] }); toast.success('Société supprimée'); },
+  });
+
+  const toggleSocieteMut = useMutation({
+    mutationFn: ({ id, actif }: { id: string; actif: boolean }) => repertoireApi.updateSociete(id, { actif }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['societes'] }),
+  });
+
+  const createIntervenantMut = useMutation({
+    mutationFn: repertoireApi.createIntervenant,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['intervenants'] }); toast.success('Intervenant ajouté'); setIntervenantDialog(false); setEditIntervenant(null); },
+  });
+
+  const updateIntervenantMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => repertoireApi.updateIntervenant(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['intervenants'] }); toast.success('Intervenant mis à jour'); setIntervenantDialog(false); setEditIntervenant(null); },
+  });
+
+  const deleteIntervenantMut = useMutation({
+    mutationFn: repertoireApi.deleteIntervenant,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['intervenants'] }); toast.success('Intervenant supprimé'); },
+  });
+
+  const toggleIntervenantMut = useMutation({
+    mutationFn: ({ id, actif }: { id: string; actif: boolean }) => repertoireApi.updateIntervenant(id, { actif }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['intervenants'] }),
+  });
+
+  const openCreateSociete = () => {
+    setEditSociete(null);
+    setSocieteForm({ nom: '', code: '', adresse: '', telephone: '', email: '' });
+    setSocieteDialog(true);
+  };
+
+  const openEditSociete = (s: Societe) => {
+    setEditSociete(s);
+    setSocieteForm({ nom: s.nom, code: s.code ?? '', adresse: s.adresse ?? '', telephone: s.telephone ?? '', email: s.email ?? '' });
+    setSocieteDialog(true);
+  };
+
+  const handleSaveSociete = () => {
+    if (!societeForm.nom) { toast.error('Le nom est obligatoire'); return; }
+    const payload = {
+      nom: societeForm.nom,
+      code: societeForm.code || undefined,
+      adresse: societeForm.adresse || undefined,
+      telephone: societeForm.telephone || undefined,
+      email: societeForm.email || undefined,
+    };
+    if (editSociete) updateSocieteMut.mutate({ id: editSociete.id, data: payload });
+    else createSocieteMut.mutate(payload);
+  };
+
+  const openCreateIntervenant = () => {
+    setEditIntervenant(null);
+    setIntervenantForm({ nom: '', prenom: '', email: '', telephone: '', societeId: '' });
+    setIntervenantDialog(true);
+  };
+
+  const openEditIntervenant = (i: Intervenant) => {
+    setEditIntervenant(i);
+    setIntervenantForm({ nom: i.nom, prenom: i.prenom, email: i.email ?? '', telephone: i.telephone ?? '', societeId: i.societeId ?? '' });
+    setIntervenantDialog(true);
+  };
+
+  const handleSaveIntervenant = () => {
+    if (!intervenantForm.nom || !intervenantForm.prenom) { toast.error('Nom et prénom obligatoires'); return; }
+    const payload = {
+      nom: intervenantForm.nom,
+      prenom: intervenantForm.prenom,
+      email: intervenantForm.email || undefined,
+      telephone: intervenantForm.telephone || undefined,
+      societeId: intervenantForm.societeId || undefined,
+    };
+    if (editIntervenant) updateIntervenantMut.mutate({ id: editIntervenant.id, data: payload });
+    else createIntervenantMut.mutate(payload);
+  };
+
   const roles = [
     { value: 'ADMIN', label: 'Administrateur', color: 'bg-red-100 text-red-700' },
     { value: 'LOGISTICIEN_1', label: 'Logisticien 1 (Backoffice)', color: 'bg-blue-100 text-blue-700' },
@@ -176,6 +289,7 @@ export default function Parametres() {
           { key: 'utilisateurs' as Tab, label: 'Utilisateurs', icon: Users },
           { key: 'entrepots' as Tab, label: 'Entrepôts', icon: Warehouse },
           { key: 'catalogue' as Tab, label: 'Catalogue articles', icon: BookOpen },
+          { key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 },
           { key: 'workflow' as Tab, label: 'Guide & Workflow', icon: HelpCircle },
         ].map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
@@ -475,6 +589,203 @@ export default function Parametres() {
         </div>
       )}
 
+      {/* ── TAB RÉPERTOIRE ── */}
+      {tab === 'repertoire' && (
+        <div className="space-y-4">
+          {/* Sous-navigation */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRepertoireSection('societes')}
+              className={cn('flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium border transition-colors',
+                repertoireSection === 'societes'
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+              <Building2 className="w-3.5 h-3.5" />
+              Sociétés ({societes.length})
+            </button>
+            <button
+              onClick={() => setRepertoireSection('intervenants')}
+              className={cn('flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium border transition-colors',
+                repertoireSection === 'intervenants'
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+              <UserRound className="w-3.5 h-3.5" />
+              Intervenants ({intervenants.length})
+            </button>
+          </div>
+
+          {/* ── Sociétés ── */}
+          {repertoireSection === 'societes' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Répertoire des sociétés</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Prestataires et sous-traitants référencés</p>
+                </div>
+                {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                  <button onClick={openCreateSociete}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                    <Plus className="w-3.5 h-3.5" /> Nouvelle société
+                  </button>
+                )}
+              </div>
+
+              {societes.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-xs">
+                  Aucune société enregistrée. Commencez par en créer une.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {societes.map(s => (
+                    <div key={s.id} className={cn('bg-card rounded-xl border border-border p-4 flex items-start gap-4', !s.actif && 'opacity-60')}>
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Building2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{s.nom}</span>
+                          {s.code && <span className="px-2 py-0.5 bg-muted rounded-full text-xs font-mono text-muted-foreground">{s.code}</span>}
+                          <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', s.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                            {s.actif ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          {s.adresse && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{s.adresse}</span>}
+                          {s.telephone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{s.telephone}</span>}
+                          {s.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{s.email}</span>}
+                        </div>
+                        {s.intervenants && s.intervenants.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {s.intervenants.map(i => (
+                              <span key={i.id} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs">
+                                {i.prenom} {i.nom}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button onClick={() => openEditSociete(s)}
+                            className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => toggleSocieteMut.mutate({ id: s.id, actif: !s.actif })}
+                            className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
+                              s.actif ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
+                            {s.actif ? 'Désactiver' : 'Activer'}
+                          </button>
+                          {hasRole('ADMIN') && (
+                            <button onClick={() => {
+                              if (confirm(`Supprimer "${s.nom}" ?`)) deleteSocieteMut.mutate(s.id);
+                            }}
+                              className="px-2.5 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Intervenants ── */}
+          {repertoireSection === 'intervenants' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Répertoire des intervenants</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Techniciens et contacts rattachés aux sociétés</p>
+                </div>
+                {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                  <button onClick={openCreateIntervenant}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                    <Plus className="w-3.5 h-3.5" /> Nouvel intervenant
+                  </button>
+                )}
+              </div>
+
+              {intervenants.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-xs">
+                  Aucun intervenant enregistré.
+                </div>
+              ) : (
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        {['Intervenant', 'Société', 'Téléphone', 'Email', 'Statut', ''].map(h => (
+                          <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {intervenants.map(i => (
+                        <tr key={i.id} className={cn('border-b border-border/50 hover:bg-muted/10', !i.actif && 'opacity-60')}>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs font-bold text-blue-700">{i.prenom[0]}{i.nom[0]}</span>
+                              </div>
+                              <div>
+                                <p className="font-medium">{i.prenom} {i.nom}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground">
+                            {i.societe ? (
+                              <span className="flex items-center gap-1">
+                                <Building2 className="w-3 h-3" />
+                                {i.societe.nom}
+                                {i.societe.code && <span className="font-mono text-xs">({i.societe.code})</span>}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground">{i.telephone || '—'}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground">{i.email || '—'}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                              i.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                              {i.actif ? 'Actif' : 'Inactif'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                              <div className="flex items-center gap-1.5">
+                                <button onClick={() => openEditIntervenant(i)}
+                                  className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted">
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button onClick={() => toggleIntervenantMut.mutate({ id: i.id, actif: !i.actif })}
+                                  className={cn('px-2 py-1 text-xs rounded border transition-colors',
+                                    i.actif ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
+                                  {i.actif ? 'Désactiver' : 'Activer'}
+                                </button>
+                                {hasRole('ADMIN') && (
+                                  <button onClick={() => {
+                                    if (confirm(`Supprimer ${i.prenom} ${i.nom} ?`)) deleteIntervenantMut.mutate(i.id);
+                                  }}
+                                    className="px-2 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── TAB WORKFLOW ── */}
       {tab === 'workflow' && (
         <div className="space-y-4 max-w-3xl">
@@ -621,6 +932,118 @@ export default function Parametres() {
                 <button onClick={handleSaveEntrepot} disabled={createEntrepotMut.isPending || updateEntrepotMut.isPending}
                   className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" /> {editEntrepot ? 'Enregistrer' : 'Créer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog Société */}
+      {societeDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold">{editSociete ? `Modifier — ${editSociete.nom}` : 'Nouvelle société'}</h2>
+              <button onClick={() => { setSocieteDialog(false); setEditSociete(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Nom *</label>
+                  <input value={societeForm.nom} onChange={e => setSocieteForm(p => ({ ...p, nom: e.target.value }))}
+                    placeholder="TechnoSmart SARL"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Code (optionnel)</label>
+                  <input value={societeForm.code} onChange={e => setSocieteForm(p => ({ ...p, code: e.target.value }))}
+                    placeholder="TS01" disabled={!!editSociete}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-muted" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Téléphone</label>
+                  <input value={societeForm.telephone} onChange={e => setSocieteForm(p => ({ ...p, telephone: e.target.value }))}
+                    placeholder="04 XX XX XX XX"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Adresse</label>
+                <input value={societeForm.adresse} onChange={e => setSocieteForm(p => ({ ...p, adresse: e.target.value }))}
+                  placeholder="12 rue de l'industrie, 69000 Lyon"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
+                <input type="email" value={societeForm.email} onChange={e => setSocieteForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="contact@societe.fr"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { setSocieteDialog(false); setEditSociete(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={handleSaveSociete} disabled={createSocieteMut.isPending || updateSocieteMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> {editSociete ? 'Enregistrer' : 'Créer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog Intervenant */}
+      {intervenantDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold">{editIntervenant ? `Modifier — ${editIntervenant.prenom} ${editIntervenant.nom}` : 'Nouvel intervenant'}</h2>
+              <button onClick={() => { setIntervenantDialog(false); setEditIntervenant(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Prénom *</label>
+                  <input value={intervenantForm.prenom} onChange={e => setIntervenantForm(p => ({ ...p, prenom: e.target.value }))}
+                    placeholder="Jean"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Nom *</label>
+                  <input value={intervenantForm.nom} onChange={e => setIntervenantForm(p => ({ ...p, nom: e.target.value }))}
+                    placeholder="Dupont"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Société</label>
+                <select value={intervenantForm.societeId} onChange={e => setIntervenantForm(p => ({ ...p, societeId: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20">
+                  <option value="">— Sans société —</option>
+                  {societes.filter(s => s.actif).map(s => (
+                    <option key={s.id} value={s.id}>{s.nom}{s.code ? ` (${s.code})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Téléphone</label>
+                  <input value={intervenantForm.telephone} onChange={e => setIntervenantForm(p => ({ ...p, telephone: e.target.value }))}
+                    placeholder="06 XX XX XX XX"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
+                  <input type="email" value={intervenantForm.email} onChange={e => setIntervenantForm(p => ({ ...p, email: e.target.value }))}
+                    placeholder="j.dupont@societe.fr"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { setIntervenantDialog(false); setEditIntervenant(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={handleSaveIntervenant} disabled={createIntervenantMut.isPending || updateIntervenantMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> {editIntervenant ? 'Enregistrer' : 'Ajouter'}
                 </button>
               </div>
             </div>

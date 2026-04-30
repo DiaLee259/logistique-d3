@@ -157,6 +157,30 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface Societe {
+  id: string;
+  nom: string;
+  code?: string;
+  adresse?: string;
+  telephone?: string;
+  email?: string;
+  actif: boolean;
+  createdAt: string;
+  intervenants?: Pick<Intervenant, 'id' | 'nom' | 'prenom'>[];
+}
+
+export interface Intervenant {
+  id: string;
+  nom: string;
+  prenom: string;
+  email?: string;
+  telephone?: string;
+  societeId?: string;
+  actif: boolean;
+  createdAt: string;
+  societe?: Pick<Societe, 'id' | 'nom' | 'code'>;
+}
+
 export interface DashboardKpis {
   totalEntrees: number;
   totalSorties: number;

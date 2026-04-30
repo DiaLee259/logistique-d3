@@ -41,8 +41,8 @@ export default function Login() {
 
         {/* Logo TechnoSmart */}
         <div className="flex flex-col items-center mb-8">
-          <div className="rounded-xl overflow-hidden mb-4 px-6 py-3" style={{ background: '#181d2e' }}>
-            <Logo height={52} />
+          <div className="rounded-2xl overflow-hidden mb-4 px-8 py-4" style={{ background: 'hsl(220, 25%, 12%)' }}>
+            <Logo height={64} />
           </div>
           <p className="text-blue-300/60 text-xs tracking-wide uppercase">Logistique · Fibre Optique</p>
         </div>
