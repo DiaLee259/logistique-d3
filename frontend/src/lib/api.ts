@@ -198,6 +198,8 @@ export const inventairesApi = {
   create: (data: any) => api.post('/inventaires', data).then(r => r.data),
   template: () => api.get('/inventaires/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/inventaires/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  deleteOne: (id: string) => api.delete(`/inventaires/${id}`).then(r => r.data),
+  deleteBulk: (ids: string[]) => api.delete('/inventaires/bulk', { data: { ids } }).then(r => r.data),
 };
 
 // ── Commandes TS ──────────────────────────────────────────────────────────────

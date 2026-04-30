@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react';
+import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventairesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -58,6 +58,20 @@ export default function Inventaire() {
       toast.success('Inventaire enregistré');
       closeDialog();
     },
+  });
+
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState<{ key: string; ids: string[] } | null>(null);
+
+  const deleteBulkMut = useMutation({
+    mutationFn: (ids: string[]) => inventairesApi.deleteBulk(ids),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
+      qc.invalidateQueries({ queryKey: ['inventaire-etat'] });
+      qc.invalidateQueries({ queryKey: ['inventaires-alertes'] });
+      toast.success(`${data.deleted} enregistrement(s) supprimé(s)`);
+      setConfirmDeleteSession(null);
+    },
+    onError: () => toast.error('Erreur lors de la suppression'),
   });
 
   const importMut = useMutation({
@@ -220,11 +234,20 @@ export default function Inventaire() {
                           <p className="text-xs text-muted-foreground">{session.lignes.length} article(s) comptés</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs font-semibold text-primary">{formatDate(session.date)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(session.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-primary">{formatDate(session.date)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(session.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); setConfirmDeleteSession({ key: session.key, ids: session.lignes.map((l: any) => l.id) }); }}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Supprimer cette session"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </button>
                     {isExpanded && (
@@ -440,6 +463,37 @@ export default function Inventaire() {
             </div>
           )}
         </>
+      )}
+
+      {/* ─── Dialog confirmation suppression session ────────────────────────── */}
+      {confirmDeleteSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Supprimer cette session ?</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {confirmDeleteSession.ids.length} enregistrement(s) seront supprimés définitivement.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDeleteSession(null)}
+                className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted transition-colors">
+                Annuler
+              </button>
+              <button
+                onClick={() => deleteBulkMut.mutate(confirmDeleteSession.ids)}
+                disabled={deleteBulkMut.isPending}
+                className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+                {deleteBulkMut.isPending ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ─── Dialog saisie inventaire ────────────────────────────────────────── */}

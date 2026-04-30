@@ -121,6 +121,17 @@ export class InventairesService {
     return created;
   }
 
+  async deleteOne(id: string) {
+    return this.prisma.inventairePhysique.delete({ where: { id } });
+  }
+
+  async deleteBulk(ids: string[]) {
+    const result = await this.prisma.inventairePhysique.deleteMany({
+      where: { id: { in: ids } },
+    });
+    return { deleted: result.count };
+  }
+
   async importInventaire(buffer: Buffer, userId?: string) {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Request, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, Request, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -51,5 +51,17 @@ export class InventairesController {
   @Post()
   create(@Body() body: any, @Request() req: any) {
     return this.service.create(body, req.user?.userId);
+  }
+
+  // Suppression d'une liste d'IDs (session entière)
+  @Delete('bulk')
+  deleteBulk(@Body() body: { ids: string[] }) {
+    return this.service.deleteBulk(body.ids);
+  }
+
+  // Suppression d'un seul enregistrement
+  @Delete(':id')
+  deleteOne(@Param('id') id: string) {
+    return this.service.deleteOne(id);
   }
 }
