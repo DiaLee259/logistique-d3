@@ -119,6 +119,16 @@ export default function Parametres() {
   // ── Catalogue Articles ────────────────────────────────────────────────────
   const [catalogueFilter, setCatalogueFilter] = useState<'all' | 'actif' | 'inactif'>('all');
   const [editingSeuil, setEditingSeuil] = useState<{ id: string; value: string } | null>(null);
+  const fileInputArticleRef = useRef<HTMLInputElement>(null);
+  const importArticleMut = useMutation({
+    mutationFn: (file: File) => articlesApi.import(file),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['articles-all'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success(`Import terminé : ${res.created} ajoutés, ${res.skipped} ignorés`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
+  });
 
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles-all'],
@@ -492,14 +502,28 @@ export default function Parametres() {
                 {articles.filter(a => a.actif).length} actif(s) · {articles.filter(a => !a.actif).length} inactif(s)
               </p>
             </div>
-            <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
-              {(['all', 'actif', 'inactif'] as const).map(f => (
-                <button key={f} onClick={() => setCatalogueFilter(f)}
-                  className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
-                    catalogueFilter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                  {f === 'all' ? 'Tous' : f === 'actif' ? 'Actifs' : 'Inactifs'}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => articlesApi.template().then(b => downloadBlob(b, 'template-articles.xlsx')).catch(() => toast.error('Erreur téléchargement'))}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
+                <Download className="w-3.5 h-3.5" /> Modèle Excel
+              </button>
+              <button onClick={() => fileInputArticleRef.current?.click()}
+                disabled={importArticleMut.isPending}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-60">
+                <Upload className="w-3.5 h-3.5" /> {importArticleMut.isPending ? 'Import…' : 'Importer'}
+              </button>
+              <input ref={fileInputArticleRef} type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) { importArticleMut.mutate(f); e.target.value = ''; } }} />
+              <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
+                {(['all', 'actif', 'inactif'] as const).map(f => (
+                  <button key={f} onClick={() => setCatalogueFilter(f)}
+                    className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
+                      catalogueFilter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                    {f === 'all' ? 'Tous' : f === 'actif' ? 'Actifs' : 'Inactifs'}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

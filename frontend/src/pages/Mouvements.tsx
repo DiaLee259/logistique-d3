@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Download, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,8 +8,16 @@ import type { Mouvement, Article, Entrepot } from '@/lib/types';
 
 const PROD_SAV = ['PROD', 'SAV', 'MALFACON', 'AUTRE'];
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function Mouvements() {
   const qc = useQueryClient();
+  const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({ type: '', entrepotId: '', departement: '', dateDebut: '', dateFin: '', mois: '' });
   const [page, setPage] = useState(1);
@@ -37,6 +45,16 @@ export default function Mouvements() {
   const deleteMut = useMutation({
     mutationFn: mouvementsApi.delete,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mouvements'] }); qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Mouvement supprimé'); },
+  });
+
+  const importMut = useMutation({
+    mutationFn: mouvementsApi.import,
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['mouvements'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success(`Import terminé : ${data.created} ajoutés, ${data.skipped} ignorés`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
   });
 
   const closeDialog = () => {
@@ -96,6 +114,15 @@ export default function Mouvements() {
         <button onClick={exportCSV} className="flex items-center gap-2 px-3 py-2 text-sm bg-card border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground">
           <Download className="w-4 h-4" /> Export CSV
         </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => mouvementsApi.template().then(b => downloadBlob(b, 'template-mouvements.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Modèle Excel
+          </button>
+          <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Importer
+          </button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+        </div>
         <button onClick={() => setDialogOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
           <Plus className="w-4 h-4" /> Ajouter
         </button>

@@ -1,4 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
+import * as ExcelJS from 'exceljs';
 
 import { CommandesService } from './commandes.service';
 import { CreateCommandeDto } from './dto/create-commande.dto';
@@ -32,6 +35,42 @@ export class CommandesController {
   }
 
   // ── Routes statiques (AVANT :id pour éviter conflit de routes) ───────────
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1')
+  @Get('template')
+  async templateCommandes(@Res() res: Response) {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Commandes');
+    ws.columns = [
+      { header: 'Ref groupe', key: 'refGroupe', width: 15 },
+      { header: 'Demandeur *', key: 'demandeur', width: 25 },
+      { header: 'Département *', key: 'departement', width: 20 },
+      { header: 'Email demandeur', key: 'email', width: 30 },
+      { header: 'Téléphone destinataire', key: 'telephone', width: 20 },
+      { header: 'Adresse de livraison', key: 'adresse', width: 40 },
+      { header: 'Commentaire commande', key: 'commentaire', width: 35 },
+      { header: 'Référence article *', key: 'refArticle', width: 20 },
+      { header: 'Quantité demandée *', key: 'quantite', width: 16 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    ws.addRow({ refGroupe: 'G1', demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: 'j.dupont@tech.fr', telephone: '06 12 34 56 78', adresse: '12 rue de la Paix, Lyon', commentaire: '', refArticle: 'CAB-FO-G657', quantite: 100 });
+    ws.addRow({ refGroupe: 'G1', demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'CON-SC-APC', quantite: 20 });
+    ws.addRow({ refGroupe: 'G2', demandeur: 'Marie Martin', departement: 'ADMIN', email: '', telephone: '07 98 76 54 32', adresse: '', commentaire: 'Urgence', refArticle: 'CAB-FO-G657', quantite: 50 });
+    const buffer = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="template-commandes.xlsx"');
+    res.send(buffer);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1')
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  async importCommandes(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+    return this.service.importCommandes(file.buffer, req.user?.id);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get()

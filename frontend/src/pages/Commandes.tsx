@@ -88,10 +88,18 @@ function ArticleCombobox({
   );
 }
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function Commandes() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
+  const importRef = useRef<HTMLInputElement>(null);
 
   // Filtres
   const [search, setSearch] = useState('');
@@ -186,6 +194,15 @@ export default function Commandes() {
       toast.success('Commande supprimée');
       setConfirmDeleteId(null);
     },
+  });
+
+  const importMut = useMutation({
+    mutationFn: commandesApi.import,
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      toast.success(`Import terminé : ${data.created} ajoutées, ${data.skipped} ignorées`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
   });
 
   const resetForm = () => {
@@ -291,12 +308,25 @@ export default function Commandes() {
           {showFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
 
-        {/* Import Excel */}
+        {/* Import Excel existant */}
         <label className={cn('flex items-center gap-1.5 px-3 py-2 text-xs bg-card border border-border rounded-lg hover:border-green-500 cursor-pointer transition-colors', excelLoading && 'opacity-60')}>
           <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
           {excelLoading ? 'Analyse…' : 'Import Excel'}
           <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} disabled={excelLoading} />
         </label>
+
+        {/* Import batch template */}
+        {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => commandesApi.template().then(b => downloadBlob(b, 'template-commandes.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+              Modèle Excel
+            </button>
+            <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+              Import lot
+            </button>
+            <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+          </div>
+        )}
 
         {/* Lien prestataire */}
         {hasRole('ADMIN', 'LOGISTICIEN_1') && (

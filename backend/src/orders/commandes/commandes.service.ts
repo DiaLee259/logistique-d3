@@ -3,6 +3,7 @@ import { StatutCommande } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCommandeDto } from './dto/create-commande.dto';
 import { PdfService } from '../../pdf/pdf.service';
+import * as ExcelJS from 'exceljs';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -412,5 +413,64 @@ export class CommandesService {
     });
 
     return { lien: { nom: lien.nom, expiresAt: lien.expiresAt }, articles };
+  }
+
+  async importCommandes(buffer: Buffer, userId?: string) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    // Group rows by refGroupe
+    const groups = new Map<string, any[]>();
+    let rowIndex = 0;
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return;
+      const refGroupe = String(row.getCell(1).value ?? '').trim() || `__row_${rowIndex++}`;
+      if (!groups.has(refGroupe)) groups.set(refGroupe, []);
+      groups.get(refGroupe)!.push(row);
+    });
+
+    for (const [, rows] of groups) {
+      const firstRow = rows[0];
+      const demandeur = String(firstRow.getCell(2).value ?? '').trim();
+      const departement = String(firstRow.getCell(3).value ?? '').trim();
+      if (!demandeur || !departement) { skipped++; continue; }
+      const emailDemandeur = String(firstRow.getCell(4).value ?? '').trim() || undefined;
+      const telephoneDestinataire = String(firstRow.getCell(5).value ?? '').trim() || undefined;
+      const adresseLivraison = String(firstRow.getCell(6).value ?? '').trim() || undefined;
+      const commentaire = String(firstRow.getCell(7).value ?? '').trim() || undefined;
+
+      const lignes: { articleId: string; quantiteDemandee: number }[] = [];
+      for (const row of rows) {
+        const refArticle = String(row.getCell(8).value ?? '').trim();
+        const quantite = parseInt(String(row.getCell(9).value ?? '0')) || 0;
+        if (!refArticle || !quantite) continue;
+        const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
+        if (article) lignes.push({ articleId: article.id, quantiteDemandee: quantite });
+      }
+      if (lignes.length === 0) { skipped++; continue; }
+
+      try {
+        const count = await this.prisma.commande.count();
+        const numero = `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+        await this.prisma.commande.create({
+          data: {
+            numero,
+            demandeur,
+            departement,
+            emailDemandeur,
+            telephoneDestinataire,
+            adresseLivraison,
+            commentaire,
+            lignes: { create: lignes },
+          },
+        });
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { created, skipped, total: created + skipped };
   }
 }

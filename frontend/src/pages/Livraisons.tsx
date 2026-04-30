@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,8 +20,16 @@ const statutLivraisonColor: Record<string, string> = {
   INCIDENT: 'bg-red-100 text-red-700',
 };
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function Livraisons() {
   const qc = useQueryClient();
+  const importRef = useRef<HTMLInputElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fournisseur, setFournisseur] = useState('');
   const [entrepotId, setEntrepotId] = useState('');
@@ -85,6 +93,17 @@ export default function Livraisons() {
       toast.success('Livraison supprimée');
       setConfirmDeleteId(null);
     },
+  });
+
+  const importMut = useMutation({
+    mutationFn: livraisonsApi.import,
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['livraisons'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      qc.invalidateQueries({ queryKey: ['mouvements'] });
+      toast.success(`Import terminé : ${data.created} ajoutées, ${data.skipped} ignorées`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
   });
 
   const closeDialog = () => {
@@ -166,6 +185,15 @@ export default function Livraisons() {
               vue === 'matrice' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             <LayoutGrid className="w-3.5 h-3.5" /> Matrice
           </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => livraisonsApi.template().then(b => downloadBlob(b, 'template-livraisons.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Modèle Excel
+          </button>
+          <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Importer
+          </button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
         </div>
         <button onClick={() => setDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">

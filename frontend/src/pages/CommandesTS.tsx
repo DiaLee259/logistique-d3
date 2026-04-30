@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2, LayoutGrid, List, Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,10 +9,18 @@ import { useAuth } from '@/contexts/AuthContext';
 
 type LigneForm = { articleId: string; qteProd: number; qteSav: number; qteMalfacon: number; repartitions: { entrepotId: string; tauxRepartition: number }[] };
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function CommandesTS() {
   const qc = useQueryClient();
   const { hasRole } = useAuth();
   const canEdit = hasRole('ADMIN', 'LOGISTICIEN_1');
+  const importRef = useRef<HTMLInputElement>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -66,6 +74,15 @@ export default function CommandesTS() {
       toast.success('Commande TS supprimée');
       setConfirmDeleteId(null);
     },
+  });
+
+  const importMut = useMutation({
+    mutationFn: commandesTSApi.import,
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['commandes-ts'] });
+      toast.success(`Import terminé : ${data.created} ajoutées, ${data.skipped} ignorées`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
   });
 
   const closeCreate = () => {
@@ -167,6 +184,17 @@ export default function CommandesTS() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
+          )}
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => commandesTSApi.template().then(b => downloadBlob(b, 'template-commandes-ts.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+                Modèle Excel
+              </button>
+              <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+                Importer
+              </button>
+              <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+            </div>
           )}
           {canEdit && (
             <button onClick={openCreate}

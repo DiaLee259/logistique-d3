@@ -68,6 +68,8 @@ export const articlesApi = {
   create: (data: any) => api.post('/articles', data).then(r => r.data),
   update: (id: string, data: any) => api.put(`/articles/${id}`, data).then(r => r.data),
   delete: (id: string) => api.delete(`/articles/${id}`).then(r => r.data),
+  template: () => api.get('/articles/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/articles/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Entrepôts ─────────────────────────────────────────────────────────────────
@@ -98,6 +100,8 @@ export const mouvementsApi = {
   delete: (id: string) => api.delete(`/mouvements/${id}`).then(r => r.data),
   toggle: (id: string, field: 'envoye' | 'recu') =>
     api.patch(`/mouvements/${id}/toggle/${field}`).then(r => r.data),
+  template: () => api.get('/mouvements/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/mouvements/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Commandes ─────────────────────────────────────────────────────────────────
@@ -137,6 +141,8 @@ export const commandesApi = {
     api.post(`/commandes/public/${token}`, data).then(r => r.data),
   suiviPublic: (numero: string) =>
     api.get(`/commandes/public/suivi/${encodeURIComponent(numero)}`).then(r => r.data),
+  template: () => api.get('/commandes/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/commandes/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Livraisons ────────────────────────────────────────────────────────────────
@@ -152,6 +158,8 @@ export const livraisonsApi = {
   updateStatut: (id: string, data: any) =>
     api.patch(`/livraisons/${id}/statut`, data).then(r => r.data),
   delete: (id: string) => api.delete(`/livraisons/${id}`).then(r => r.data),
+  template: () => api.get('/livraisons/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/livraisons/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
@@ -186,6 +194,8 @@ export const inventairesApi = {
   alertes: () => api.get('/inventaires/alertes').then(r => r.data),
   etatEntrepot: (entrepotId: string) => api.get('/inventaires/entrepot', { params: { entrepotId } }).then(r => r.data),
   create: (data: any) => api.post('/inventaires', data).then(r => r.data),
+  template: () => api.get('/inventaires/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/inventaires/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Commandes TS ──────────────────────────────────────────────────────────────
@@ -203,6 +213,8 @@ export const commandesTSApi = {
   updateLigne: (ligneId: string, data: any) => api.put(`/commandes-ts/lignes/${ligneId}`, data).then(r => r.data),
   updateRepartition: (repartitionId: string, data: any) => api.put(`/commandes-ts/repartitions/${repartitionId}`, data).then(r => r.data),
   delete: (id: string) => api.delete(`/commandes-ts/${id}`).then(r => r.data),
+  template: () => api.get('/commandes-ts/template', { responseType: 'blob' }).then(r => r.data as Blob),
+  import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/commandes-ts/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };
 
 // ── Répertoire (Sociétés + Intervenants) ──────────────────────────────────────

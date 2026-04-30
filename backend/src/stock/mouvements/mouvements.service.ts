@@ -3,6 +3,7 @@ import { TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class MouvementsService {
@@ -139,6 +140,60 @@ export class MouvementsService {
       where: { id },
       data: { [field]: !m[field] },
     });
+  }
+
+  async importMouvements(buffer: Buffer, userId?: string) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    const rows: ExcelJS.Row[] = [];
+    ws.eachRow((row, idx) => { if (idx > 1) rows.push(row); });
+    for (const row of rows) {
+      const typeRaw = String(row.getCell(1).value ?? '').trim().toUpperCase();
+      const dateRaw = String(row.getCell(2).value ?? '').trim();
+      const refArticle = String(row.getCell(3).value ?? '').trim();
+      const codeEntrepot = String(row.getCell(4).value ?? '').trim();
+      const qteFournie = parseInt(String(row.getCell(5).value ?? '0')) || 0;
+      const qteDemandeeRaw = row.getCell(6).value;
+      const qteDemandee = qteDemandeeRaw ? parseInt(String(qteDemandeeRaw)) || qteFournie : qteFournie;
+      const departement = String(row.getCell(7).value ?? '').trim() || undefined;
+      const manager = String(row.getCell(8).value ?? '').trim() || undefined;
+      const numeroCommande = String(row.getCell(9).value ?? '').trim() || undefined;
+      const sourceDestination = String(row.getCell(10).value ?? '').trim() || undefined;
+      const commentaire = String(row.getCell(11).value ?? '').trim() || undefined;
+
+      if (!refArticle || !codeEntrepot || !qteFournie) { skipped++; continue; }
+      if (typeRaw !== 'ENTREE' && typeRaw !== 'SORTIE') { errors.push(`Type invalide: ${typeRaw}`); skipped++; continue; }
+
+      const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
+      const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
+      if (!article || !entrepot) { errors.push(`Article ou entrepôt introuvable: ${refArticle} / ${codeEntrepot}`); skipped++; continue; }
+
+      const date = dateRaw ? new Date(dateRaw) : new Date();
+      try {
+        await this.create({
+          articleId: article.id,
+          entrepotId: entrepot.id,
+          type: typeRaw as TypeMouvement,
+          quantiteFournie: qteFournie,
+          quantiteDemandee: qteDemandee,
+          departement,
+          manager,
+          numeroCommande,
+          sourceDestination,
+          commentaire,
+          date: date.toISOString(),
+        } as any, userId);
+        created++;
+      } catch (e: any) {
+        errors.push(e?.message ?? 'Erreur inconnue');
+        skipped++;
+      }
+    }
+    return { created, skipped, errors, total: created + skipped };
   }
 
   private async validateStockSuffisant(articleId: string, entrepotId: string, quantite: number) {

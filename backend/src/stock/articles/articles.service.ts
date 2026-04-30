@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class ArticlesService {
@@ -49,6 +50,31 @@ export class ArticlesService {
   async delete(id: string) {
     await this.findById(id);
     return this.prisma.article.update({ where: { id }, data: { actif: false } });
+  }
+
+  async importArticles(buffer: Buffer) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    const rows: ExcelJS.Row[] = [];
+    ws.eachRow((row, idx) => { if (idx > 1) rows.push(row); });
+    for (const row of rows) {
+      const reference = String(row.getCell(1).value ?? '').trim();
+      const nom = String(row.getCell(2).value ?? '').trim();
+      if (!reference || !nom) { skipped++; continue; }
+      const description = String(row.getCell(3).value ?? '').trim() || undefined;
+      const unite = String(row.getCell(4).value ?? '').trim() || 'unité';
+      const seuilAlerte = parseInt(String(row.getCell(5).value ?? '0')) || 0;
+      try {
+        await this.prisma.article.create({ data: { reference, nom, description, unite, seuilAlerte } });
+        created++;
+      } catch (e: any) {
+        if (e?.code === 'P2002') { skipped++; } else { throw e; }
+      }
+    }
+    return { created, skipped, total: created + skipped };
   }
 
   async getStockParArticle(entrepotId?: string) {

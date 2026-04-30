@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { StatutLivraison, TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MouvementsService } from '../../stock/mouvements/mouvements.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class LivraisonsService {
@@ -140,5 +141,58 @@ export class LivraisonsService {
       },
       orderBy: { deletedAt: 'desc' },
     });
+  }
+
+  async importLivraisons(buffer: Buffer, userId?: string) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    // Group rows by refGroupe (or per row if empty)
+    const groups = new Map<string, any[]>();
+    let rowIndex = 0;
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return;
+      const refGroupe = String(row.getCell(1).value ?? '').trim() || `__row_${rowIndex++}`;
+      if (!groups.has(refGroupe)) groups.set(refGroupe, []);
+      groups.get(refGroupe)!.push(row);
+    });
+
+    for (const [, rows] of groups) {
+      const firstRow = rows[0];
+      const numeroCommande = String(firstRow.getCell(2).value ?? '').trim() || undefined;
+      const codeEntrepot = String(firstRow.getCell(3).value ?? '').trim();
+      const fournisseur = String(firstRow.getCell(4).value ?? '').trim() || '';
+      // numeroSuivi and datePrevue are informational
+
+      if (!codeEntrepot) { skipped++; continue; }
+      const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
+      if (!entrepot) { skipped++; continue; }
+
+      let commandeId: string | undefined;
+      if (numeroCommande) {
+        const commande = await this.prisma.commande.findFirst({ where: { numero: numeroCommande } });
+        commandeId = commande?.id;
+      }
+
+      const lignes: { articleId: string; quantiteCommandee: number; quantiteRecue: number }[] = [];
+      for (const row of rows) {
+        const refArticle = String(row.getCell(7).value ?? '').trim();
+        const quantiteRecue = parseInt(String(row.getCell(8).value ?? '0')) || 0;
+        if (!refArticle || !quantiteRecue) continue;
+        const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
+        if (article) lignes.push({ articleId: article.id, quantiteCommandee: quantiteRecue, quantiteRecue });
+      }
+
+      if (lignes.length === 0) { skipped++; continue; }
+      try {
+        await this.create({ fournisseur, entrepotId: entrepot.id, lignes, commandeId }, userId);
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { created, skipped, total: created + skipped };
   }
 }

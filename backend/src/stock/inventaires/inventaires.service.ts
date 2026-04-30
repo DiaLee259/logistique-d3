@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class InventairesService {
@@ -118,5 +119,41 @@ export class InventairesService {
       )
     );
     return created;
+  }
+
+  async importInventaire(buffer: Buffer, userId?: string) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    const rows: ExcelJS.Row[] = [];
+    ws.eachRow((row, idx) => { if (idx > 1) rows.push(row); });
+    for (const row of rows) {
+      const codeEntrepot = String(row.getCell(1).value ?? '').trim();
+      const refArticle = String(row.getCell(2).value ?? '').trim();
+      const quantite = parseInt(String(row.getCell(4).value ?? '0')) || 0;
+      const commentaire = String(row.getCell(5).value ?? '').trim() || undefined;
+      if (!codeEntrepot || !refArticle) { skipped++; continue; }
+      const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
+      const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
+      if (!entrepot || !article) { skipped++; continue; }
+      try {
+        await this.prisma.inventairePhysique.create({
+          data: {
+            entrepotId: entrepot.id,
+            articleId: article.id,
+            quantite,
+            commentaire,
+            userId,
+            date: new Date(),
+          },
+        });
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { created, skipped, total: created + skipped };
   }
 }

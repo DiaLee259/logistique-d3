@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class CommandesTSService {
@@ -167,5 +168,69 @@ export class CommandesTSService {
       },
       orderBy: { deletedAt: 'desc' },
     });
+  }
+
+  async importCommandesTS(buffer: Buffer, userId?: string) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    let created = 0;
+    let skipped = 0;
+    // Group rows by refGroupe
+    const groups = new Map<string, any[]>();
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return;
+      const refGroupe = String(row.getCell(1).value ?? '').trim();
+      if (!refGroupe) return;
+      if (!groups.has(refGroupe)) groups.set(refGroupe, []);
+      groups.get(refGroupe)!.push(row);
+    });
+
+    for (const [, rows] of groups) {
+      const firstRow = rows[0];
+      const titre = String(firstRow.getCell(2).value ?? '').trim();
+      const dateDeb = String(firstRow.getCell(3).value ?? '').trim();
+      const dateFin = String(firstRow.getCell(4).value ?? '').trim();
+      if (!titre || !dateDeb || !dateFin) { skipped++; continue; }
+      const commentaire = String(firstRow.getCell(5).value ?? '').trim() || undefined;
+
+      // Group rows within the group by refArticle
+      const articleMap = new Map<string, { qteProd: number; qteSav: number; qteMalfacon: number; repartitions: { entrepotId: string; tauxRepartition: number }[] }>();
+      for (const row of rows) {
+        const refArticle = String(row.getCell(6).value ?? '').trim();
+        if (!refArticle) continue;
+        const qteProd = parseInt(String(row.getCell(7).value ?? '0')) || 0;
+        const qteSav = parseInt(String(row.getCell(8).value ?? '0')) || 0;
+        const qteMalfacon = parseInt(String(row.getCell(9).value ?? '0')) || 0;
+        const codeEntrepot = String(row.getCell(10).value ?? '').trim();
+        const tauxRepartition = parseFloat(String(row.getCell(11).value ?? '0')) || 0;
+
+        if (!articleMap.has(refArticle)) {
+          articleMap.set(refArticle, { qteProd, qteSav, qteMalfacon, repartitions: [] });
+        }
+        if (codeEntrepot) {
+          const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
+          if (entrepot) {
+            articleMap.get(refArticle)!.repartitions.push({ entrepotId: entrepot.id, tauxRepartition });
+          }
+        }
+      }
+
+      const lignes: any[] = [];
+      for (const [refArticle, data] of articleMap) {
+        const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
+        if (!article) continue;
+        lignes.push({ articleId: article.id, ...data });
+      }
+
+      if (lignes.length === 0) { skipped++; continue; }
+      try {
+        await this.create({ titre, dateDebut: dateDeb, dateFin, commentaire, lignes }, userId ?? '');
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { created, skipped, total: created + skipped };
   }
 }

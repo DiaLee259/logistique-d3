@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
@@ -6,8 +6,16 @@ import { inventairesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import type { Entrepot } from '@/lib/types';
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function Inventaire() {
   const qc = useQueryClient();
+  const importRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<'etat' | 'historique'>('etat');
   const [selectedEntrepot, setSelectedEntrepot] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -50,6 +58,17 @@ export default function Inventaire() {
       toast.success('Inventaire enregistré');
       closeDialog();
     },
+  });
+
+  const importMut = useMutation({
+    mutationFn: inventairesApi.import,
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['inventaire-etat'] });
+      qc.invalidateQueries({ queryKey: ['inventaires-alertes'] });
+      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
+      toast.success(`Import terminé : ${data.created} ajoutés, ${data.skipped} ignorés`);
+    },
+    onError: () => toast.error("Erreur lors de l'import"),
   });
 
   const alertesActives = alertes.filter(a => a.enAlerte);
@@ -125,18 +144,29 @@ export default function Inventaire() {
 
   return (
     <div className="space-y-4">
-      {/* Onglets */}
-      <div className="flex gap-1 bg-muted/30 rounded-lg p-1 w-fit">
-        <button onClick={() => setTab('etat')}
-          className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
-            tab === 'etat' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-          <ClipboardCheck className="w-3.5 h-3.5" /> État des stocks
-        </button>
-        <button onClick={() => setTab('historique')}
-          className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
-            tab === 'historique' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-          <History className="w-3.5 h-3.5" /> Historique
-        </button>
+      {/* Onglets + boutons import */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 bg-muted/30 rounded-lg p-1 w-fit">
+          <button onClick={() => setTab('etat')}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
+              tab === 'etat' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <ClipboardCheck className="w-3.5 h-3.5" /> État des stocks
+          </button>
+          <button onClick={() => setTab('historique')}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
+              tab === 'historique' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <History className="w-3.5 h-3.5" /> Historique
+          </button>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => inventairesApi.template().then(b => downloadBlob(b, 'template-inventaire.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Modèle Excel
+          </button>
+          <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            Importer
+          </button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+        </div>
       </div>
 
       {/* ─── VUE HISTORIQUE ─────────────────────────────────────────────────── */}
