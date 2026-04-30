@@ -80,9 +80,10 @@ export class RepertoireService {
 
   // ── Import Excel ──────────────────────────────────────────────────────────────
 
-  async importSocietes(buffer: Buffer) {
+  async importSocietes(buffer: Buffer<ArrayBufferLike>) {
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets[0];
 
     const rows: any[] = [];
@@ -112,9 +113,10 @@ export class RepertoireService {
     return { created, skipped, total: rows.length };
   }
 
-  async importIntervenants(buffer: Buffer) {
+  async importIntervenants(buffer: Buffer<ArrayBufferLike>) {
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets[0];
 
     const rows: any[] = [];
