@@ -121,6 +121,15 @@ export class InventairesService {
     return created;
   }
 
+  /** Retourne tous les articles (actifs en premier, puis inactifs) triés par nom */
+  async getAllArticlesForTemplate() {
+    const articles = await this.prisma.article.findMany({
+      select: { id: true, reference: true, nom: true, actif: true },
+      orderBy: [{ actif: 'desc' }, { nom: 'asc' }],
+    });
+    return articles;
+  }
+
   async deleteOne(id: string) {
     return this.prisma.inventairePhysique.delete({ where: { id } });
   }

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventairesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -90,8 +90,8 @@ export default function Inventaire() {
   const openDialog = (entrepotId: string) => {
     setDialogEntrepotId(entrepotId);
     if (etat.length > 0) {
-      // On utilise les données de l'état (qui contient tous les articles actifs)
-      setLignes(etat.map((e: any) => ({
+      // On utilise les données de l'état (qui contient tous les articles actifs), triés par nom
+      setLignes([...etat].sort((a: any, b: any) => (a.article?.nom ?? '').localeCompare(b.article?.nom ?? '', 'fr')).map((e: any) => ({
         articleId: e.articleId,
         quantite: e.stockTheorique,
         commentaire: '',
@@ -158,6 +158,17 @@ export default function Inventaire() {
 
   return (
     <div className="space-y-4">
+      {/* Overlay import en cours */}
+      {importMut.isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border px-8 py-6 flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-sm font-semibold">Import en cours…</p>
+            <p className="text-xs text-muted-foreground">Traitement du fichier, veuillez patienter.</p>
+          </div>
+        </div>
+      )}
+
       {/* Onglets + boutons import */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1 bg-muted/30 rounded-lg p-1 w-fit">
@@ -176,8 +187,14 @@ export default function Inventaire() {
           <button onClick={() => inventairesApi.template().then(b => downloadBlob(b, 'template-inventaire.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
             Modèle Excel
           </button>
-          <button onClick={() => importRef.current?.click()} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
-            Importer
+          <button
+            onClick={() => importRef.current?.click()}
+            disabled={importMut.isPending}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {importMut.isPending
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Import en cours…</>
+              : 'Importer'}
           </button>
           <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
         </div>
