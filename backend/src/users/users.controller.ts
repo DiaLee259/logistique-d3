@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Put, Patch, Body, Param, UseGuards } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { UsersService, UserPrivileges } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -38,5 +38,11 @@ export class UsersController {
   @Roles('ADMIN')
   toggleActif(@Param('id') id: string) {
     return this.usersService.toggleActif(id);
+  }
+
+  @Put(':id/privileges')
+  @Roles('ADMIN')
+  updatePrivileges(@Param('id') id: string, @Body() privileges: UserPrivileges) {
+    return this.usersService.updatePrivileges(id, privileges);
   }
 }

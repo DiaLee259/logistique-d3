@@ -125,19 +125,33 @@ export class InventairesService {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets[0];
+    if (!ws) return { created: 0, skipped: 0, errors: ['Fichier Excel vide ou invalide'], total: 0 };
+
     let created = 0;
     let skipped = 0;
+    const errors: string[] = [];
     const rows: ExcelJS.Row[] = [];
     ws.eachRow((row, idx) => { if (idx > 1) rows.push(row); });
+
     for (const row of rows) {
       const codeEntrepot = String(row.getCell(1).value ?? '').trim();
-      const refArticle = String(row.getCell(2).value ?? '').trim();
-      const quantite = parseInt(String(row.getCell(4).value ?? '0')) || 0;
+      const refArticle   = String(row.getCell(2).value ?? '').trim();
+      // col 3 = Nom article (info, ignorée)
+      const rawQte = row.getCell(4).value;
+      const quantite = rawQte !== null && rawQte !== undefined ? (parseInt(String(rawQte)) || 0) : null;
       const commentaire = String(row.getCell(5).value ?? '').trim() || undefined;
+
       if (!codeEntrepot || !refArticle) { skipped++; continue; }
+      if (quantite === null || quantite === undefined) {
+        errors.push(`Quantité manquante pour ${refArticle}`); skipped++; continue;
+      }
+
       const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
+      if (!entrepot) { errors.push(`Entrepôt introuvable : "${codeEntrepot}"`); skipped++; continue; }
+
       const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
-      if (!entrepot || !article) { skipped++; continue; }
+      if (!article) { errors.push(`Article introuvable : "${refArticle}"`); skipped++; continue; }
+
       try {
         await this.prisma.inventairePhysique.create({
           data: {
@@ -145,15 +159,22 @@ export class InventairesService {
             articleId: article.id,
             quantite,
             commentaire,
-            userId,
+            userId: userId ?? null,
             date: new Date(),
           },
         });
+        // Mettre à jour le stock théorique avec la quantité inventoriée
+        await this.prisma.stock.upsert({
+          where: { articleId_entrepotId: { articleId: article.id, entrepotId: entrepot.id } },
+          update: { quantite },
+          create: { articleId: article.id, entrepotId: entrepot.id, quantite },
+        });
         created++;
-      } catch {
+      } catch (err: any) {
+        errors.push(`Erreur ligne ${refArticle}/${codeEntrepot} : ${err?.message ?? String(err)}`);
         skipped++;
       }
     }
-    return { created, skipped, total: created + skipped };
+    return { created, skipped, errors, total: rows.length };
   }
 }

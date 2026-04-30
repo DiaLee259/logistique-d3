@@ -186,6 +186,7 @@ export const usersApi = {
   create: (data: any) => api.post('/users', data).then(r => r.data),
   update: (id: string, data: any) => api.put(`/users/${id}`, data).then(r => r.data),
   toggleActif: (id: string) => api.patch(`/users/${id}/toggle-actif`).then(r => r.data),
+  updatePrivileges: (id: string, privileges: any) => api.put(`/users/${id}/privileges`, privileges).then(r => r.data),
 };
 
 // ── Inventaires ───────────────────────────────────────────────────────────────

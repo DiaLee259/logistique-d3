@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, FileSpreadsheet, Eye, X,
+  Plus, Search, Eye, X,
   Link2, Copy, Check, ChevronDown, ChevronUp, Calendar, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi, articlesApi, uploadsApi } from '@/lib/api';
+import { commandesApi, articlesApi } from '@/lib/api';
 import { cn, formatDate, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -111,10 +111,6 @@ export default function Commandes() {
 
   // Dialogs
   const [newDialogOpen, setNewDialogOpen] = useState(false);
-  const [excelDialogOpen, setExcelDialogOpen] = useState(false);
-  const [excelData, setExcelData] = useState<any>(null);
-  const [excelLoading, setExcelLoading] = useState(false);
-  const [excelMapping, setExcelMapping] = useState<Record<number, string>>({}); // index → articleId override
   const [liensOpen, setLiensOpen] = useState(false);
   const [nomLien, setNomLien] = useState('');
   const [expireDays, setExpireDays] = useState('30');
@@ -210,57 +206,6 @@ export default function Commandes() {
     setLignes([{ articleId: '', quantiteDemandee: 1, commentaire: '' }]);
   };
 
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setExcelLoading(true);
-    try {
-      const parsed = await uploadsApi.parseExcel(file);
-      setExcelData(parsed);
-      setExcelDialogOpen(true);
-    } catch {
-      toast.error('Erreur lors du parsing Excel');
-    } finally {
-      setExcelLoading(false);
-      e.target.value = '';
-    }
-  };
-
-  const getAutoMatch = (l: any) =>
-    articles.find(a =>
-      a.reference === l.reference ||
-      (l.articleNom && a.nom.toLowerCase().includes(l.articleNom.toLowerCase())) ||
-      (l.reference && a.reference?.toLowerCase().includes(l.reference.toLowerCase()))
-    );
-
-  const createFromExcel = () => {
-    if (!excelData) return;
-    const lignesFinales = excelData.lignes
-      .map((l: any, i: number) => {
-        const overrideId = excelMapping[i];
-        if (overrideId) return { articleId: overrideId, quantiteDemandee: l.quantiteDemandee || 1 };
-        const auto = getAutoMatch(l);
-        return auto ? { articleId: auto.id, quantiteDemandee: l.quantiteDemandee || 1 } : null;
-      })
-      .filter(Boolean);
-
-    if (lignesFinales.length === 0) { toast.error('Aucun article associé. Veuillez mapper les articles manuellement.'); return; }
-
-    createMut.mutate({
-      departement: excelData.departement || 'Non défini',
-      demandeur: excelData.demandeur,
-      emailDemandeur: excelData.emailDemandeur,
-      societe: excelData.societe,
-      manager: excelData.manager,
-      nombreGrilles: excelData.nombreGrilles,
-      typeGrille: excelData.typeGrille,
-      lignes: lignesFinales,
-    });
-    setExcelDialogOpen(false);
-    setExcelData(null);
-    setExcelMapping({});
-  };
-
   const handleCreateManuel = () => {
     if (!formData.departement) { toast.error('Département requis'); return; }
     const validLignes = lignes.filter(l => l.articleId && l.quantiteDemandee > 0);
@@ -308,14 +253,7 @@ export default function Commandes() {
           {showFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
 
-        {/* Import Excel existant */}
-        <label className={cn('flex items-center gap-1.5 px-3 py-2 text-xs bg-card border border-border rounded-lg hover:border-green-500 cursor-pointer transition-colors', excelLoading && 'opacity-60')}>
-          <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
-          {excelLoading ? 'Analyse…' : 'Import Excel'}
-          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} disabled={excelLoading} />
-        </label>
-
-        {/* Import batch template */}
+        {/* Import lot template */}
         {hasRole('ADMIN', 'LOGISTICIEN_1') && (
           <div className="flex items-center gap-2">
             <button onClick={() => commandesApi.template().then(b => downloadBlob(b, 'template-commandes.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
@@ -549,80 +487,6 @@ export default function Commandes() {
           </div>
         </div>
       )}
-
-      {/* Dialog Excel */}
-      {excelDialogOpen && excelData && (() => {
-        const matched = excelData.lignes.filter((_: any, i: number) => excelMapping[i] || getAutoMatch(excelData.lignes[i])).length;
-        const unmatched = excelData.lignes.length - matched;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-green-600" /> Import Excel — vérification</h2>
-                <button onClick={() => { setExcelDialogOpen(false); setExcelData(null); setExcelMapping({}); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
-              </div>
-              <div className="p-5 space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    ['Département', excelData.departement || '—'],
-                    ['Demandeur', excelData.demandeur || '—'],
-                    ['Société', excelData.societe || '—'],
-                    ['Lignes', `${matched}/${excelData.lignes.length} associées`],
-                  ].map(([k, v]) => (
-                    <div key={k} className="bg-muted/30 rounded-lg p-2.5">
-                      <p className="text-muted-foreground">{k}</p>
-                      <p className="font-medium">{v}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {unmatched > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-                    ⚠️ <strong>{unmatched} article(s)</strong> n'ont pas été reconnus automatiquement. Associez-les manuellement ci-dessous.
-                  </div>
-                )}
-
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Articles — association</p>
-                  {excelData.lignes.map((l: any, i: number) => {
-                    const auto = getAutoMatch(l);
-                    const overrideId = excelMapping[i];
-                    const isMatched = !!(overrideId || auto);
-                    return (
-                      <div key={i} className={cn('border rounded-lg p-2.5 text-xs', isMatched ? 'border-green-200 bg-green-50/50' : 'border-amber-200 bg-amber-50/50')}>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className={cn('w-3.5 h-3.5 rounded-full flex-shrink-0', isMatched ? 'bg-green-500' : 'bg-amber-400')} />
-                          <span className="font-medium">{l.articleNom || l.reference || 'Article inconnu'}</span>
-                          <span className="text-muted-foreground ml-auto">×{l.quantiteDemandee || 1}</span>
-                        </div>
-                        {auto && !overrideId ? (
-                          <p className="text-green-700 text-xs pl-5">✓ Associé à : <strong>{auto.nom}</strong> ({auto.reference})</p>
-                        ) : (
-                          <div className="mt-1">
-                            <ArticleCombobox
-                              articles={articles}
-                              value={overrideId || auto?.id || ''}
-                              onChange={id => setExcelMapping(prev => ({ ...prev, [i]: id }))}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => { setExcelDialogOpen(false); setExcelData(null); setExcelMapping({}); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-                  <button onClick={createFromExcel} disabled={createMut.isPending || matched === 0}
-                    className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60">
-                    Créer la commande ({matched} article{matched > 1 ? 's' : ''})
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Dialog liens prestataire */}
       {liensOpen && (

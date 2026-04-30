@@ -49,15 +49,16 @@ enum ProdSav {
 // ─── UTILISATEURS ─────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  nom       String
-  prenom    String
-  role      Role     @default(LOGISTICIEN_2)
-  actif     Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  nom        String
+  prenom     String
+  role       Role     @default(LOGISTICIEN_2)
+  actif      Boolean  @default(true)
+  privileges Json?    // UserPrivileges JSON object
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   commandesValidees  Commande[] @relation("ValideurLog1")
   commandesExpediees Commande[] @relation("ExpediteurLog2")

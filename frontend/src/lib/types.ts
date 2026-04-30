@@ -4,6 +4,50 @@ export type ProdSav = 'PROD' | 'SAV' | 'MALFACON' | 'AUTRE';
 export type StatutCommande = 'EN_ATTENTE' | 'EN_VALIDATION' | 'VALIDEE' | 'EN_ATTENTE_LOG2' | 'EXPEDIEE' | 'LIVREE' | 'ANNULEE';
 export type StatutLivraison = 'EN_ATTENTE' | 'EN_COURS' | 'LIVREE' | 'INCIDENT';
 
+export type PrivilegeLevel = 'NONE' | 'LECTURE' | 'EDITEUR' | 'ADMIN';
+
+export interface UserPrivileges {
+  modules: {
+    dashboard:   PrivilegeLevel;
+    commandes:   PrivilegeLevel;
+    commandesTS: PrivilegeLevel;
+    livraisons:  PrivilegeLevel;
+    inventaire:  PrivilegeLevel;
+    mouvements:  PrivilegeLevel;
+    parametres:  PrivilegeLevel;
+    guide:       PrivilegeLevel;
+  };
+  entrepots: string[];   // [] = tous visibles, sinon liste d'IDs
+  actions: {
+    importExcel:       boolean;
+    exportExcel:       boolean;
+    creerArticle:      boolean;
+    supprimerRecord:   boolean;
+    gererUtilisateurs: boolean;
+  };
+}
+
+export const DEFAULT_PRIVILEGES: UserPrivileges = {
+  modules: {
+    dashboard:   'LECTURE',
+    commandes:   'EDITEUR',
+    commandesTS: 'LECTURE',
+    livraisons:  'LECTURE',
+    inventaire:  'LECTURE',
+    mouvements:  'LECTURE',
+    parametres:  'NONE',
+    guide:       'LECTURE',
+  },
+  entrepots: [],
+  actions: {
+    importExcel:       true,
+    exportExcel:       true,
+    creerArticle:      false,
+    supprimerRecord:   false,
+    gererUtilisateurs: false,
+  },
+};
+
 export interface User {
   id: string;
   email: string;
@@ -12,6 +56,7 @@ export interface User {
   role: Role;
   actif: boolean;
   createdAt: string;
+  privileges?: UserPrivileges;
 }
 
 export interface Entrepot {

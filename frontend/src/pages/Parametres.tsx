@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { usersApi, articlesApi, entrepotsApi, repertoireApi } from '@/lib/api';
 import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
-import type { User, Article, Entrepot, Societe, Intervenant } from '@/lib/types';
+import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges } from '@/lib/types';
+import { DEFAULT_PRIVILEGES } from '@/lib/types';
 
 type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow';
 
@@ -55,6 +56,27 @@ export default function Parametres() {
 
   const closeUserDialog = () => { setUserDialog(false); setEditUser(null); };
 
+  // ── Privileges ────────────────────────────────────────────────────────────
+  const [privilegeDialog, setPrivilegeDialog] = useState(false);
+  const [privilegeUser, setPrivilegeUser] = useState<User | null>(null);
+  const [privilegeForm, setPrivilegeForm] = useState<UserPrivileges>(DEFAULT_PRIVILEGES);
+
+  const updatePrivilegesMut = useMutation({
+    mutationFn: ({ id, privileges }: { id: string; privileges: UserPrivileges }) =>
+      usersApi.updatePrivileges(id, privileges),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Privilèges mis à jour');
+      setPrivilegeDialog(false);
+    },
+  });
+
+  const openPrivilegeDialog = (user: User) => {
+    setPrivilegeUser(user);
+    setPrivilegeForm(user.privileges ?? { ...DEFAULT_PRIVILEGES });
+    setPrivilegeDialog(true);
+  };
+
   const handleSaveUser = () => {
     if (!userForm.prenom || !userForm.nom || !userForm.email) { toast.error('Champs obligatoires manquants'); return; }
     if (!editUser && !userForm.password) { toast.error('Mot de passe requis'); return; }
@@ -75,7 +97,7 @@ export default function Parametres() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots-all'],
     queryFn: () => entrepotsApi.list(true),
-    enabled: tab === 'entrepots',
+    enabled: tab === 'entrepots' || privilegeDialog,
   });
 
   const createEntrepotMut = useMutation({
@@ -396,6 +418,10 @@ export default function Parametres() {
                               <button onClick={() => openEditUser(u)}
                                 className="px-2.5 py-1 text-xs rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors">
                                 Modifier
+                              </button>
+                              <button onClick={() => openPrivilegeDialog(u)}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
+                                <ShieldCheck className="w-3 h-3" /> Privilèges
                               </button>
                               <button onClick={() => toggleActifMut.mutate(u.id)}
                                 className={cn('px-2.5 py-1 text-xs rounded-lg border transition-colors',
@@ -959,8 +985,8 @@ export default function Parametres() {
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Code *</label>
                   <input value={entrepotForm.code} onChange={e => setEntrepotForm(p => ({ ...p, code: e.target.value }))}
-                    disabled={!!editEntrepot} placeholder="ENT01"
-                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-muted" />
+                    placeholder="ENT01"
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Nom *</label>
@@ -1178,6 +1204,160 @@ export default function Parametres() {
           </div>
         </div>
       )}
+
+      {/* ── Dialog Privilèges ── */}
+      {privilegeDialog && privilegeUser && (() => {
+        const MODULE_LABELS: Record<keyof UserPrivileges['modules'], string> = {
+          dashboard:   'Tableau de bord',
+          commandes:   'Commandes',
+          commandesTS: 'Commandes TS',
+          livraisons:  'Livraisons',
+          inventaire:  'Inventaire',
+          mouvements:  'Mouvements',
+          parametres:  'Paramètres',
+          guide:       'Guide & Workflow',
+        };
+        const LEVELS = ['NONE', 'LECTURE', 'EDITEUR', 'ADMIN'] as const;
+        const levelColor = (l: string) => {
+          if (l === 'NONE') return 'bg-gray-100 text-gray-500';
+          if (l === 'LECTURE') return 'bg-blue-100 text-blue-700';
+          if (l === 'EDITEUR') return 'bg-amber-100 text-amber-700';
+          return 'bg-red-100 text-red-700';
+        };
+        const setModule = (mod: keyof UserPrivileges['modules'], level: string) =>
+          setPrivilegeForm(p => ({ ...p, modules: { ...p.modules, [mod]: level as any } }));
+        const setAction = (key: keyof UserPrivileges['actions'], val: boolean) =>
+          setPrivilegeForm(p => ({ ...p, actions: { ...p.actions, [key]: val } }));
+        const toggleEntrepot = (id: string) =>
+          setPrivilegeForm(p => ({
+            ...p,
+            entrepots: p.entrepots.includes(id) ? p.entrepots.filter(e => e !== id) : [...p.entrepots, id],
+          }));
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl border border-border max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  Privilèges — {privilegeUser.prenom} {privilegeUser.nom}
+                </h2>
+                <button onClick={() => setPrivilegeDialog(false)} className="p-1 hover:bg-muted rounded">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {/* Modules */}
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Accès aux modules</h3>
+                  <div className="space-y-2">
+                    {(Object.keys(MODULE_LABELS) as Array<keyof UserPrivileges['modules']>).map(mod => (
+                      <div key={mod} className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2">
+                        <span className="text-xs font-medium w-36">{MODULE_LABELS[mod]}</span>
+                        <div className="flex gap-1">
+                          {LEVELS.map(level => (
+                            <button
+                              key={level}
+                              onClick={() => setModule(mod, level)}
+                              className={cn(
+                                'px-2.5 py-1 text-xs rounded-md font-medium transition-colors border',
+                                privilegeForm.modules[mod] === level
+                                  ? levelColor(level) + ' border-transparent'
+                                  : 'bg-card border-border text-muted-foreground hover:bg-muted',
+                              )}
+                            >
+                              {level === 'NONE' ? 'Aucun' : level === 'LECTURE' ? 'Lecture' : level === 'EDITEUR' ? 'Éditeur' : 'Admin'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Entrepôts visibles */}
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Entrepôts visibles</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Si aucun entrepôt sélectionné, l'utilisateur voit tous les entrepôts.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {entrepots.map((e: Entrepot) => {
+                      const selected = privilegeForm.entrepots.includes(e.id);
+                      return (
+                        <button
+                          key={e.id}
+                          onClick={() => toggleEntrepot(e.id)}
+                          className={cn(
+                            'px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors',
+                            selected
+                              ? 'bg-primary text-white border-primary'
+                              : 'bg-card border-border text-muted-foreground hover:border-primary',
+                          )}
+                        >
+                          {e.code} — {e.nom}
+                        </button>
+                      );
+                    })}
+                    {entrepots.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">Aucun entrepôt configuré.</p>
+                    )}
+                  </div>
+                  {privilegeForm.entrepots.length === 0 && (
+                    <p className="text-xs text-green-700 mt-2">✓ Tous les entrepôts sont visibles</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Permissions d'action</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { key: 'importExcel' as const, label: 'Import Excel' },
+                      { key: 'exportExcel' as const, label: 'Export Excel' },
+                      { key: 'creerArticle' as const, label: 'Créer des articles' },
+                      { key: 'supprimerRecord' as const, label: 'Supprimer des enregistrements' },
+                      { key: 'gererUtilisateurs' as const, label: 'Gérer les utilisateurs' },
+                    ] as { key: keyof UserPrivileges['actions']; label: string }[]).map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2.5 bg-muted/20 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={privilegeForm.actions[key]}
+                          onChange={e => setAction(key, e.target.checked)}
+                          className="rounded border-border w-3.5 h-3.5 accent-primary"
+                        />
+                        <span className="text-xs">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between gap-2 pt-1 border-t border-border">
+                  <button
+                    onClick={() => setPrivilegeForm({ ...DEFAULT_PRIVILEGES })}
+                    className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted text-muted-foreground"
+                  >
+                    Réinitialiser
+                  </button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPrivilegeDialog(false)} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">
+                      Annuler
+                    </button>
+                    <button
+                      onClick={() => updatePrivilegesMut.mutate({ id: privilegeUser.id, privileges: privilegeForm })}
+                      disabled={updatePrivilegesMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Enregistrer les privilèges
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

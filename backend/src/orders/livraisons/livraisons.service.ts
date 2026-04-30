@@ -147,52 +147,67 @@ export class LivraisonsService {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets[0];
+    if (!ws) return { created: 0, skipped: 0, errors: ['Fichier Excel vide ou invalide'], total: 0 };
+
     let created = 0;
     let skipped = 0;
-    // Group rows by refGroupe (or per row if empty)
+    const errors: string[] = [];
+
+    // Regrouper les lignes par Ref groupe (col 1)
     const groups = new Map<string, any[]>();
-    let rowIndex = 0;
+    let autoIdx = 0;
     ws.eachRow((row, idx) => {
       if (idx === 1) return;
-      const refGroupe = String(row.getCell(1).value ?? '').trim() || `__row_${rowIndex++}`;
-      if (!groups.has(refGroupe)) groups.set(refGroupe, []);
-      groups.get(refGroupe)!.push(row);
+      const key = String(row.getCell(1).value ?? '').trim() || `__auto_${autoIdx++}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
     });
 
-    for (const [, rows] of groups) {
+    for (const [groupKey, rows] of groups) {
       const firstRow = rows[0];
-      const numeroCommande = String(firstRow.getCell(2).value ?? '').trim() || undefined;
-      const codeEntrepot = String(firstRow.getCell(3).value ?? '').trim();
-      const fournisseur = String(firstRow.getCell(4).value ?? '').trim() || '';
-      // numeroSuivi and datePrevue are informational
+      const numeroCommande  = String(firstRow.getCell(2).value ?? '').trim() || undefined;
+      const codeEntrepot    = String(firstRow.getCell(3).value ?? '').trim();
+      const fournisseur     = String(firstRow.getCell(4).value ?? '').trim() || 'Inconnu';
+      // Col 5 = N° suivi (non stocké), Col 6 = date prévue
 
-      if (!codeEntrepot) { skipped++; continue; }
+      if (!codeEntrepot) {
+        errors.push(`Groupe "${groupKey}" : Code entrepôt manquant`); skipped++; continue;
+      }
       const entrepot = await this.prisma.entrepot.findFirst({ where: { code: codeEntrepot } });
-      if (!entrepot) { skipped++; continue; }
+      if (!entrepot) {
+        errors.push(`Entrepôt introuvable : "${codeEntrepot}" (groupe "${groupKey}")`); skipped++; continue;
+      }
 
       let commandeId: string | undefined;
       if (numeroCommande) {
         const commande = await this.prisma.commande.findFirst({ where: { numero: numeroCommande } });
-        commandeId = commande?.id;
+        if (!commande) errors.push(`Commande "${numeroCommande}" introuvable — livraison créée sans lien`);
+        else commandeId = commande.id;
       }
 
       const lignes: { articleId: string; quantiteCommandee: number; quantiteRecue: number }[] = [];
       for (const row of rows) {
-        const refArticle = String(row.getCell(7).value ?? '').trim();
-        const quantiteRecue = parseInt(String(row.getCell(8).value ?? '0')) || 0;
-        if (!refArticle || !quantiteRecue) continue;
+        const refArticle   = String(row.getCell(7).value ?? '').trim();
+        const quantiteRecue = Math.max(0, parseInt(String(row.getCell(8).value ?? '0')) || 0);
+        if (!refArticle) continue;
         const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
-        if (article) lignes.push({ articleId: article.id, quantiteCommandee: quantiteRecue, quantiteRecue });
+        if (!article) {
+          errors.push(`Article introuvable : "${refArticle}"`); continue;
+        }
+        lignes.push({ articleId: article.id, quantiteCommandee: quantiteRecue, quantiteRecue });
       }
 
-      if (lignes.length === 0) { skipped++; continue; }
+      if (lignes.length === 0) {
+        errors.push(`Groupe "${groupKey}" : aucun article valide`); skipped++; continue;
+      }
       try {
         await this.create({ fournisseur, entrepotId: entrepot.id, lignes, commandeId }, userId);
         created++;
-      } catch {
+      } catch (err: any) {
+        errors.push(`Erreur création livraison groupe "${groupKey}" : ${err?.message ?? String(err)}`);
         skipped++;
       }
     }
-    return { created, skipped, total: created + skipped };
+    return { created, skipped, errors, total: created + skipped };
   }
 }

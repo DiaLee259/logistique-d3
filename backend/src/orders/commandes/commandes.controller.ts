@@ -41,9 +41,16 @@ export class CommandesController {
   @Get('template')
   async templateCommandes(@Res() res: Response) {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Commandes');
+    // Onglet d'aide
+    const help = wb.addWorksheet('📋 Instructions');
+    help.getCell('A1').value = '1 fichier = 1 commande. Les colonnes A–F (info commande) sont lues sur la 1ère ligne de données uniquement.';
+    help.getCell('A2').value = 'Chaque ligne suivante ajoute un article à cette commande (colonnes G, I). La colonne H (Désignation) est informative — ignorée à l\'import.';
+    help.getCell('A1').font = { bold: true };
+    help.getCell('A1').alignment = { wrapText: true };
+    help.getColumn('A').width = 100;
+
+    const ws = wb.addWorksheet('Commande');
     ws.columns = [
-      { header: 'Ref groupe', key: 'refGroupe', width: 15 },
       { header: 'Demandeur *', key: 'demandeur', width: 25 },
       { header: 'Département *', key: 'departement', width: 20 },
       { header: 'Email demandeur', key: 'email', width: 30 },
@@ -51,13 +58,14 @@ export class CommandesController {
       { header: 'Adresse de livraison', key: 'adresse', width: 40 },
       { header: 'Commentaire commande', key: 'commentaire', width: 35 },
       { header: 'Référence article *', key: 'refArticle', width: 20 },
+      { header: 'Désignation (info)', key: 'designation', width: 35 },
       { header: 'Quantité demandée *', key: 'quantite', width: 16 },
     ];
     ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
-    ws.addRow({ refGroupe: 'G1', demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: 'j.dupont@tech.fr', telephone: '06 12 34 56 78', adresse: '12 rue de la Paix, Lyon', commentaire: '', refArticle: 'CAB-FO-G657', quantite: 100 });
-    ws.addRow({ refGroupe: 'G1', demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'CON-SC-APC', quantite: 20 });
-    ws.addRow({ refGroupe: 'G2', demandeur: 'Marie Martin', departement: 'ADMIN', email: '', telephone: '07 98 76 54 32', adresse: '', commentaire: 'Urgence', refArticle: 'CAB-FO-G657', quantite: 50 });
+    ws.addRow({ demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: 'j.dupont@tech.fr', telephone: '06 12 34 56 78', adresse: '12 rue de la Paix, Lyon', commentaire: '', refArticle: 'CAB-FO-G657', designation: 'Câble FO G657', quantite: 100 });
+    ws.addRow({ demandeur: '', departement: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'CON-SC-APC', designation: 'Connecteur SC/APC', quantite: 20 });
+    ws.addRow({ demandeur: '', departement: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'MUF-SC', designation: 'Manchon de protection', quantite: 5 });
     const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="template-commandes.xlsx"');

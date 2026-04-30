@@ -23,7 +23,7 @@ export class EntrepotsService {
     return this.prisma.entrepot.create({ data });
   }
 
-  async update(id: string, data: Partial<{ nom: string; localisation: string; gestionnaire: string; adresse: string; telephone: string; email: string; actif: boolean }>) {
+  async update(id: string, data: Partial<{ code: string; nom: string; localisation: string; gestionnaire: string; adresse: string; telephone: string; email: string; actif: boolean }>) {
     await this.findById(id);
     return this.prisma.entrepot.update({ where: { id }, data });
   }

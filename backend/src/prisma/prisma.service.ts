@@ -69,7 +69,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         END $$
       `;
 
-      this.logger.log('Tables societes/intervenants vérifiées ✓');
+      // Colonne privileges sur users
+      await this.$executeRaw`
+        ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "privileges" JSONB
+      `;
+
+      this.logger.log('Tables societes/intervenants + colonne privileges vérifiées ✓');
     } catch (err: any) {
       this.logger.warn(`ensureTables: ${err?.message ?? err}`);
     }
