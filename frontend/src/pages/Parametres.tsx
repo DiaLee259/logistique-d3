@@ -237,6 +237,15 @@ export default function Parametres() {
   const fileInputSocieteRef = useRef<HTMLInputElement>(null);
   const fileInputIntervenantRef = useRef<HTMLInputElement>(null);
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const openCreateSociete = () => {
     setEditSociete(null);
     setSocieteForm({ nom: '', code: '', adresse: '', telephone: '', email: '' });
@@ -639,10 +648,10 @@ export default function Parametres() {
                 </div>
                 {hasRole('ADMIN', 'LOGISTICIEN_1') && (
                   <div className="flex items-center gap-2">
-                    <a href={repertoireApi.templateSocietes()} download
+                    <button onClick={() => repertoireApi.templateSocietes().then(blob => downloadBlob(blob, 'template-societes.xlsx')).catch(() => toast.error('Erreur téléchargement'))}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
                       <Download className="w-3.5 h-3.5" /> Modèle Excel
-                    </a>
+                    </button>
                     <button onClick={() => fileInputSocieteRef.current?.click()}
                       disabled={importSocieteMut.isPending}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-60">
@@ -730,10 +739,10 @@ export default function Parametres() {
                 </div>
                 {hasRole('ADMIN', 'LOGISTICIEN_1') && (
                   <div className="flex items-center gap-2">
-                    <a href={repertoireApi.templateIntervenants()} download
+                    <button onClick={() => repertoireApi.templateIntervenants().then(blob => downloadBlob(blob, 'template-intervenants.xlsx')).catch(() => toast.error('Erreur téléchargement'))}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted">
                       <Download className="w-3.5 h-3.5" /> Modèle Excel
-                    </a>
+                    </button>
                     <button onClick={() => fileInputIntervenantRef.current?.click()}
                       disabled={importIntervenantMut.isPending}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-60">
