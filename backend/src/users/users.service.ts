@@ -54,6 +54,14 @@ export class UsersService {
     });
   }
 
+  /** Export admin uniquement — inclut le hash bcrypt du mot de passe */
+  async findAllWithPassword() {
+    return this.prisma.user.findMany({
+      select: { ...SELECT_USER, password: true },
+      orderBy: { nom: 'asc' },
+    });
+  }
+
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: SELECT_USER });
     if (!user) throw new NotFoundException('Utilisateur introuvable');

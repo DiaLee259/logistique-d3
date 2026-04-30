@@ -187,6 +187,7 @@ export const usersApi = {
   update: (id: string, data: any) => api.put(`/users/${id}`, data).then(r => r.data),
   toggleActif: (id: string) => api.patch(`/users/${id}/toggle-actif`).then(r => r.data),
   updatePrivileges: (id: string, privileges: any) => api.put(`/users/${id}/privileges`, privileges).then(r => r.data),
+  export: () => api.get('/users/export', { responseType: 'blob' }).then(r => r.data as Blob),
 };
 
 // ── Inventaires ───────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { usersApi, articlesApi, entrepotsApi, repertoireApi } from '@/lib/api';
 import { useRef } from 'react';
@@ -20,6 +20,7 @@ export default function Parametres() {
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
+  const [showUserPass, setShowUserPass] = useState(false);
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
@@ -54,7 +55,7 @@ export default function Parametres() {
     setUserDialog(true);
   };
 
-  const closeUserDialog = () => { setUserDialog(false); setEditUser(null); };
+  const closeUserDialog = () => { setUserDialog(false); setEditUser(null); setShowUserPass(false); };
 
   // ── Privileges ────────────────────────────────────────────────────────────
   const [privilegeDialog, setPrivilegeDialog] = useState(false);
@@ -372,10 +373,27 @@ export default function Parametres() {
                   <p className="text-xs text-muted-foreground mt-0.5">{users.length} compte(s) enregistré(s)</p>
                 </div>
                 {hasRole('ADMIN') && (
-                  <button onClick={openCreateUser}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-                    <Plus className="w-3.5 h-3.5" /> Nouveau compte
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        usersApi.export().then(blob => {
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `export-comptes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border rounded-lg bg-card hover:border-green-500 hover:text-green-700 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Exporter comptes
+                    </button>
+                    <button onClick={openCreateUser}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                      <Plus className="w-3.5 h-3.5" /> Nouveau compte
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1182,9 +1200,23 @@ export default function Parametres() {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Mot de passe {editUser ? '(laisser vide = inchangé)' : '*'}
                 </label>
-                <input type="password" value={userForm.password} onChange={e => setUserForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder={editUser ? 'Laisser vide pour ne pas changer' : 'Minimum 8 caractères'}
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <div className="relative">
+                  <input
+                    type={showUserPass ? 'text' : 'password'}
+                    value={userForm.password}
+                    onChange={e => setUserForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder={editUser ? 'Laisser vide pour ne pas changer' : 'Minimum 8 caractères'}
+                    className="w-full px-3 py-2 pr-9 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowUserPass(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showUserPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Rôle *</label>
