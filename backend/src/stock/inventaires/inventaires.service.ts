@@ -22,27 +22,35 @@ export class InventairesService {
     });
   }
 
-  // Vue consolidée par entrepôt : dernier inventaire par article + stock actuel + écart
+  // Vue consolidée par entrepôt : tous les articles actifs + stock (éventuellement 0) + dernier inventaire
   async getEtatParEntrepot(entrepotId: string) {
-    const stocks = await this.prisma.stock.findMany({
-      where: { entrepotId },
-      include: { article: { select: { id: true, nom: true, reference: true, unite: true, seuilAlerte: true } } },
+    // On prend TOUS les articles actifs (pas seulement ceux avec du stock)
+    const articles = await this.prisma.article.findMany({
+      where: { actif: true },
+      select: { id: true, nom: true, reference: true, unite: true, seuilAlerte: true },
+      orderBy: { nom: 'asc' },
     });
 
-    const result = await Promise.all(stocks.map(async (s) => {
+    const result = await Promise.all(articles.map(async (article) => {
+      const stock = await this.prisma.stock.findUnique({
+        where: { articleId_entrepotId: { articleId: article.id, entrepotId } },
+      });
+
       const dernierInventaire = await this.prisma.inventairePhysique.findFirst({
-        where: { entrepotId, articleId: s.articleId },
+        where: { entrepotId, articleId: article.id },
         orderBy: { date: 'desc' },
       });
 
+      const stockTheorique = stock?.quantite ?? 0;
+
       return {
-        articleId: s.articleId,
-        article: s.article,
-        stockTheorique: s.quantite,
+        articleId: article.id,
+        article,
+        stockTheorique,
         dernierInventaire: dernierInventaire
           ? { quantite: dernierInventaire.quantite, date: dernierInventaire.date, commentaire: dernierInventaire.commentaire }
           : null,
-        ecart: dernierInventaire ? dernierInventaire.quantite - s.quantite : null,
+        ecart: dernierInventaire ? dernierInventaire.quantite - stockTheorique : null,
       };
     }));
 

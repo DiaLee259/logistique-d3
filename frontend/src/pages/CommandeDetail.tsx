@@ -202,6 +202,20 @@ export default function CommandeDetail() {
         ))}
       </div>
 
+      {/* Adresse livraison + téléphone */}
+      {(commande.adresseLivraison || commande.telephoneDestinataire) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-wrap gap-4">
+          <div className="flex items-center gap-1.5 text-xs text-blue-700">
+            <span className="font-semibold">📍 Adresse de livraison :</span>
+            <span>{commande.adresseLivraison ?? '—'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-blue-700">
+            <span className="font-semibold">📞 Téléphone :</span>
+            <span>{commande.telephoneDestinataire ?? '—'}</span>
+          </div>
+        </div>
+      )}
+
       {/* Timeline */}
       <div className="bg-card rounded-xl border border-border p-4">
         <h3 className="text-xs font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Parcours de la commande</h3>

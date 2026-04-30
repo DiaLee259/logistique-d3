@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2 } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronRight, Check, Archive, Trash2, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesTSApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
@@ -17,6 +17,7 @@ export default function CommandesTS() {
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [vue, setVue] = useState<'liste' | 'matrice'>('liste');
   const [titre, setTitre] = useState('');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
@@ -101,16 +102,116 @@ export default function CommandesTS() {
           <h1 className="text-sm font-semibold">Commandes TS — Approvisionnement périodique</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Planification des commandes de matériel sur des périodes fixes (1 à 3 mois)</p>
         </div>
-        {canEdit && (
-          <button onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-            <Plus className="w-3.5 h-3.5" /> Nouvelle commande TS
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Toggle vue */}
+          <div className="flex gap-1 bg-muted/30 rounded-lg p-0.5">
+            <button onClick={() => setVue('liste')}
+              className={cn('flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors',
+                vue === 'liste' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <List className="w-3.5 h-3.5" /> Liste
+            </button>
+            <button onClick={() => setVue('matrice')}
+              className={cn('flex items-center gap-1 px-3 py-1.5 text-xs rounded font-medium transition-colors',
+                vue === 'matrice' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <LayoutGrid className="w-3.5 h-3.5" /> Matrice
+            </button>
+          </div>
+          {canEdit && (
+            <button onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+              <Plus className="w-3.5 h-3.5" /> Nouvelle commande TS
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Liste */}
-      <div className="space-y-2">
+      {/* ── Vue Matrice article × commande TS ── */}
+      {vue === 'matrice' && (() => {
+        // Toutes les commandes TS triées par date de début
+        const cmdsSorted = [...commandesTS].sort((a, b) => new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime());
+        // Map articleId → nom+ref
+        const artMap = new Map<string, { nom: string; reference: string }>();
+        commandesTS.forEach(c => {
+          c.lignes?.forEach(l => {
+            if (l.article && !artMap.has(l.articleId)) {
+              artMap.set(l.articleId, { nom: l.article.nom, reference: l.article.reference ?? '' });
+            }
+          });
+        });
+        const artsMatrice = [...artMap.entries()].sort((a, b) => a[1].nom.localeCompare(b[1].nom));
+
+        // Lookup : articleId_commandeId → { prod, sav, malfacon }
+        const lookup = new Map<string, { prod: number; sav: number; malfacon: number }>();
+        commandesTS.forEach(c => {
+          c.lignes?.forEach(l => {
+            lookup.set(`${l.articleId}_${c.id}`, { prod: l.qteProd, sav: l.qteSav, malfacon: l.qteMalfacon });
+          });
+        });
+
+        return (
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            {artsMatrice.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground">Aucune donnée disponible. Créez d'abord une commande TS avec des articles.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/30 min-w-[200px]">Article</th>
+                      {cmdsSorted.map(c => (
+                        <th key={c.id} className="text-center px-2 py-2.5 font-semibold text-muted-foreground min-w-[130px]">
+                          <div className="text-primary font-bold truncate max-w-[130px]" title={c.titre}>{c.titre}</div>
+                          <div className="text-muted-foreground/70 font-normal text-xs">
+                            {formatDate(c.dateDebut)} → {formatDate(c.dateFin)}
+                          </div>
+                          <div className={cn('text-xs font-medium mt-0.5', c.statut === 'CLOTUREE' ? 'text-gray-500' : 'text-green-600')}>
+                            {c.statut === 'CLOTUREE' ? 'Clôturée' : 'En cours'}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                    <tr className="border-b border-border/30 bg-muted/10">
+                      <th className="sticky left-0 bg-muted/10" />
+                      {cmdsSorted.map(c => (
+                        <th key={c.id} className="text-center px-2 py-1 text-muted-foreground/70 font-normal">
+                          <span className="text-green-700">PROD</span> / <span className="text-orange-600">SAV</span> / <span className="text-red-600">MAL</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {artsMatrice.map(([artId, art]) => (
+                      <tr key={artId} className="border-t border-border/30 hover:bg-muted/10">
+                        <td className="px-3 py-2 sticky left-0 bg-card border-r border-border/30">
+                          <p className="font-medium">{art.nom}</p>
+                          <p className="font-mono text-muted-foreground">{art.reference}</p>
+                        </td>
+                        {cmdsSorted.map(c => {
+                          const cell = lookup.get(`${artId}_${c.id}`);
+                          return (
+                            <td key={c.id} className="px-2 py-2 text-center">
+                              {cell ? (
+                                <div className="space-y-0.5">
+                                  <div className="font-bold text-green-700">{cell.prod > 0 ? cell.prod : '—'}</div>
+                                  <div className="text-orange-600">{cell.sav > 0 ? cell.sav : '—'}</div>
+                                  <div className="text-red-600">{cell.malfacon > 0 ? cell.malfacon : '—'}</div>
+                                </div>
+                              ) : <span className="text-muted-foreground/30">—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Vue Liste ── */}
+      {vue === 'liste' && <div className="space-y-2">
         {commandesTS.length === 0 ? (
           <div className="bg-card rounded-xl border border-border p-8 text-center">
             <Archive className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -245,7 +346,7 @@ export default function CommandesTS() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* Dialog confirmation suppression */}
       {confirmDeleteId && (

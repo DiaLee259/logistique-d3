@@ -118,6 +118,8 @@ export interface Commande {
   valideurId?: string;
   expediteurId?: string;
   dateValidation?: string;
+  telephoneDestinataire?: string;
+  adresseLivraison?: string;
   lignes?: LigneCommande[];
   valideur?: User;
   expediteur?: User;
