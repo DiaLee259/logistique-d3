@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff, RotateCcw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { usersApi, articlesApi, entrepotsApi, repertoireApi } from '@/lib/api';
+import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi } from '@/lib/api';
 import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
 import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges } from '@/lib/types';
 import { DEFAULT_PRIVILEGES } from '@/lib/types';
 
-type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow';
+type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero';
 
 export default function Parametres() {
   const { hasRole } = useAuth();
@@ -152,6 +152,38 @@ export default function Parametres() {
     },
     onError: () => toast.error("Erreur lors de l'import"),
   });
+
+  const seedArticlesMut = useMutation({
+    mutationFn: () => articlesApi.seed(),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['articles-all'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success(`Catalogue réinitialisé : ${res.upserted} articles injectés, ${res.deactivated} désactivés`);
+    },
+    onError: () => toast.error('Erreur lors de la réinitialisation'),
+  });
+
+  const makeResetMut = (fn: () => Promise<any>, label: string) => ({
+    mutationFn: fn,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stocks'] });
+      qc.invalidateQueries({ queryKey: ['mouvements'] });
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      qc.invalidateQueries({ queryKey: ['inventaires'] });
+      qc.invalidateQueries({ queryKey: ['livraisons'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success(label);
+    },
+    onError: () => toast.error('Erreur lors de la remise à zéro'),
+  });
+
+  const resetMouvementsMut = useMutation(makeResetMut(adminApi.resetMouvements, 'Mouvements supprimés'));
+  const resetInventairesMut = useMutation(makeResetMut(adminApi.resetInventaires, 'Inventaires supprimés'));
+  const resetCommandesMut = useMutation(makeResetMut(adminApi.resetCommandes, 'Commandes supprimées'));
+  const resetLivraisonsMut = useMutation(makeResetMut(adminApi.resetLivraisons, 'Livraisons supprimées'));
+  const resetStocksMut = useMutation(makeResetMut(adminApi.resetStocks, 'Stocks remis à zéro'));
+  const resetNotificationsMut = useMutation(makeResetMut(adminApi.resetNotifications, 'Notifications supprimées'));
+  const resetCompletMut = useMutation(makeResetMut(adminApi.resetComplet, 'Remise à zéro complète effectuée'));
 
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles-all'],
@@ -348,6 +380,7 @@ export default function Parametres() {
           { key: 'catalogue' as Tab, label: 'Catalogue articles', icon: BookOpen },
           { key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 },
           { key: 'workflow' as Tab, label: 'Guide & Workflow', icon: HelpCircle },
+          ...(hasRole('ADMIN') ? [{ key: 'remise-a-zero' as Tab, label: 'Remise à zéro', icon: RotateCcw }] : []),
         ].map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={cn('flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors',
@@ -559,6 +592,14 @@ export default function Parametres() {
               </button>
               <input ref={fileInputArticleRef} type="file" accept=".xlsx,.xls" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) { importArticleMut.mutate(f); e.target.value = ''; } }} />
+              {hasRole('ADMIN') && (
+                <button
+                  onClick={() => { if (confirm('Réinitialiser le catalogue avec les 55 articles officiels ? Les articles hors-liste seront désactivés.')) seedArticlesMut.mutate(); }}
+                  disabled={seedArticlesMut.isPending}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs border border-orange-400 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-60">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> {seedArticlesMut.isPending ? 'Injection…' : 'Réinjecter catalogue'}
+                </button>
+              )}
               <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
                 {(['all', 'actif', 'inactif'] as const).map(f => (
                   <button key={f} onClick={() => setCatalogueFilter(f)}
@@ -986,6 +1027,64 @@ export default function Parametres() {
             <p className="text-xs text-muted-foreground mt-2">
               Ces règles sont configurables dans <strong>Articles & Stock → modifier l'article</strong> (champ "Règle de consommation" et "Facteur").
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB REMISE À ZÉRO ── */}
+      {tab === 'remise-a-zero' && hasRole('ADMIN') && (
+        <div className="space-y-4 max-w-2xl">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              Remise à zéro — Administration
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ces actions sont irréversibles. Utilisez-les uniquement pour repartir de zéro après la phase de test.
+            </p>
+          </div>
+
+          {/* Actions granulaires */}
+          <div className="bg-card rounded-xl border border-border divide-y divide-border">
+            {[
+              { label: 'Mouvements de stock', desc: 'Supprime tous les mouvements d\'entrée et de sortie. Recalcule les stocks.', mut: resetMouvementsMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+              { label: 'Inventaires physiques', desc: 'Supprime tous les enregistrements d\'inventaire. Recalcule les stocks.', mut: resetInventairesMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+              { label: 'Commandes prestataires', desc: 'Supprime toutes les commandes et leurs lignes. Recalcule les stocks.', mut: resetCommandesMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+              { label: 'Livraisons fournisseurs', desc: 'Supprime toutes les livraisons enregistrées.', mut: resetLivraisonsMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+              { label: 'Quantités en stock', desc: 'Remet toutes les quantités à 0 sans supprimer les mouvements.', mut: resetStocksMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+              { label: 'Notifications', desc: 'Supprime toutes les notifications système.', mut: resetNotificationsMut, color: 'text-orange-600 border-orange-300 hover:bg-orange-50' },
+            ].map(({ label, desc, mut, color }) => (
+              <div key={label} className="flex items-center justify-between px-4 py-3 gap-4">
+                <div>
+                  <p className="text-xs font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+                <button
+                  onClick={() => { if (confirm(`Supprimer : ${label} ?\nCette action est irréversible.`)) mut.mutate(); }}
+                  disabled={mut.isPending}
+                  className={`flex-shrink-0 px-3 py-1.5 text-xs border rounded-lg disabled:opacity-60 ${color}`}
+                >
+                  {mut.isPending ? 'En cours…' : 'Supprimer'}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Remise à zéro complète */}
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-red-700 mb-1">Remise à zéro complète</p>
+            <p className="text-xs text-red-600 mb-3">
+              Supprime mouvements, inventaires, commandes, livraisons, remet les stocks à 0 et vide les notifications.
+              Les articles, entrepôts et utilisateurs sont conservés.
+            </p>
+            <button
+              onClick={() => { if (confirm('REMISE À ZÉRO COMPLÈTE ?\n\nToutes les données opérationnelles seront supprimées définitivement.\nLes articles, entrepôts et comptes sont conservés.\n\nConfirmer ?')) resetCompletMut.mutate(); }}
+              disabled={resetCompletMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 font-medium"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {resetCompletMut.isPending ? 'Remise à zéro en cours…' : 'Tout remettre à zéro'}
+            </button>
           </div>
         </div>
       )}

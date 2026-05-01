@@ -6,11 +6,11 @@ import {
   Link2, Copy, Check, ChevronDown, ChevronUp, Calendar, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi, articlesApi } from '@/lib/api';
+import { commandesApi, articlesApi, repertoireApi } from '@/lib/api';
 import { cn, formatDate, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Commande, Article } from '@/lib/types';
+import type { Commande, Article, Intervenant } from '@/lib/types';
 
 // ── Combobox article avec recherche ──────────────────────────────────────────
 function ArticleCombobox({
@@ -121,7 +121,7 @@ export default function Commandes() {
   const [formData, setFormData] = useState({
     departement: '', demandeur: '', emailDemandeur: '', societe: '',
     manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '',
-    adresseLivraison: '', commentaire: '',
+    adresseLivraison: '', commentaire: '', intervenantId: '',
   });
   const [lignes, setLignes] = useState<{ articleId: string; quantiteDemandee: number; commentaire: string }[]>([
     { articleId: '', quantiteDemandee: 1, commentaire: '' },
@@ -146,6 +146,12 @@ export default function Commandes() {
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles'],
     queryFn: () => articlesApi.list(),
+  });
+
+  const { data: intervenantsActifs = [] } = useQuery<Intervenant[]>({
+    queryKey: ['intervenants-actifs'],
+    queryFn: () => repertoireApi.listIntervenantsActifs(),
+    enabled: newDialogOpen,
   });
 
   const { data: liens = [] } = useQuery<any[]>({
@@ -202,7 +208,7 @@ export default function Commandes() {
   });
 
   const resetForm = () => {
-    setFormData({ departement: '', demandeur: '', emailDemandeur: '', societe: '', manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '', adresseLivraison: '', commentaire: '' });
+    setFormData({ departement: '', demandeur: '', emailDemandeur: '', societe: '', manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '', adresseLivraison: '', commentaire: '', intervenantId: '' });
     setLignes([{ articleId: '', quantiteDemandee: 1, commentaire: '' }]);
   };
 
@@ -213,6 +219,7 @@ export default function Commandes() {
     createMut.mutate({
       ...formData,
       nombreGrilles: formData.nombreGrilles ? parseInt(formData.nombreGrilles) : undefined,
+      intervenantId: formData.intervenantId || undefined,
       lignes: validLignes,
     });
   };
@@ -432,6 +439,18 @@ export default function Commandes() {
                     <option value="PROD">PROD</option>
                     <option value="SAV">SAV</option>
                     <option value="Mixte">Mixte</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Intervenant (technicien)</label>
+                  <select value={formData.intervenantId} onChange={e => setFormData(p => ({ ...p, intervenantId: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
+                    <option value="">— Aucun —</option>
+                    {intervenantsActifs.map(i => (
+                      <option key={i.id} value={i.id}>
+                        {i.prenom} {i.nom}{i.societe ? ` — ${i.societe.nom}` : ' — Auto'}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

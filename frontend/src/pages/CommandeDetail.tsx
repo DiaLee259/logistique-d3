@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Mail, CheckCircle, Truck, Download, X, Package } from 'lucide-react';
+import { ArrowLeft, FileText, Mail, CheckCircle, Truck, Download, X, Package, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi } from '@/lib/api';
+import { commandesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, downloadBlob } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Commande } from '@/lib/types';
+import type { Commande, Entrepot } from '@/lib/types';
 
 export default function CommandeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -17,16 +17,25 @@ export default function CommandeDetail() {
 
   const [validDialogOpen, setValidDialogOpen] = useState(false);
   const [quantitesValidees, setQuantitesValidees] = useState<Record<string, number>>({});
+  const [entrepotsSource, setEntrepotsSource] = useState<Record<string, string>>({});
   const [commentaireValid, setCommentaireValid] = useState('');
   const [expedierDialogOpen, setExpedierDialogOpen] = useState(false);
+  const [quantitesExpedition, setQuantitesExpedition] = useState<Record<string, number>>({});
   const [commentaireLog2, setCommentaireLog2] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editData, setEditData] = useState<Record<string, any>>({});
 
   const { data: commande, isLoading } = useQuery<Commande>({
     queryKey: ['commande', id],
     queryFn: () => commandesApi.get(id!),
     enabled: !!id,
     refetchInterval: 15_000, // sync auto toutes les 15s
+  });
+
+  const { data: entrepots = [] } = useQuery<Entrepot[]>({
+    queryKey: ['entrepots-actifs'],
+    queryFn: () => entrepotsApi.list(),
   });
 
   const invalider = () => {
@@ -42,6 +51,11 @@ export default function CommandeDetail() {
   const expedierMut = useMutation({
     mutationFn: (data: any) => commandesApi.expedier(id!, data),
     onSuccess: () => { invalider(); toast.success('Commande expédiée'); setExpedierDialogOpen(false); },
+  });
+
+  const modifierMut = useMutation({
+    mutationFn: (data: any) => commandesApi.modifier(id!, data),
+    onSuccess: () => { invalider(); toast.success('Commande modifiée'); setEditDialogOpen(false); },
   });
 
   const livreeMut = useMutation({
@@ -79,16 +93,58 @@ export default function CommandeDetail() {
   const openValidDialog = () => {
     if (!commande?.lignes) return;
     const qtes: Record<string, number> = {};
-    commande.lignes.forEach(l => { qtes[l.id] = l.quantiteValidee ?? l.quantiteDemandee; });
+    const entSrc: Record<string, string> = {};
+    commande.lignes.forEach(l => {
+      qtes[l.id] = l.quantiteValidee ?? l.quantiteDemandee;
+      if (l.entrepotSource) entSrc[l.id] = l.entrepotSource;
+    });
     setQuantitesValidees(qtes);
+    setEntrepotsSource(entSrc);
     setCommentaireValid('');
     setValidDialogOpen(true);
   };
 
+  const openExpedierDialog = () => {
+    if (!commande?.lignes) return;
+    const qtes: Record<string, number> = {};
+    commande.lignes.forEach(l => { qtes[l.id] = l.quantiteValidee ?? l.quantiteDemandee; });
+    setQuantitesExpedition(qtes);
+    setCommentaireLog2('');
+    setExpedierDialogOpen(true);
+  };
+
+  const openEditDialog = () => {
+    if (!commande) return;
+    setEditData({
+      departement: commande.departement ?? '',
+      demandeur: commande.demandeur ?? '',
+      emailDemandeur: commande.emailDemandeur ?? '',
+      societe: commande.societe ?? '',
+      manager: commande.manager ?? '',
+      telephoneDestinataire: commande.telephoneDestinataire ?? '',
+      adresseLivraison: commande.adresseLivraison ?? '',
+      commentaire: commande.commentaire ?? '',
+      nombreGrilles: commande.nombreGrilles ?? '',
+      typeGrille: commande.typeGrille ?? '',
+    });
+    setEditDialogOpen(true);
+  };
+
   const handleValider = () => {
     validerMut.mutate({
-      lignes: Object.entries(quantitesValidees).map(([lid, qte]) => ({ id: lid, quantiteValidee: qte })),
+      lignes: Object.entries(quantitesValidees).map(([lid, qte]) => ({
+        id: lid,
+        quantiteValidee: qte,
+        entrepotSource: entrepotsSource[lid] ?? null,
+      })),
       commentaire: commentaireValid,
+    });
+  };
+
+  const handleExpedier = () => {
+    expedierMut.mutate({
+      commentaire: commentaireLog2,
+      lignes: Object.entries(quantitesExpedition).map(([ligneId, quantite]) => ({ ligneId, quantite })),
     });
   };
 
@@ -322,9 +378,17 @@ export default function CommandeDetail() {
           </button>
         )}
 
+        {/* Modifier — Log1 quand pas encore expédié */}
+        {hasRole('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2') && !['EXPEDIEE', 'LIVREE', 'ANNULEE'].includes(commande.statut) && (
+          <button onClick={openEditDialog}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs bg-card border border-border rounded-lg hover:border-primary hover:text-primary transition-colors">
+            <Edit2 className="w-3.5 h-3.5" /> Modifier
+          </button>
+        )}
+
         {/* Expédier — Log1 OU Log2 */}
         {hasRole('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2') && commande.statut === 'EN_ATTENTE_LOG2' && (
-          <button onClick={() => setExpedierDialogOpen(true)}
+          <button onClick={openExpedierDialog}
             className="flex items-center gap-1.5 px-3 py-2 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
             <Truck className="w-3.5 h-3.5" /> Marquer expédiée
           </button>
@@ -360,17 +424,32 @@ export default function CommandeDetail() {
             </div>
             <div className="p-5 space-y-3">
               <p className="text-xs text-muted-foreground">Ajustez les quantités validées selon le stock disponible.</p>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {commande.lignes?.map(l => (
-                  <div key={l.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-lg">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{l.article?.nom}</p>
-                      <p className="text-xs text-muted-foreground">Demandé: {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
+                  <div key={l.id} className="p-2.5 bg-muted/30 rounded-lg space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{l.article?.nom}</p>
+                        <p className="text-xs text-muted-foreground">Demandé: {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
+                      </div>
+                      <input type="number" min={0} max={l.quantiteDemandee}
+                        value={quantitesValidees[l.id] ?? l.quantiteDemandee}
+                        onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
+                        className="w-20 px-2 py-1.5 text-xs text-center border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
                     </div>
-                    <input type="number" min={0} max={l.quantiteDemandee}
-                      value={quantitesValidees[l.id] ?? l.quantiteDemandee}
-                      onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
-                      className="w-20 px-2 py-1.5 text-xs text-center border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground whitespace-nowrap">Entrepôt source :</label>
+                      <select
+                        value={entrepotsSource[l.id] ?? ''}
+                        onChange={e => setEntrepotsSource(prev => ({ ...prev, [l.id]: e.target.value }))}
+                        className="flex-1 px-2 py-1 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
+                      >
+                        <option value="">— Non défini —</option>
+                        {entrepots.map(e => (
+                          <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -391,16 +470,37 @@ export default function CommandeDetail() {
         </div>
       )}
 
-      {/* Dialog expédition Log2 */}
+      {/* Dialog expédition Log2 avec quantités modifiables */}
       {expedierDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold">Confirmer l'expédition</h2>
+              <div>
+                <h2 className="text-sm font-semibold">Expédier — {commande.numero}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Ajustez les quantités réellement envoyées si nécessaire</p>
+              </div>
               <button onClick={() => setExpedierDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-5 space-y-3">
-              <p className="text-xs text-muted-foreground">Commande <strong>{commande.numero}</strong> sera marquée expédiée.</p>
+              <div className="space-y-1.5">
+                {commande.lignes?.map(l => (
+                  <div key={l.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{l.article?.nom}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Validé: <span className="font-medium text-foreground">{l.quantiteValidee ?? l.quantiteDemandee}</span> {l.article?.unite ?? 'u'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <label className="text-xs text-muted-foreground">À envoyer</label>
+                      <input type="number" min={0}
+                        value={quantitesExpedition[l.id] ?? l.quantiteValidee ?? l.quantiteDemandee}
+                        onChange={e => setQuantitesExpedition(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
+                        className="w-20 px-2 py-1.5 text-xs text-center border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Commentaire Log2 (optionnel)</label>
                 <textarea value={commentaireLog2} onChange={e => setCommentaireLog2(e.target.value)} rows={2}
@@ -408,9 +508,69 @@ export default function CommandeDetail() {
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setExpedierDialogOpen(false)} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-                <button onClick={() => expedierMut.mutate({ commentaire: commentaireLog2 })} disabled={expedierMut.isPending}
+                <button onClick={handleExpedier} disabled={expedierMut.isPending}
                   className="px-3 py-2 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60">
                   Confirmer expédition
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog modifier commande */}
+      {editDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold">Modifier la commande — {commande.numero}</h2>
+              <button onClick={() => setEditDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { field: 'departement', label: 'Département *' },
+                  { field: 'demandeur', label: 'Demandeur' },
+                  { field: 'emailDemandeur', label: 'Email' },
+                  { field: 'societe', label: 'Société' },
+                  { field: 'manager', label: 'Manager' },
+                  { field: 'nombreGrilles', label: 'Nb. grilles' },
+                  { field: 'telephoneDestinataire', label: 'Téléphone' },
+                ].map(({ field, label }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+                    <input value={editData[field] ?? ''}
+                      onChange={e => setEditData(p => ({ ...p, [field]: e.target.value }))}
+                      className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Type de grille</label>
+                  <select value={editData.typeGrille ?? ''} onChange={e => setEditData(p => ({ ...p, typeGrille: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
+                    <option value="">— Choisir —</option>
+                    <option value="PROD">PROD</option>
+                    <option value="SAV">SAV</option>
+                    <option value="Mixte">Mixte</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Adresse de livraison</label>
+                <input value={editData.adresseLivraison ?? ''}
+                  onChange={e => setEditData(p => ({ ...p, adresseLivraison: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Commentaire</label>
+                <textarea value={editData.commentaire ?? ''} onChange={e => setEditData(p => ({ ...p, commentaire: e.target.value }))} rows={2}
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => setEditDialogOpen(false)} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={() => modifierMut.mutate(editData)} disabled={modifierMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60">
+                  Enregistrer
                 </button>
               </div>
             </div>

@@ -206,9 +206,11 @@ model Commande {
   deletedByName            String?
   valideurId               String?
   expediteurId             String?
+  intervenantId            String?
 
-  valideur   User? @relation("ValideurLog1", fields: [valideurId], references: [id])
-  expediteur User? @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
+  valideur     User?        @relation("ValideurLog1", fields: [valideurId], references: [id])
+  expediteur   User?        @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
+  intervenant  Intervenant? @relation(fields: [intervenantId], references: [id], onDelete: SetNull)
 
   lignes     LigneCommande[]
   mouvements Mouvement[]
@@ -229,6 +231,7 @@ model LigneCommande {
   quantiteFournie  Int?
   commentaire      String?
   stockDisponible  Int?
+  entrepotSource   String?
 
   commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
   article  Article  @relation(fields: [articleId], references: [id])
@@ -398,17 +401,19 @@ model Societe {
 }
 
 model Intervenant {
-  id         String   @id @default(uuid())
-  nom        String
-  prenom     String
-  email      String?
-  telephone  String?
-  societeId  String?
-  actif      Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(uuid())
+  nom             String
+  prenom          String
+  email           String?
+  telephone       String?
+  societeId       String?
+  actif           Boolean  @default(true)
+  autoEntrepreneur Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  societe Societe? @relation(fields: [societeId], references: [id])
+  societe   Societe?   @relation(fields: [societeId], references: [id])
+  commandes Commande[]
 
   @@map("intervenants")
 }

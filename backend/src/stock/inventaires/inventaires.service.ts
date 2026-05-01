@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StockCalculatorService } from '../stock-calculator.service';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class InventairesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private calculator: StockCalculatorService,
+  ) {}
 
   async findAll(filters: { entrepotId?: string; articleId?: string; mois?: string }) {
     const where: any = {};
@@ -23,9 +27,9 @@ export class InventairesService {
     });
   }
 
-  // Vue consolidée par entrepôt : tous les articles actifs + stock (éventuellement 0) + dernier inventaire
+
+  // Vue consolidée par entrepôt : tous les articles actifs + stock théorique (mouvements) + dernier inventaire
   async getEtatParEntrepot(entrepotId: string) {
-    // On prend TOUS les articles actifs (pas seulement ceux avec du stock)
     const articles = await this.prisma.article.findMany({
       where: { actif: true },
       select: { id: true, nom: true, reference: true, unite: true, seuilAlerte: true },
@@ -33,16 +37,23 @@ export class InventairesService {
     });
 
     const result = await Promise.all(articles.map(async (article) => {
-      const stock = await this.prisma.stock.findUnique({
-        where: { articleId_entrepotId: { articleId: article.id, entrepotId } },
-      });
+      // Stock théorique = toujours calculé depuis les mouvements
+      const [entrees, sorties, dernierInventaire] = await Promise.all([
+        this.prisma.mouvement.aggregate({
+          where: { entrepotId, articleId: article.id, type: 'ENTREE' as any },
+          _sum: { quantiteFournie: true },
+        }),
+        this.prisma.mouvement.aggregate({
+          where: { entrepotId, articleId: article.id, type: 'SORTIE' as any },
+          _sum: { quantiteFournie: true },
+        }),
+        this.prisma.inventairePhysique.findFirst({
+          where: { entrepotId, articleId: article.id },
+          orderBy: { date: 'desc' },
+        }),
+      ]);
 
-      const dernierInventaire = await this.prisma.inventairePhysique.findFirst({
-        where: { entrepotId, articleId: article.id },
-        orderBy: { date: 'desc' },
-      });
-
-      const stockTheorique = stock?.quantite ?? 0;
+      const stockTheorique = (entrees._sum.quantiteFournie ?? 0) - (sorties._sum.quantiteFournie ?? 0);
 
       return {
         articleId: article.id,
@@ -118,6 +129,10 @@ export class InventairesService {
         })
       )
     );
+    // Recalculer le stock avec la formule hybride pour chaque article
+    for (const l of data.lignes) {
+      await this.calculator.sync(l.articleId, data.entrepotId);
+    }
     return created;
   }
 
@@ -131,13 +146,28 @@ export class InventairesService {
   }
 
   async deleteOne(id: string) {
-    return this.prisma.inventairePhysique.delete({ where: { id } });
+    const inv = await this.prisma.inventairePhysique.findUnique({ where: { id } });
+    if (!inv) return { deleted: 0 };
+    await this.prisma.inventairePhysique.delete({ where: { id } });
+    await this.calculator.sync(inv.articleId, inv.entrepotId);
+    return { deleted: 1 };
   }
 
   async deleteBulk(ids: string[]) {
-    const result = await this.prisma.inventairePhysique.deleteMany({
+    const records = await this.prisma.inventairePhysique.findMany({
       where: { id: { in: ids } },
+      select: { articleId: true, entrepotId: true },
     });
+
+    const result = await this.prisma.inventairePhysique.deleteMany({ where: { id: { in: ids } } });
+
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const r of records) {
+      pairs.set(`${r.articleId}:${r.entrepotId}`, r);
+    }
+    for (const pair of pairs.values()) {
+      await this.calculator.sync(pair.articleId, pair.entrepotId);
+    }
     return { deleted: result.count };
   }
 
@@ -183,12 +213,8 @@ export class InventairesService {
             date: new Date(),
           },
         });
-        // Mettre à jour le stock théorique avec la quantité inventoriée
-        await this.prisma.stock.upsert({
-          where: { articleId_entrepotId: { articleId: article.id, entrepotId: entrepot.id } },
-          update: { quantite },
-          create: { articleId: article.id, entrepotId: entrepot.id, quantite },
-        });
+        // Recalculer avec formule hybride (inventaire comme nouvelle base)
+        await this.calculator.sync(article.id, entrepot.id);
         created++;
       } catch (err: any) {
         errors.push(`Erreur ligne ${refArticle}/${codeEntrepot} : ${err?.message ?? String(err)}`);

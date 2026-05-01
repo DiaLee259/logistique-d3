@@ -78,6 +78,88 @@ export class RepertoireService {
     return this.prisma.intervenant.delete({ where: { id } });
   }
 
+  // ── Stats intervenants ────────────────────────────────────────────────────────
+
+  async getStatsIntervenant(id: string) {
+    const intervenant = await this.prisma.intervenant.findUnique({
+      where: { id },
+      select: { id: true, nom: true, prenom: true, societe: { select: { nom: true } }, autoEntrepreneur: true },
+    });
+    if (!intervenant) throw new NotFoundException('Intervenant introuvable');
+
+    const commandes = await this.prisma.commande.findMany({
+      where: { intervenantId: id, deletedAt: null },
+      include: {
+        lignes: {
+          include: { article: { select: { id: true, nom: true, reference: true, unite: true } } },
+        },
+      },
+    });
+
+    // Agréger par articleId
+    const articlesMap = new Map<string, { articleId: string; nom: string; reference: string; unite: string; quantiteEnvoyee: number }>();
+    for (const commande of commandes) {
+      for (const ligne of commande.lignes) {
+        const qte = ligne.quantiteFournie ?? ligne.quantiteValidee ?? ligne.quantiteDemandee;
+        const existing = articlesMap.get(ligne.articleId);
+        if (existing) {
+          existing.quantiteEnvoyee += qte;
+        } else {
+          articlesMap.set(ligne.articleId, {
+            articleId: ligne.articleId,
+            nom: ligne.article.nom,
+            reference: ligne.article.reference,
+            unite: ligne.article.unite,
+            quantiteEnvoyee: qte,
+          });
+        }
+      }
+    }
+
+    return {
+      intervenant: {
+        id: intervenant.id,
+        nom: intervenant.nom,
+        prenom: intervenant.prenom,
+        societe: intervenant.societe,
+        autoEntrepreneur: (intervenant as any).autoEntrepreneur ?? false,
+      },
+      stats: {
+        nbCommandes: commandes.length,
+        articles: Array.from(articlesMap.values()),
+      },
+    };
+  }
+
+  async getIntervenantsWithStats() {
+    const intervenants = await this.prisma.intervenant.findMany({
+      include: { societe: { select: { id: true, nom: true, code: true } } },
+      orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
+    });
+
+    const result = await Promise.all(
+      intervenants.map(async (intervenant) => {
+        const commandes = await this.prisma.commande.findMany({
+          where: { intervenantId: intervenant.id, deletedAt: null },
+          include: { lignes: { select: { quantiteFournie: true, quantiteValidee: true, quantiteDemandee: true } } },
+        });
+
+        const totalArticles = commandes.reduce((sum, c) => {
+          return sum + c.lignes.reduce((s, l) => s + (l.quantiteFournie ?? l.quantiteValidee ?? l.quantiteDemandee), 0);
+        }, 0);
+
+        return {
+          ...intervenant,
+          autoEntrepreneur: (intervenant as any).autoEntrepreneur ?? false,
+          nbCommandes: commandes.length,
+          totalArticles,
+        };
+      }),
+    );
+
+    return result;
+  }
+
   // ── Import Excel ──────────────────────────────────────────────────────────────
 
   async importSocietes(buffer: Buffer<ArrayBufferLike>) {

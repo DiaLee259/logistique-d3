@@ -51,21 +51,23 @@ export class CommandesController {
 
     const ws = wb.addWorksheet('Commande');
     ws.columns = [
-      { header: 'Demandeur *', key: 'demandeur', width: 25 },
-      { header: 'Département *', key: 'departement', width: 20 },
-      { header: 'Email demandeur', key: 'email', width: 30 },
-      { header: 'Téléphone destinataire', key: 'telephone', width: 20 },
-      { header: 'Adresse de livraison', key: 'adresse', width: 40 },
-      { header: 'Commentaire commande', key: 'commentaire', width: 35 },
-      { header: 'Référence article *', key: 'refArticle', width: 20 },
-      { header: 'Désignation (info)', key: 'designation', width: 35 },
-      { header: 'Quantité demandée *', key: 'quantite', width: 16 },
+      { header: 'Demandeur *', key: 'demandeur', width: 25 },       // A
+      { header: 'Département *', key: 'departement', width: 20 },   // B
+      { header: 'Société', key: 'societe', width: 25 },             // C
+      { header: 'Manager', key: 'manager', width: 25 },             // D
+      { header: 'Email demandeur', key: 'email', width: 30 },       // E
+      { header: 'Téléphone destinataire', key: 'telephone', width: 20 }, // F
+      { header: 'Adresse de livraison', key: 'adresse', width: 40 },    // G
+      { header: 'Commentaire commande', key: 'commentaire', width: 35 }, // H
+      { header: 'Référence article *', key: 'refArticle', width: 20 },  // I
+      { header: 'Désignation (info)', key: 'designation', width: 35 },  // J
+      { header: 'Quantité demandée *', key: 'quantite', width: 16 },    // K
     ];
     ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
-    ws.addRow({ demandeur: 'Jean Dupont', departement: 'TRAVAUX', email: 'j.dupont@tech.fr', telephone: '06 12 34 56 78', adresse: '12 rue de la Paix, Lyon', commentaire: '', refArticle: 'CAB-FO-G657', designation: 'Câble FO G657', quantite: 100 });
-    ws.addRow({ demandeur: '', departement: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'CON-SC-APC', designation: 'Connecteur SC/APC', quantite: 20 });
-    ws.addRow({ demandeur: '', departement: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'MUF-SC', designation: 'Manchon de protection', quantite: 5 });
+    ws.addRow({ demandeur: 'Jean Dupont', departement: 'TRAVAUX', societe: 'TechFibre SARL', manager: 'Marie Martin', email: 'j.dupont@tech.fr', telephone: '06 12 34 56 78', adresse: '12 rue de la Paix, Lyon', commentaire: '', refArticle: 'CAB-FO-G657', designation: 'Câble FO G657', quantite: 100 });
+    ws.addRow({ demandeur: '', departement: '', societe: '', manager: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'CON-SC-APC', designation: 'Connecteur SC/APC', quantite: 20 });
+    ws.addRow({ demandeur: '', departement: '', societe: '', manager: '', email: '', telephone: '', adresse: '', commentaire: '', refArticle: 'MUF-SC', designation: 'Manchon de protection', quantite: 5 });
     const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="template-commandes.xlsx"');
@@ -162,9 +164,16 @@ export class CommandesController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
+  @Patch(':id/modifier')
+  updateDetails(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateDetails(id, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
   @Patch(':id/expedier')
-  expedier(@Param('id') id: string, @Body() body: { commentaire?: string }, @Request() req: any) {
-    return this.service.expedier(id, req.user.id, body.commentaire);
+  expedier(@Param('id') id: string, @Body() body: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[] }, @Request() req: any) {
+    return this.service.expedier(id, req.user.id, body);
   }
 
   @UseGuards(JwtAuthGuard)

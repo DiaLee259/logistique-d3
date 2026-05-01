@@ -90,6 +90,16 @@ export class RepertoireController {
     return this.service.listIntervenantsActifs();
   }
 
+  @Get('intervenants/stats')
+  getIntervenantsWithStats() {
+    return this.service.getIntervenantsWithStats();
+  }
+
+  @Get('intervenants/:id/stats')
+  getStatsIntervenant(@Param('id') id: string) {
+    return this.service.getStatsIntervenant(id);
+  }
+
   @Get('intervenants/template')
   @Roles('ADMIN', 'LOGISTICIEN_1')
   async templateIntervenants(@Res() res: Response) {

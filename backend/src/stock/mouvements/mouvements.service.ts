@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StockCalculatorService } from '../stock-calculator.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class MouvementsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private calculator: StockCalculatorService,
+  ) {}
 
   async findAll(filters: FilterMouvementsDto) {
     const where: any = {};
@@ -73,7 +77,6 @@ export class MouvementsService {
   }
 
   async create(dto: CreateMouvementDto, userId?: string) {
-    // Valider stock pour sortie
     if (dto.type === TypeMouvement.SORTIE) {
       await this.validateStockSuffisant(dto.articleId, dto.entrepotId, dto.quantiteFournie);
     }
@@ -83,7 +86,7 @@ export class MouvementsService {
       include: { article: true, entrepot: true },
     });
 
-    await this.updateStock(dto.articleId, dto.entrepotId, dto.type, dto.quantiteFournie);
+    await this.calculator.sync(dto.articleId, dto.entrepotId);
     return mouvement;
   }
 
@@ -98,40 +101,25 @@ export class MouvementsService {
   async update(id: string, dto: Partial<CreateMouvementDto>) {
     const existing = await this.findById(id);
 
-    // Inverser l'ancien mouvement sur le stock
-    const typeInverse = existing.type === TypeMouvement.ENTREE ? TypeMouvement.SORTIE : TypeMouvement.ENTREE;
-    await this.updateStock(existing.articleId, existing.entrepotId, typeInverse, existing.quantiteFournie);
-
-    // Valider et appliquer le nouveau
-    if (dto.type === TypeMouvement.SORTIE || existing.type === TypeMouvement.SORTIE) {
-      const newQte = dto.quantiteFournie ?? existing.quantiteFournie;
-      const newType = dto.type ?? existing.type;
-      const newArticle = dto.articleId ?? existing.articleId;
-      const newEntrepot = dto.entrepotId ?? existing.entrepotId;
-      if (newType === TypeMouvement.SORTIE) {
-        await this.validateStockSuffisant(newArticle, newEntrepot, newQte);
-      }
-    }
-
     const updated = await this.prisma.mouvement.update({
       where: { id },
       data: dto as any,
       include: { article: true, entrepot: true },
     });
 
-    await this.updateStock(updated.articleId, updated.entrepotId, updated.type, updated.quantiteFournie);
+    // Recalculer les deux couples potentiellement impactés (si articleId/entrepotId ont changé)
+    await this.calculator.sync(updated.articleId, updated.entrepotId);
+    if (dto.articleId !== existing.articleId || dto.entrepotId !== existing.entrepotId) {
+      await this.calculator.sync(existing.articleId, existing.entrepotId);
+    }
     return updated;
   }
 
   async delete(id: string) {
     const m = await this.findById(id);
-    if (m.type === TypeMouvement.SORTIE) {
-      await this.updateStock(m.articleId, m.entrepotId, TypeMouvement.ENTREE, m.quantiteFournie);
-    } else {
-      await this.validateStockSuffisant(m.articleId, m.entrepotId, m.quantiteFournie);
-      await this.updateStock(m.articleId, m.entrepotId, TypeMouvement.SORTIE, m.quantiteFournie);
-    }
-    return this.prisma.mouvement.delete({ where: { id } });
+    await this.prisma.mouvement.delete({ where: { id } });
+    await this.calculator.sync(m.articleId, m.entrepotId);
+    return m;
   }
 
   async toggleField(id: string, field: 'envoye' | 'recu') {
@@ -202,18 +190,7 @@ export class MouvementsService {
     });
     const stockActuel = stock?.quantite ?? 0;
     if (stockActuel < quantite) {
-      throw new BadRequestException(
-        `Stock insuffisant : disponible ${stockActuel}, demandé ${quantite}`,
-      );
+      throw new BadRequestException(`Stock insuffisant : disponible ${stockActuel}, demandé ${quantite}`);
     }
-  }
-
-  private async updateStock(articleId: string, entrepotId: string, type: TypeMouvement, quantite: number) {
-    const delta = type === TypeMouvement.ENTREE ? quantite : -quantite;
-    await this.prisma.stock.upsert({
-      where: { articleId_entrepotId: { articleId, entrepotId } },
-      update: { quantite: { increment: delta } },
-      create: { articleId, entrepotId, quantite: Math.max(0, delta) },
-    });
   }
 }

@@ -74,7 +74,25 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "privileges" JSONB
       `;
 
-      this.logger.log('Tables societes/intervenants + colonne privileges vérifiées ✓');
+      // Colonne autoEntrepreneur sur intervenants
+      await this.$executeRaw`ALTER TABLE "intervenants" ADD COLUMN IF NOT EXISTS "autoEntrepreneur" BOOLEAN NOT NULL DEFAULT false`;
+
+      // Colonne intervenantId sur commandes + FK
+      await this.$executeRaw`ALTER TABLE "commandes" ADD COLUMN IF NOT EXISTS "intervenantId" TEXT`;
+
+      await this.$executeRaw`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'commandes_intervenantId_fkey') THEN
+            ALTER TABLE "commandes" ADD CONSTRAINT "commandes_intervenantId_fkey"
+              FOREIGN KEY ("intervenantId") REFERENCES "intervenants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+          END IF;
+        END $$
+      `;
+
+      // Colonne entrepotSource sur lignes_commande
+      await this.$executeRaw`ALTER TABLE "lignes_commande" ADD COLUMN IF NOT EXISTS "entrepotSource" TEXT`;
+
+      this.logger.log('Tables societes/intervenants + colonnes vérifiées ✓');
     } catch (err: any) {
       this.logger.warn(`ensureTables: ${err?.message ?? err}`);
     }

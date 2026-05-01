@@ -37,6 +37,13 @@ export class ArticlesController {
     res.send(buffer);
   }
 
+  @Post('seed')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async seedArticles() {
+    return this.service.seedArticles();
+  }
+
   @Post('import')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1')

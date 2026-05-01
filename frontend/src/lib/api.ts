@@ -70,6 +70,7 @@ export const articlesApi = {
   delete: (id: string) => api.delete(`/articles/${id}`).then(r => r.data),
   template: () => api.get('/articles/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/articles/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  seed: () => api.post('/articles/seed').then(r => r.data),
 };
 
 // ── Entrepôts ─────────────────────────────────────────────────────────────────
@@ -116,7 +117,9 @@ export const commandesApi = {
   create: (data: any) => api.post('/commandes', data).then(r => r.data),
   valider: (id: string, data: any) =>
     api.patch(`/commandes/${id}/valider`, data).then(r => r.data),
-  expedier: (id: string, data?: { commentaire?: string }) =>
+  modifier: (id: string, data: any) =>
+    api.patch(`/commandes/${id}/modifier`, data).then(r => r.data),
+  expedier: (id: string, data?: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[] }) =>
     api.patch(`/commandes/${id}/expedier`, data ?? {}).then(r => r.data),
   marquerLivree: (id: string) =>
     api.patch(`/commandes/${id}/livree`).then(r => r.data),
@@ -239,6 +242,8 @@ export const repertoireApi = {
   deleteIntervenant: (id: string) => api.delete(`/repertoire/intervenants/${id}`).then(r => r.data),
   templateIntervenants: () => api.get('/repertoire/intervenants/template', { responseType: 'blob' }).then(r => r.data as Blob),
   importIntervenants: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/repertoire/intervenants/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  statsIntervenants: () => api.get('/repertoire/intervenants/stats').then(r => r.data),
+  statsIntervenant: (id: string) => api.get(`/repertoire/intervenants/${id}/stats`).then(r => r.data),
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -247,4 +252,15 @@ export const notificationsApi = {
   count: () => api.get('/notifications/count').then(r => r.data),
   marquerLue: (id: string) => api.patch(`/notifications/${id}/lire`).then(r => r.data),
   marquerToutesLues: () => api.patch('/notifications/lire-toutes').then(r => r.data),
+};
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+export const adminApi = {
+  resetMouvements: () => api.post('/admin/reset/mouvements').then(r => r.data),
+  resetInventaires: () => api.post('/admin/reset/inventaires').then(r => r.data),
+  resetCommandes: () => api.post('/admin/reset/commandes').then(r => r.data),
+  resetLivraisons: () => api.post('/admin/reset/livraisons').then(r => r.data),
+  resetStocks: () => api.post('/admin/reset/stocks').then(r => r.data),
+  resetNotifications: () => api.post('/admin/reset/notifications').then(r => r.data),
+  resetComplet: () => api.post('/admin/reset/complet').then(r => r.data),
 };

@@ -130,6 +130,7 @@ export interface LigneCommande {
   quantiteFournie?: number;
   commentaire?: string;
   stockDisponible?: number;
+  entrepotSource?: string;
   article?: Article;
 }
 
@@ -162,12 +163,14 @@ export interface Commande {
   dateBonRetourRecu?: string;
   valideurId?: string;
   expediteurId?: string;
+  intervenantId?: string;
   dateValidation?: string;
   telephoneDestinataire?: string;
   adresseLivraison?: string;
   lignes?: LigneCommande[];
   valideur?: User;
   expediteur?: User;
+  intervenant?: Pick<Intervenant, 'id' | 'nom' | 'prenom'>;
 }
 
 export interface LigneLivraison {
@@ -224,6 +227,7 @@ export interface Intervenant {
   telephone?: string;
   societeId?: string;
   actif: boolean;
+  autoEntrepreneur?: boolean;
   createdAt: string;
   societe?: Pick<Societe, 'id' | 'nom' | 'code'>;
 }

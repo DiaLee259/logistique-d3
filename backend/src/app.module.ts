@@ -15,6 +15,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { CommandesTSModule } from './orders/commandes-ts/commandes-ts.module';
 import { InventairesModule } from './stock/inventaires/inventaires.module';
 import { RepertoireModule } from './repertoire/repertoire.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RepertoireModule } from './repertoire/repertoire.module';
     CommandesTSModule,
     InventairesModule,
     RepertoireModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

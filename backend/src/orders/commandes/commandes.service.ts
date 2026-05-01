@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { StatutCommande } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StockCalculatorService } from '../../stock/stock-calculator.service';
 import { CreateCommandeDto } from './dto/create-commande.dto';
 import { PdfService } from '../../pdf/pdf.service';
 import * as ExcelJS from 'exceljs';
@@ -11,6 +12,7 @@ export class CommandesService {
   constructor(
     private prisma: PrismaService,
     private pdfService: PdfService,
+    private calculator: StockCalculatorService,
   ) {}
 
   async findAll(filters: any) {
@@ -52,6 +54,7 @@ export class CommandesService {
           lignes: { include: { article: { select: { id: true, nom: true, reference: true, unite: true } } } },
           valideur: { select: { id: true, nom: true, prenom: true } },
           expediteur: { select: { id: true, nom: true, prenom: true } },
+          intervenant: { select: { id: true, nom: true, prenom: true } },
         },
         orderBy: { dateReception: 'desc' },
         skip: (page - 1) * limit,
@@ -70,6 +73,7 @@ export class CommandesService {
         lignes: { include: { article: true } },
         valideur: { select: { id: true, nom: true, prenom: true } },
         expediteur: { select: { id: true, nom: true, prenom: true } },
+        intervenant: { select: { id: true, nom: true, prenom: true } },
         livraisons: true,
       },
     });
@@ -97,6 +101,7 @@ export class CommandesService {
         dateCommande: dto.dateCommande ? new Date(dto.dateCommande) : undefined,
         commentaire: dto.commentaire,
         fichierExcelUrl: dto.fichierExcelUrl,
+        intervenantId: dto.intervenantId ?? undefined,
         lignes: {
           create: dto.lignes.map(l => ({
             articleId: l.articleId,
@@ -210,19 +215,26 @@ export class CommandesService {
     }
 
     for (const ligne of data.lignes || []) {
-      const stock = await this.prisma.stock.findFirst({
-        where: { articleId: commande.lignes.find(l => l.id === ligne.id)?.articleId },
-      });
+      const ligneCmd = commande.lignes.find(l => l.id === ligne.id);
+      const entrepotId = ligne.entrepotSource ?? undefined;
+      const stock = entrepotId
+        ? await this.prisma.stock.findUnique({ where: { articleId_entrepotId: { articleId: ligneCmd?.articleId ?? '', entrepotId } } })
+        : await this.prisma.stock.findFirst({ where: { articleId: ligneCmd?.articleId }, orderBy: { quantite: 'desc' } });
+
       await this.prisma.ligneCommande.update({
         where: { id: ligne.id },
-        data: { quantiteValidee: ligne.quantiteValidee, stockDisponible: stock?.quantite ?? 0 },
+        data: {
+          quantiteValidee: ligne.quantiteValidee,
+          stockDisponible: stock?.quantite ?? 0,
+          entrepotSource: ligne.entrepotSource ?? null,
+        },
       });
     }
 
     return this.prisma.commande.update({
       where: { id },
       data: {
-        statut: StatutCommande.EN_ATTENTE_LOG2,  // → transmis à Log2
+        statut: StatutCommande.EN_ATTENTE_LOG2,
         valideurId: userId,
         dateTraitement: new Date(),
         dateTransmissionLog2: new Date(),
@@ -232,42 +244,61 @@ export class CommandesService {
     });
   }
 
-  async expedier(id: string, userId: string, commentaire?: string) {
+  async updateDetails(id: string, data: Record<string, any>) {
+    const commande = await this.findById(id);
+    if (['EXPEDIEE', 'LIVREE', 'ANNULEE'].includes(commande.statut)) {
+      throw new BadRequestException('Impossible de modifier une commande expédiée, livrée ou annulée');
+    }
+    const allowed = ['departement', 'demandeur', 'emailDemandeur', 'societe', 'manager',
+      'telephoneDestinataire', 'adresseLivraison', 'commentaire', 'nombreGrilles', 'typeGrille', 'intervenantId'];
+    const update: Record<string, any> = {};
+    for (const key of allowed) {
+      if (!(key in data)) continue;
+      if (key === 'nombreGrilles') {
+        update[key] = data[key] !== '' && data[key] != null ? parseInt(String(data[key])) || null : null;
+      } else {
+        update[key] = data[key] || null;
+      }
+    }
+    return this.prisma.commande.update({ where: { id }, data: update });
+  }
+
+  async expedier(id: string, userId: string, data: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[] }) {
     const commande = await this.findById(id);
     if (!['VALIDEE', 'EN_ATTENTE_LOG2'].includes(commande.statut)) {
       throw new BadRequestException('La commande doit être validée avant expédition');
     }
 
-    // Créer un mouvement SORTIE pour chaque ligne validée
+    // Créer un mouvement SORTIE pour chaque ligne
     for (const ligne of commande.lignes) {
-      const qty = (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
+      const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
+      const qty = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
       if (!qty || qty <= 0) continue;
 
-      // Entrepôt avec le plus de stock disponible pour cet article
-      const stock = await this.prisma.stock.findFirst({
-        where: { articleId: ligne.articleId },
-        orderBy: { quantite: 'desc' },
-      });
-
+      // Entrepôt : priorité à entrepotSource choisi par Log1, sinon celui avec le plus de stock
       let entrepotId: string;
+      const entrepotSource = (ligne as any).entrepotSource;
 
-      if (stock) {
-        entrepotId = stock.entrepotId;
-        // Décrémenter le stock existant
-        await this.prisma.stock.update({
-          where: { id: stock.id },
-          data: { quantite: { decrement: qty } },
-        });
+      if (entrepotSource) {
+        entrepotId = entrepotSource;
       } else {
-        // Pas de stock pour cet article → fallback sur le premier entrepôt actif
-        const entrepot = await this.prisma.entrepot.findFirst({ where: { actif: true } });
-        if (!entrepot) continue; // Aucun entrepôt configuré, on ne peut pas créer de mouvement
-        entrepotId = entrepot.id;
-        // Créer l'entrée stock (négatif = dette à régulariser via un inventaire)
-        await this.prisma.stock.create({
-          data: { articleId: ligne.articleId, entrepotId, quantite: -qty },
+        const stock = await this.prisma.stock.findFirst({
+          where: { articleId: ligne.articleId },
+          orderBy: { quantite: 'desc' },
         });
+        if (stock) {
+          entrepotId = stock.entrepotId;
+        } else {
+          const entrepot = await this.prisma.entrepot.findFirst({ where: { actif: true } });
+          if (!entrepot) continue;
+          entrepotId = entrepot.id;
+        }
       }
+
+      await this.prisma.ligneCommande.update({
+        where: { id: ligne.id },
+        data: { quantiteFournie: qty },
+      });
 
       await this.prisma.mouvement.create({
         data: {
@@ -282,6 +313,9 @@ export class CommandesService {
           commandeId: id,
         },
       });
+
+      // Recalcul hybride après le mouvement
+      await this.calculator.sync(ligne.articleId, entrepotId);
     }
 
     return this.prisma.commande.update({
@@ -290,7 +324,7 @@ export class CommandesService {
         statut: StatutCommande.EXPEDIEE,
         expediteurId: userId,
         dateExpedition: new Date(),
-        commentaireLog2: commentaire,
+        commentaireLog2: data.commentaire,
       },
     });
   }
@@ -370,11 +404,20 @@ export class CommandesService {
   }
 
   async supprimerDefinitivement(id: string) {
-    // Nullifier les FK sur mouvements et livraisons avant suppression
-    await this.prisma.mouvement.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
+    const mouvements = await this.prisma.mouvement.findMany({
+      where: { commandeId: id },
+      select: { articleId: true, entrepotId: true },
+    });
+
+    await this.prisma.mouvement.deleteMany({ where: { commandeId: id } });
     await this.prisma.livraison.updateMany({ where: { commandeId: id }, data: { commandeId: null } });
-    // LigneCommande a onDelete: Cascade → supprimées automatiquement
-    return this.prisma.commande.delete({ where: { id } });
+    const result = await this.prisma.commande.delete({ where: { id } });
+
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+
+    return result;
   }
 
   async viderCorbeille() {
@@ -384,9 +427,21 @@ export class CommandesService {
     });
     if (!items.length) return { count: 0 };
     const ids = items.map(i => i.id);
-    await this.prisma.mouvement.updateMany({ where: { commandeId: { in: ids } }, data: { commandeId: null } });
+
+    const mouvements = await this.prisma.mouvement.findMany({
+      where: { commandeId: { in: ids } },
+      select: { articleId: true, entrepotId: true },
+    });
+
+    await this.prisma.mouvement.deleteMany({ where: { commandeId: { in: ids } } });
     await this.prisma.livraison.updateMany({ where: { commandeId: { in: ids } }, data: { commandeId: null } });
-    return this.prisma.commande.deleteMany({ where: { id: { in: ids } } });
+    const result = await this.prisma.commande.deleteMany({ where: { id: { in: ids } } });
+
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+
+    return result;
   }
 
   async findCorbeille() {
@@ -434,10 +489,12 @@ export class CommandesService {
     if (!demandeur || !departement)
       return { created: 0, skipped: dataRows.length, errors: ['Demandeur et Département requis (colonnes A et B)'], total: dataRows.length };
 
-    const emailDemandeur = String(firstRow.getCell(3).value ?? '').trim() || undefined;
-    const telephoneDestinataire = String(firstRow.getCell(4).value ?? '').trim() || undefined;
-    const adresseLivraison = String(firstRow.getCell(5).value ?? '').trim() || undefined;
-    const commentaire = String(firstRow.getCell(6).value ?? '').trim() || undefined;
+    const societe = String(firstRow.getCell(3).value ?? '').trim() || undefined;       // col C
+    const manager = String(firstRow.getCell(4).value ?? '').trim() || undefined;        // col D
+    const emailDemandeur = String(firstRow.getCell(5).value ?? '').trim() || undefined; // col E
+    const telephoneDestinataire = String(firstRow.getCell(6).value ?? '').trim() || undefined; // col F
+    const adresseLivraison = String(firstRow.getCell(7).value ?? '').trim() || undefined;      // col G
+    const commentaire = String(firstRow.getCell(8).value ?? '').trim() || undefined;           // col H
 
     let created = 0;
     let skipped = 0;
@@ -445,9 +502,9 @@ export class CommandesService {
 
     const lignes: { articleId: string; quantiteDemandee: number }[] = [];
     for (const row of dataRows) {
-      const refArticle = String(row.getCell(7).value ?? '').trim(); // col G
-      // col H = désignation, ignorée
-      const quantite = parseInt(String(row.getCell(9).value ?? '0')) || 0; // col I
+      const refArticle = String(row.getCell(9).value ?? '').trim();  // col I
+      // col J = désignation, ignorée
+      const quantite = parseInt(String(row.getCell(11).value ?? '0')) || 0; // col K
       if (!refArticle) continue;
       if (!quantite) { errors.push(`Quantité invalide pour l'article "${refArticle}"`); skipped++; continue; }
       const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });
@@ -466,6 +523,8 @@ export class CommandesService {
           numero,
           demandeur,
           departement,
+          societe,
+          manager,
           emailDemandeur,
           telephoneDestinataire,
           adresseLivraison,

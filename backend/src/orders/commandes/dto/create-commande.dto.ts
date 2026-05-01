@@ -66,6 +66,10 @@ export class CreateCommandeDto {
   @IsOptional()
   adresseLivraison?: string;
 
+  @IsString()
+  @IsOptional()
+  intervenantId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LigneCommandeDto)
