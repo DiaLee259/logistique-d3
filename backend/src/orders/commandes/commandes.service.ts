@@ -19,6 +19,7 @@ export class CommandesService {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
+    if (filters.manager) where.manager = { contains: filters.manager, mode: 'insensitive' };
     if (filters.entrepotSource) where.entrepotSource = filters.entrepotSource;
 
     const andClauses: any[] = [];
@@ -319,6 +320,7 @@ export class CommandesService {
           quantiteValidee: (ligne as any).quantiteValidee ?? null,
           quantiteFournie: quantiteLivree,
           departement: commande.departement,
+          manager: (commande as any).manager ?? null,
           numeroCommande: commande.numero,
           numeroOperation: commande.numero,
           sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
@@ -393,6 +395,14 @@ export class CommandesService {
 
   async desactiverLien(id: string) {
     return this.prisma.lienPrestataire.update({ where: { id }, data: { actif: false } });
+  }
+
+  async bulkSetEntrepot(commandeIds: string[], entrepotId: string) {
+    const result = await this.prisma.commande.updateMany({
+      where: { id: { in: commandeIds }, deletedAt: null },
+      data: { entrepotSource: entrepotId },
+    });
+    return { updated: result.count };
   }
 
   async delete(id: string, userId?: string) {

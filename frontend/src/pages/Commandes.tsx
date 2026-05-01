@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Eye, X,
-  Link2, Copy, Check, ChevronDown, ChevronUp, Calendar, Trash2,
+  Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/api';
@@ -108,7 +108,26 @@ export default function Commandes() {
   const [filterDateDebut, setFilterDateDebut] = useState('');
   const [filterDateFin, setFilterDateFin] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
+  const [filterManager, setFilterManager] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Expand / sélection
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkEntrepot, setBulkEntrepot] = useState('');
+
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === commandes.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(commandes.map(c => c.id)));
+  };
 
   // Dialogs
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -136,11 +155,12 @@ export default function Commandes() {
     if (filterDateDebut) p.dateDebut = filterDateDebut;
     if (filterDateFin) p.dateFin = filterDateFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
+    if (filterManager) p.manager = filterManager;
     return p;
   };
 
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
@@ -214,6 +234,16 @@ export default function Commandes() {
     onError: () => toast.error("Erreur lors de l'import"),
   });
 
+  const bulkAssignMut = useMutation({
+    mutationFn: () => commandesApi.bulkSetEntrepot(Array.from(selectedIds), bulkEntrepot),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      toast.success(`${data.count ?? selectedIds.size} commande(s) affectée(s)`);
+      setSelectedIds(new Set());
+      setBulkEntrepot('');
+    },
+  });
+
   const resetForm = () => {
     setFormData({ departement: '', demandeur: '', emailDemandeur: '', societe: '', manager: '', nombreGrilles: '', typeGrille: '', telephoneDestinataire: '', adresseLivraison: '', commentaire: '', intervenantId: '' });
     setLignes([{ articleId: '', quantiteDemandee: 1, commentaire: '' }]);
@@ -264,6 +294,16 @@ export default function Commandes() {
           <option value="">Tous entrepôts</option>
           {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
         </select>
+
+        <div className="relative min-w-32">
+          <input value={filterManager} onChange={e => setFilterManager(e.target.value)} placeholder="Filtrer manager…"
+            className="w-full px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20" />
+          {filterManager && (
+            <button onClick={() => setFilterManager('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
 
         <button onClick={() => setShowFilters(v => !v)}
           className={cn('flex items-center gap-1.5 px-3 py-2 text-xs border rounded-lg transition-colors',
@@ -327,60 +367,138 @@ export default function Commandes() {
         </div>
       )}
 
+      {/* Barre d'action en masse */}
+      {selectedIds.size > 0 && hasRole('ADMIN', 'LOGISTICIEN_1') && (
+        <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-lg px-4 py-2.5">
+          <CheckSquare className="w-4 h-4 text-primary flex-shrink-0" />
+          <span className="text-xs font-medium text-primary">{selectedIds.size} commande(s) sélectionnée(s)</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <select value={bulkEntrepot} onChange={e => setBulkEntrepot(e.target.value)}
+              className="px-3 py-1.5 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
+              <option value="">Choisir entrepôt…</option>
+              {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+            </select>
+            <button onClick={() => bulkAssignMut.mutate()} disabled={!bulkEntrepot || bulkAssignMut.isPending}
+              className="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors">
+              {bulkAssignMut.isPending ? 'Affectation…' : 'Affecter entrepôt'}
+            </button>
+            <button onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted transition-colors">
+              Désélectionner
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tableau */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Entrepôt', 'Articles', 'Statut', ''].map(h => (
+                {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                  <th className="px-3 py-2.5 w-8">
+                    <input type="checkbox"
+                      checked={commandes.length > 0 && selectedIds.size === commandes.length}
+                      onChange={toggleSelectAll}
+                      className="w-3.5 h-3.5 accent-primary cursor-pointer" />
+                  </th>
+                )}
+                <th className="w-6 px-1 py-2.5" />
+                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Manager', 'Entrepôt', 'Statut', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={10} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
               ) : commandes.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
-              ) : commandes.map(c => (
-                <tr key={c.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/commandes/${c.id}`)}>
-                  <td className="px-3 py-2.5 font-mono font-semibold text-primary whitespace-nowrap">{c.numero}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                    <span className="font-medium text-foreground">{formatDate(c.dateReception)}</span>
-                  </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    {(c as any).dateTraitement ? (
-                      <span className="text-green-700 font-medium">{formatDate((c as any).dateTraitement)}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
+              ) : commandes.map(c => {
+                const isExpanded = expandedIds.has(c.id);
+                const isSelected = selectedIds.has(c.id);
+                const entrepotCode = c.entrepotSource ? (entrepots.find(e => e.id === c.entrepotSource)?.code ?? '—') : null;
+                return (
+                  <Fragment key={c.id}>
+                    <tr
+                      className={cn('border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer', isSelected && 'bg-primary/5')}
+                      onClick={() => navigate(`/commandes/${c.id}`)}>
+                      {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                        <td className="px-3 py-2.5" onClick={e => toggleSelect(c.id, e)}>
+                          <input type="checkbox" checked={isSelected} onChange={() => {}} className="w-3.5 h-3.5 accent-primary cursor-pointer" />
+                        </td>
+                      )}
+                      <td className="px-1 py-2.5" onClick={e => toggleExpand(c.id, e)}>
+                        {isExpanded
+                          ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                          : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono font-semibold text-primary whitespace-nowrap">{c.numero}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                        <span className="font-medium text-foreground">{formatDate(c.dateReception)}</span>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        {c.dateTraitement ? (
+                          <span className="text-green-700 font-medium">{formatDate(c.dateTraitement)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 font-medium">{c.departement}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{c.demandeur ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{c.societe ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{c.manager ?? '—'}</td>
+                      <td className="px-3 py-2.5">
+                        {entrepotCode
+                          ? <span className="font-mono text-xs font-semibold text-primary">{entrepotCode}</span>
+                          : <span className="text-muted-foreground text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5"><StatusBadge statut={c.statut} /></td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1">
+                          <button onClick={e => { e.stopPropagation(); navigate(`/commandes/${c.id}`); }}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                            className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && c.lignes && c.lignes.length > 0 && (
+                      <tr className="bg-muted/10 border-b border-border/50">
+                        <td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="px-6 py-2">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-muted-foreground">
+                                <th className="text-left py-1 pr-4 font-medium">Référence</th>
+                                <th className="text-left py-1 pr-4 font-medium">Article</th>
+                                <th className="text-right py-1 pr-4 font-medium">Demandé</th>
+                                <th className="text-right py-1 pr-4 font-medium">Validé</th>
+                                <th className="text-right py-1 font-medium">Fourni</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {c.lignes.map(l => (
+                                <tr key={l.id} className="border-t border-border/30">
+                                  <td className="py-1 pr-4 font-mono text-muted-foreground">{l.article?.reference ?? '—'}</td>
+                                  <td className="py-1 pr-4 font-medium">{l.article?.nom ?? '—'}</td>
+                                  <td className="py-1 pr-4 text-right">{l.quantiteDemandee}</td>
+                                  <td className="py-1 pr-4 text-right text-blue-600">{l.quantiteValidee ?? '—'}</td>
+                                  <td className="py-1 text-right text-green-700">{l.quantiteFournie ?? '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="px-3 py-2.5 font-medium">{c.departement}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{c.demandeur ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{(c as any).societe ?? '—'}</td>
-                  <td className="px-3 py-2.5">
-                    {c.entrepotSource
-                      ? <span className="font-mono text-xs font-semibold text-primary">{entrepots.find(e => e.id === c.entrepotSource)?.code ?? '—'}</span>
-                      : <span className="text-muted-foreground text-xs">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{c.lignes?.length ?? 0} art.</td>
-                  <td className="px-3 py-2.5"><StatusBadge statut={c.statut} /></td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1">
-                      <button onClick={e => { e.stopPropagation(); navigate(`/commandes/${c.id}`); }}
-                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
-                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -42,7 +42,10 @@ export class LivraisonsController {
   }
 
   @Get()
-  findAll(@Query() filters: any) { return this.service.findAll(filters); }
+  findAll(@Query() filters: any, @Request() req: any) {
+    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
+    return this.service.findAll({ ...filters, userEntrepots });
+  }
 
   // ── Corbeille — AVANT :id ─────────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ export class FilterMouvementsDto {
   @IsOptional() @IsString() type?: string;
   @IsOptional() @IsString() envoye?: string;
   @IsOptional() @IsString() recu?: string;
+  @IsOptional() @IsString() manager?: string;
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() page?: string;
   @IsOptional() @IsString() limit?: string;

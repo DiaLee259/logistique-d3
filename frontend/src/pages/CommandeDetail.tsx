@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FileText, Mail, CheckCircle, Truck, Download, X, Package, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi, entrepotsApi } from '@/lib/api';
+import { commandesApi, entrepotsApi, stockApi } from '@/lib/api';
 import { cn, formatDate, downloadBlob } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +37,14 @@ export default function CommandeDetail() {
     queryKey: ['entrepots-actifs'],
     queryFn: () => entrepotsApi.list(),
   });
+
+  // Stocks de l'entrepôt sélectionné — chargés dynamiquement dans le dialog de validation
+  const { data: stocksEntrepot = [] } = useQuery<any[]>({
+    queryKey: ['stocks-entrepot', entrepotSourceCommande],
+    queryFn: () => stockApi.complet(entrepotSourceCommande),
+    enabled: validDialogOpen && !!entrepotSourceCommande,
+  });
+  const stockByArticle = Object.fromEntries(stocksEntrepot.map((s: any) => [s.articleId, s.quantite]));
 
   const invalider = () => {
     qc.invalidateQueries({ queryKey: ['commande', id] });
@@ -440,21 +448,31 @@ export default function CommandeDetail() {
 
               <p className="text-xs text-muted-foreground">Ajustez les quantités validées si nécessaire.</p>
               <div className="space-y-1.5">
-                {commande.lignes?.map(l => (
-                  <div key={l.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-lg">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{l.article?.nom}</p>
-                      <p className="text-xs text-muted-foreground">Demandé : {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
+                {commande.lignes?.map(l => {
+                  const stockDispo = entrepotSourceCommande ? (stockByArticle[l.articleId] ?? 0) : null;
+                  const qteVal = quantitesValidees[l.id] ?? l.quantiteDemandee;
+                  const stockInsuffisant = stockDispo !== null && qteVal > stockDispo;
+                  return (
+                    <div key={l.id} className={cn('flex items-center gap-3 p-2.5 rounded-lg border', stockInsuffisant ? 'bg-red-50 border-red-200' : 'bg-muted/30 border-transparent')}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{l.article?.nom}</p>
+                        <p className="text-xs text-muted-foreground">Demandé : {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
+                        {stockDispo !== null && (
+                          <p className={cn('text-xs font-semibold mt-0.5', stockInsuffisant ? 'text-red-600' : 'text-green-700')}>
+                            Stock : {stockDispo} {l.article?.unite ?? 'u'}{stockInsuffisant && ' ⚠ insuffisant'}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground mb-0.5">Qté validée</p>
+                        <input type="number" min={0}
+                          value={qteVal}
+                          onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
+                          className={cn('w-20 px-2 py-1.5 text-xs text-center border rounded-lg focus:outline-none focus:ring-2', stockInsuffisant ? 'border-red-300 focus:ring-red-200' : 'border-border focus:ring-primary/20')} />
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground mb-0.5">Qté validée</p>
-                      <input type="number" min={0}
-                        value={quantitesValidees[l.id] ?? l.quantiteDemandee}
-                        onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
-                        className="w-20 px-2 py-1.5 text-xs text-center border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Commentaire</label>

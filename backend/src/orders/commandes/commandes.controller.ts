@@ -108,6 +108,12 @@ export class CommandesController {
     return this.service.desactiverLien(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Patch('bulk-entrepot')
+  bulkEntrepot(@Body() body: { commandeIds: string[]; entrepotId: string }) {
+    return this.service.bulkSetEntrepot(body.commandeIds, body.entrepotId);
+  }
+
   // ── Corbeille — toutes ces routes AVANT @Get(':id') ──────────────────────
 
   @UseGuards(JwtAuthGuard)

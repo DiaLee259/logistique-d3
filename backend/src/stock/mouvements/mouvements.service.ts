@@ -30,6 +30,7 @@ export class MouvementsService {
     if (filters.entrepotId) where.entrepotId = filters.entrepotId;
     if (filters.articleId) where.articleId = filters.articleId;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
+    if (filters.manager) where.manager = { contains: filters.manager, mode: 'insensitive' };
     if (filters.type) where.type = filters.type;
     if (filters.envoye !== undefined) where.envoye = filters.envoye === 'true';
     if (filters.recu !== undefined) where.recu = filters.recu === 'true';

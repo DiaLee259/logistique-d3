@@ -144,6 +144,8 @@ export const commandesApi = {
     api.post(`/commandes/public/${token}`, data).then(r => r.data),
   suiviPublic: (numero: string) =>
     api.get(`/commandes/public/suivi/${encodeURIComponent(numero)}`).then(r => r.data),
+  bulkSetEntrepot: (commandeIds: string[], entrepotId: string) =>
+    api.patch('/commandes/bulk-entrepot', { commandeIds, entrepotId }).then(r => r.data),
   template: () => api.get('/commandes/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/commandes/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
 };

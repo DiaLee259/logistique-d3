@@ -15,6 +15,7 @@ export class LivraisonsService {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.entrepotId) where.entrepotId = filters.entrepotId;
+    if (filters.userEntrepots?.length) where.entrepotId = { in: filters.userEntrepots };
     if (filters.mois) {
       const [y, m] = filters.mois.split('-').map(Number);
       where.dateLivraison = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };

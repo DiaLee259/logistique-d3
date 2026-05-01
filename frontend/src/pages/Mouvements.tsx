@@ -19,7 +19,7 @@ export default function Mouvements() {
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({ type: '', entrepotId: '', departement: '', dateDebut: '', dateFin: '', mois: '' });
+  const [filters, setFilters] = useState({ type: '', entrepotId: '', departement: '', dateDebut: '', dateFin: '', mois: '', manager: '' });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -111,6 +111,15 @@ export default function Mouvements() {
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none" />
         <input type="date" value={filters.dateFin} onChange={e => setFilters(p => ({ ...p, dateFin: e.target.value, mois: '' }))}
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none" />
+        <div className="relative">
+          <input value={filters.manager} onChange={e => setFilters(p => ({ ...p, manager: e.target.value }))} placeholder="Filtrer manager…"
+            className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 min-w-36" />
+          {filters.manager && (
+            <button onClick={() => setFilters(p => ({ ...p, manager: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         <button onClick={exportCSV} className="flex items-center gap-2 px-3 py-2 text-sm bg-card border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground">
           <Download className="w-4 h-4" /> Export CSV
         </button>
