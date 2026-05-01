@@ -150,6 +150,7 @@ export class CommandesService {
           select: {
             quantiteDemandee: true,
             quantiteValidee: true,
+            quantiteFournie: true,
             article: { select: { nom: true, reference: true, unite: true } },
           },
         },

@@ -12,7 +12,7 @@ import { DEFAULT_PRIVILEGES } from '@/lib/types';
 type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero';
 
 export default function Parametres() {
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('utilisateurs');
 
@@ -370,6 +370,13 @@ export default function Parametres() {
 
   const roleColor = (r: string) => roles.find(x => x.value === r)?.color ?? 'bg-gray-100 text-gray-700';
 
+  const allowedEntrepots = user?.privileges?.entrepots ?? [];
+  const visibleEntrepots = allowedEntrepots.length > 0
+    ? entrepots.filter(e => allowedEntrepots.includes(e.id))
+    : entrepots;
+  const canManageEntrepots = hasRole('ADMIN', 'LOGISTICIEN_1') && allowedEntrepots.length === 0;
+  const canSeeRepertoire = hasRole('ADMIN') || (user?.privileges?.modules?.parametres ?? 'NONE') !== 'NONE';
+
   return (
     <div className="space-y-4 max-w-5xl">
       {/* Tabs */}
@@ -378,7 +385,7 @@ export default function Parametres() {
           { key: 'utilisateurs' as Tab, label: 'Utilisateurs', icon: Users },
           { key: 'entrepots' as Tab, label: 'Entrepôts', icon: Warehouse },
           { key: 'catalogue' as Tab, label: 'Catalogue articles', icon: BookOpen },
-          { key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 },
+          ...(canSeeRepertoire ? [{ key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 }] : []),
           { key: 'workflow' as Tab, label: 'Guide & Workflow', icon: HelpCircle },
           ...(hasRole('ADMIN') ? [{ key: 'remise-a-zero' as Tab, label: 'Remise à zéro', icon: RotateCcw }] : []),
         ].map(({ key, label, icon: Icon }) => (
@@ -513,9 +520,9 @@ export default function Parametres() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold">Gestion des entrepôts</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{entrepots.length} entrepôt(s)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{visibleEntrepots.length} entrepôt(s)</p>
             </div>
-            {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+            {canManageEntrepots && (
               <button onClick={openCreateEntrepot}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
                 <Plus className="w-3.5 h-3.5" /> Nouvel entrepôt
@@ -533,7 +540,7 @@ export default function Parametres() {
                 </tr>
               </thead>
               <tbody>
-                {entrepots.map(e => (
+                {visibleEntrepots.map(e => (
                   <tr key={e.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-2.5 font-mono font-bold text-primary">{e.code}</td>
                     <td className="px-3 py-2.5 font-medium">{e.nom}</td>
@@ -547,7 +554,7 @@ export default function Parametres() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      {hasRole('ADMIN', 'LOGISTICIEN_1') && (
+                      {canManageEntrepots && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => openEditEntrepot(e)}
                             className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted">

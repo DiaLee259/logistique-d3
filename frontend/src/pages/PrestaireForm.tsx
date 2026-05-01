@@ -394,12 +394,13 @@ function TrackingResult({ commande }: { commande: any }) {
         <div className="bg-gray-50 rounded-xl p-3">
           <p className="text-xs font-semibold text-gray-600 mb-1.5">Articles commandés</p>
           {commande.lignes.map((l: any, i: number) => (
-            <div key={i} className="flex justify-between text-xs py-0.5 border-b border-gray-100 last:border-0">
+            <div key={i} className="flex justify-between text-xs py-0.5 border-b border-gray-100 last:border-0 gap-2">
               <span className="text-gray-700">{l.article?.nom ?? '—'}</span>
-              <span className="text-gray-500">
-                {l.quantiteValidee != null
-                  ? <>{l.quantiteValidee} <span className="text-gray-400">/ {l.quantiteDemandee} dem.</span></>
-                  : <>{l.quantiteDemandee} dem.</>}
+              <span className="text-gray-500 text-right whitespace-nowrap">
+                <span className="text-gray-400">dem. </span><strong>{l.quantiteDemandee}</strong>
+                {l.quantiteFournie != null && (
+                  <> · <span className="text-gray-400">livré </span><strong className="text-green-700">{l.quantiteFournie}</strong></>
+                )}
               </span>
             </div>
           ))}
