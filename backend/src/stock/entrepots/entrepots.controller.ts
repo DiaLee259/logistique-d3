@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { EntrepotsService } from './entrepots.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RolesGuard } from '../../auth/roles.guard';
@@ -10,8 +10,11 @@ export class EntrepotsController {
   constructor(private service: EntrepotsService) {}
 
   @Get()
-  findAll(@Query('all') all?: string) {
-    return all === 'true' ? this.service.findAllIncludingInactif() : this.service.findAll();
+  findAll(@Query('all') all?: string, @Request() req?: any) {
+    const userEntrepots: string[] = req?.user?.privileges?.entrepots ?? [];
+    return all === 'true'
+      ? this.service.findAllIncludingInactif(userEntrepots)
+      : this.service.findAll(userEntrepots);
   }
 
   @Get(':id')

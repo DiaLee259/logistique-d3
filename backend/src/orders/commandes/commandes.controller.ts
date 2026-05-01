@@ -86,7 +86,8 @@ export class CommandesController {
   @Get()
   findAll(@Query() filters: any, @Request() req: any) {
     const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
-    return this.service.findAll({ ...filters, userEntrepots });
+    const userRole: string = req.user?.role ?? '';
+    return this.service.findAll({ ...filters, userEntrepots, userRole });
   }
 
   @UseGuards(JwtAuthGuard)

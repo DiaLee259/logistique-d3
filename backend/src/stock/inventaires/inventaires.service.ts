@@ -73,8 +73,10 @@ export class InventairesService {
   }
 
   // Alertes : entrepôts sans inventaire depuis plus de 3 mois
-  async getAlertes() {
-    const entrepots = await this.prisma.entrepot.findMany({ where: { actif: true } });
+  async getAlertes(userEntrepots?: string[]) {
+    const where: any = { actif: true };
+    if (userEntrepots?.length) where.id = { in: userEntrepots };
+    const entrepots = await this.prisma.entrepot.findMany({ where });
     const troixMoisAvant = new Date();
     troixMoisAvant.setMonth(troixMoisAvant.getMonth() - 3);
 

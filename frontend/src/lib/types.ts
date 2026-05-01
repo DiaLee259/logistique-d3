@@ -102,6 +102,7 @@ export interface Mouvement {
   entrepotId: string;
   type: TypeMouvement;
   quantiteDemandee: number;
+  quantiteValidee?: number;
   quantiteFournie: number;
   departement?: string;
   numeroCommande?: string;

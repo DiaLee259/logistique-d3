@@ -71,10 +71,10 @@ export default function Mouvements() {
 
   const exportCSV = () => {
     if (!mouvements.length) return;
-    const headers = ['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Fourni', 'Département', 'Manager', 'N° Opération', 'Source/Destination'];
+    const headers = ['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Département', 'Manager', 'N° Opération', 'Source/Destination'];
     const rows = mouvements.map(m => [
       formatDate(m.date), m.article?.reference, m.article?.nom, m.entrepot?.code,
-      m.type, m.quantiteDemandee, m.quantiteFournie, m.departement, m.manager,
+      m.type, m.quantiteDemandee, m.quantiteValidee ?? '', m.quantiteFournie, m.departement, m.manager,
       m.numeroOperation, m.sourceDestination,
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n');
@@ -134,7 +134,7 @@ export default function Mouvements() {
           <table className="min-w-max w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Fourni', 'Dép.', 'Manager', 'N° Op.', 'Source', ''].map(h => (
+                {['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Dép.', 'Manager', 'N° Op.', 'Source', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -156,6 +156,7 @@ export default function Mouvements() {
                     </span>
                   </td>
                   <td className="px-3 py-1.5 text-right text-xs text-muted-foreground">{formatNumber(m.quantiteDemandee)}</td>
+                  <td className="px-3 py-1.5 text-right text-xs text-blue-600">{m.quantiteValidee != null ? formatNumber(m.quantiteValidee) : <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-3 py-1.5 text-right text-xs font-medium">{formatNumber(m.quantiteFournie)}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.departement ?? '—'}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.manager ?? '—'}</td>

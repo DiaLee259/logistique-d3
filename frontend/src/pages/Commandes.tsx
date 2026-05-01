@@ -6,11 +6,11 @@ import {
   Link2, Copy, Check, ChevronDown, ChevronUp, Calendar, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi, articlesApi, repertoireApi } from '@/lib/api';
+import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Commande, Article, Intervenant } from '@/lib/types';
+import type { Commande, Article, Entrepot, Intervenant } from '@/lib/types';
 
 // ── Combobox article avec recherche ──────────────────────────────────────────
 function ArticleCombobox({
@@ -107,6 +107,7 @@ export default function Commandes() {
   const [filterMois, setFilterMois] = useState('');
   const [filterDateDebut, setFilterDateDebut] = useState('');
   const [filterDateFin, setFilterDateFin] = useState('');
+  const [filterEntrepot, setFilterEntrepot] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
   // Dialogs
@@ -134,13 +135,19 @@ export default function Commandes() {
     if (filterMois) p.mois = filterMois;
     if (filterDateDebut) p.dateDebut = filterDateDebut;
     if (filterDateFin) p.dateFin = filterDateFin;
+    if (filterEntrepot) p.entrepotSource = filterEntrepot;
     return p;
   };
 
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot],
     queryFn: () => commandesApi.list(buildParams()),
-    refetchInterval: 15_000, // sync auto toutes les 15s
+    refetchInterval: 15_000,
+  });
+
+  const { data: entrepots = [] } = useQuery<Entrepot[]>({
+    queryKey: ['entrepots'],
+    queryFn: () => entrepotsApi.list(),
   });
 
   const { data: articles = [] } = useQuery<Article[]>({
@@ -252,6 +259,12 @@ export default function Commandes() {
           {statuts.map(s => <option key={s} value={s}>{statutCommandeLabel(s)}</option>)}
         </select>
 
+        <select value={filterEntrepot} onChange={e => setFilterEntrepot(e.target.value)}
+          className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">Tous entrepôts</option>
+          {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+        </select>
+
         <button onClick={() => setShowFilters(v => !v)}
           className={cn('flex items-center gap-1.5 px-3 py-2 text-xs border rounded-lg transition-colors',
             hasActiveFilters ? 'bg-primary text-white border-primary' : 'bg-card border-border hover:border-primary')}>
@@ -320,16 +333,16 @@ export default function Commandes() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Articles', 'Statut', ''].map(h => (
+                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Entrepôt', 'Articles', 'Statut', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
               ) : commandes.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
               ) : commandes.map(c => (
                 <tr key={c.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
                   onClick={() => navigate(`/commandes/${c.id}`)}>
@@ -347,6 +360,11 @@ export default function Commandes() {
                   <td className="px-3 py-2.5 font-medium">{c.departement}</td>
                   <td className="px-3 py-2.5 text-muted-foreground">{c.demandeur ?? '—'}</td>
                   <td className="px-3 py-2.5 text-muted-foreground">{(c as any).societe ?? '—'}</td>
+                  <td className="px-3 py-2.5">
+                    {c.entrepotSource
+                      ? <span className="font-mono text-xs font-semibold text-primary">{entrepots.find(e => e.id === c.entrepotSource)?.code ?? '—'}</span>
+                      : <span className="text-muted-foreground text-xs">—</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-muted-foreground">{c.lignes?.length ?? 0} art.</td>
                   <td className="px-3 py-2.5"><StatusBadge statut={c.statut} /></td>
                   <td className="px-3 py-2.5">

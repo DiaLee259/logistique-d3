@@ -72,7 +72,10 @@ export class InventairesController {
   }
 
   @Get('alertes')
-  getAlertes() { return this.service.getAlertes(); }
+  getAlertes(@Request() req: any) {
+    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
+    return this.service.getAlertes(userEntrepots);
+  }
 
   @Get('entrepot')
   getEtat(@Query('entrepotId') entrepotId: string) {

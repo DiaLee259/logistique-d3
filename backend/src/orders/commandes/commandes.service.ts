@@ -19,14 +19,19 @@ export class CommandesService {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
+    if (filters.entrepotSource) where.entrepotSource = filters.entrepotSource;
+
+    const andClauses: any[] = [];
 
     // Filtrage par entrepôt selon les privilèges du user
     if (filters.userEntrepots?.length) {
-      where.OR = [
+      const isLog1OrAdmin = ['ADMIN', 'LOGISTICIEN_1'].includes(filters.userRole ?? '');
+      andClauses.push({ OR: [
         { entrepotSource: { in: filters.userEntrepots } },
-        { entrepotSource: null }, // commandes non encore assignées = visibles pour validation
-      ];
+        ...(isLog1OrAdmin ? [{ entrepotSource: null }] : []),
+      ]});
     }
+
     if (filters.dateDebut || filters.dateFin) {
       where.dateReception = {};
       if (filters.dateDebut) where.dateReception.gte = new Date(filters.dateDebut);
@@ -40,14 +45,15 @@ export class CommandesService {
       };
     }
     if (filters.search) {
-      where.OR = [
+      andClauses.push({ OR: [
         { numero: { contains: filters.search, mode: 'insensitive' } },
         { demandeur: { contains: filters.search, mode: 'insensitive' } },
         { departement: { contains: filters.search, mode: 'insensitive' } },
         { societe: { contains: filters.search, mode: 'insensitive' } },
         { manager: { contains: filters.search, mode: 'insensitive' } },
-      ];
+      ]});
     }
+    if (andClauses.length) where.AND = andClauses;
 
     const page = parseInt(filters.page || '1');
     const limit = parseInt(filters.limit || '20');
@@ -86,9 +92,14 @@ export class CommandesService {
     return c;
   }
 
-  async create(dto: CreateCommandeDto) {
+  private async genNumeroCommande(): Promise<string> {
     const count = await this.prisma.commande.count();
-    const numero = `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}-${suffix}`;
+  }
+
+  async create(dto: CreateCommandeDto) {
+    const numero = await this.genNumeroCommande();
 
     const commande = await this.prisma.commande.create({
       data: {
@@ -166,8 +177,7 @@ export class CommandesService {
     if (!lien || !lien.actif) throw new BadRequestException('Lien invalide ou expiré');
     if (lien.expiresAt && lien.expiresAt < new Date()) throw new BadRequestException('Lien expiré');
 
-    const count = await this.prisma.commande.count();
-    const numero = `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const numero = await this.genNumeroCommande();
 
     const commande = await this.prisma.commande.create({
       data: {
@@ -306,12 +316,14 @@ export class CommandesService {
           entrepotId,
           type: 'SORTIE' as any,
           quantiteDemandee: (ligne as any).quantiteDemandee,
+          quantiteValidee: (ligne as any).quantiteValidee ?? null,
           quantiteFournie: quantiteLivree,
           departement: commande.departement,
           numeroCommande: commande.numero,
+          numeroOperation: commande.numero,
           sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
           commandeId: id,
-        },
+        } as any,
       });
 
       await this.calculator.sync(ligne.articleId, entrepotId);
@@ -474,8 +486,10 @@ export class CommandesService {
     // Chaque ligne contribue un article (col G = référence, col H = désignation ignorée, col I = quantité).
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
-    // Chercher l'onglet "Commande" ou prendre le premier
-    const ws = wb.getWorksheet('Commande') ?? wb.worksheets[0];
+    // Chercher l'onglet "Commande" (insensible à la casse), sinon prendre le premier onglet non-instructions
+    const ws = wb.worksheets.find(s => s.name.toLowerCase() === 'commande')
+      ?? wb.worksheets.find(s => !s.name.includes('Instructions') && !s.name.includes('📋'))
+      ?? wb.worksheets[0];
     if (!ws) return { created: 0, skipped: 0, errors: ['Fichier Excel vide ou invalide'], total: 0 };
 
     const dataRows: any[] = [];
@@ -534,8 +548,7 @@ export class CommandesService {
       return { created: 0, skipped, errors: [...errors, 'Aucun article valide trouvé'], total: dataRows.length };
 
     try {
-      const count = await this.prisma.commande.count();
-      const numero = `CMD-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+      const numero = await this.genNumeroCommande();
       await this.prisma.commande.create({
         data: {
           numero,

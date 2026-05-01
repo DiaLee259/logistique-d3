@@ -5,12 +5,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class EntrepotsService {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.entrepot.findMany({ where: { actif: true }, orderBy: { code: 'asc' } });
+  findAll(userEntrepots?: string[]) {
+    const where: any = { actif: true };
+    if (userEntrepots?.length) where.id = { in: userEntrepots };
+    return this.prisma.entrepot.findMany({ where, orderBy: { code: 'asc' } });
   }
 
-  findAllIncludingInactif() {
-    return this.prisma.entrepot.findMany({ orderBy: { code: 'asc' } });
+  findAllIncludingInactif(userEntrepots?: string[]) {
+    const where: any = {};
+    if (userEntrepots?.length) where.id = { in: userEntrepots };
+    return this.prisma.entrepot.findMany({ where, orderBy: { code: 'asc' } });
   }
 
   async findById(id: string) {

@@ -142,6 +142,7 @@ model Mouvement {
   entrepotId         String
   type               TypeMouvement
   quantiteDemandee   Int
+  quantiteValidee    Int?
   quantiteFournie    Int
   departement        String?
   numeroCommande     String?
