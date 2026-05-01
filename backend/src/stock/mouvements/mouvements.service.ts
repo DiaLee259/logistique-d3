@@ -33,6 +33,9 @@ export class MouvementsService {
     if (filters.type) where.type = filters.type;
     if (filters.envoye !== undefined) where.envoye = filters.envoye === 'true';
     if (filters.recu !== undefined) where.recu = filters.recu === 'true';
+    if ((filters as any).userEntrepots?.length) {
+      where.entrepotId = { in: (filters as any).userEntrepots };
+    }
     if (filters.search) {
       where.OR = [
         { article: { nom: { contains: filters.search, mode: 'insensitive' } } },

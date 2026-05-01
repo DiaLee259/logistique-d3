@@ -19,8 +19,13 @@ export class CommandesService {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
-    if (filters.entrepotId) {
-      where.lignes = { some: {} }; // placeholder, join not easy here
+
+    // Filtrage par entrepôt selon les privilèges du user
+    if (filters.userEntrepots?.length) {
+      where.OR = [
+        { entrepotSource: { in: filters.userEntrepots } },
+        { entrepotSource: null }, // commandes non encore assignées = visibles pour validation
+      ];
     }
     if (filters.dateDebut || filters.dateFin) {
       where.dateReception = {};
@@ -214,19 +219,23 @@ export class CommandesService {
       throw new BadRequestException('Commande ne peut pas être validée dans cet état');
     }
 
+    // entrepotSource est désormais au niveau commande (choix unique de Log1)
+    const entrepotId = data.entrepotSource ?? undefined;
+    const stockRef = entrepotId
+      ? null // calculé par ligne
+      : await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
+
     for (const ligne of data.lignes || []) {
       const ligneCmd = commande.lignes.find(l => l.id === ligne.id);
-      const entrepotId = ligne.entrepotSource ?? undefined;
       const stock = entrepotId
         ? await this.prisma.stock.findUnique({ where: { articleId_entrepotId: { articleId: ligneCmd?.articleId ?? '', entrepotId } } })
-        : await this.prisma.stock.findFirst({ where: { articleId: ligneCmd?.articleId }, orderBy: { quantite: 'desc' } });
+        : stockRef;
 
       await this.prisma.ligneCommande.update({
         where: { id: ligne.id },
         data: {
           quantiteValidee: ligne.quantiteValidee,
           stockDisponible: stock?.quantite ?? 0,
-          entrepotSource: ligne.entrepotSource ?? null,
         },
       });
     }
@@ -239,6 +248,7 @@ export class CommandesService {
         dateTraitement: new Date(),
         dateTransmissionLog2: new Date(),
         commentaire: data.commentaire,
+        entrepotSource: data.entrepotSource ?? null,
       },
       include: { lignes: { include: { article: true } }, valideur: true },
     });
@@ -269,35 +279,24 @@ export class CommandesService {
       throw new BadRequestException('La commande doit être validée avant expédition');
     }
 
-    // Créer un mouvement SORTIE pour chaque ligne
+    // Entrepôt source : défini au niveau commande par Log1
+    let entrepotId: string | undefined = (commande as any).entrepotSource ?? undefined;
+    if (!entrepotId) {
+      const stock = await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
+      entrepotId = stock?.entrepotId ?? (await this.prisma.entrepot.findFirst({ where: { actif: true } }))?.id;
+    }
+    if (!entrepotId) throw new BadRequestException('Aucun entrepôt disponible pour l\'expédition');
+
+    // Créer un mouvement SORTIE pour chaque ligne avec la quantité réelle envoyée par Log2
     for (const ligne of commande.lignes) {
       const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
-      const qty = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
-      if (!qty || qty <= 0) continue;
-
-      // Entrepôt : priorité à entrepotSource choisi par Log1, sinon celui avec le plus de stock
-      let entrepotId: string;
-      const entrepotSource = (ligne as any).entrepotSource;
-
-      if (entrepotSource) {
-        entrepotId = entrepotSource;
-      } else {
-        const stock = await this.prisma.stock.findFirst({
-          where: { articleId: ligne.articleId },
-          orderBy: { quantite: 'desc' },
-        });
-        if (stock) {
-          entrepotId = stock.entrepotId;
-        } else {
-          const entrepot = await this.prisma.entrepot.findFirst({ where: { actif: true } });
-          if (!entrepot) continue;
-          entrepotId = entrepot.id;
-        }
-      }
+      // quantiteLivree = ce que Log2 a réellement envoyé (peut différer du validé)
+      const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
+      if (!quantiteLivree || quantiteLivree <= 0) continue;
 
       await this.prisma.ligneCommande.update({
         where: { id: ligne.id },
-        data: { quantiteFournie: qty },
+        data: { quantiteFournie: quantiteLivree }, // quantiteFournie = quantité livrée réelle
       });
 
       await this.prisma.mouvement.create({
@@ -306,7 +305,7 @@ export class CommandesService {
           entrepotId,
           type: 'SORTIE' as any,
           quantiteDemandee: (ligne as any).quantiteDemandee,
-          quantiteFournie: qty,
+          quantiteFournie: quantiteLivree,
           departement: commande.departement,
           numeroCommande: commande.numero,
           sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
@@ -314,7 +313,6 @@ export class CommandesService {
         },
       });
 
-      // Recalcul hybride après le mouvement
       await this.calculator.sync(ligne.articleId, entrepotId);
     }
 
@@ -483,18 +481,38 @@ export class CommandesService {
     ws.eachRow((row, idx) => { if (idx > 1) dataRows.push(row); });
     if (dataRows.length === 0) return { created: 0, skipped: 0, errors: ['Aucune ligne de données'], total: 0 };
 
+    // Auto-détection du format : ancien (refArticle=G/7, qte=I/9) ou nouveau (refArticle=I/9, qte=K/11)
+    const headerRow = ws.getRow(1);
+    const colGHeader = String(headerRow.getCell(7).value ?? '').toLowerCase();
+    const isOldFormat = colGHeader.includes('réf') || colGHeader.includes('ref') || colGHeader.includes('article');
+    const refCol = isOldFormat ? 7 : 9;
+    const qteCol = isOldFormat ? 9 : 11;
+
     const firstRow = dataRows[0];
     const demandeur = String(firstRow.getCell(1).value ?? '').trim();
     const departement = String(firstRow.getCell(2).value ?? '').trim();
     if (!demandeur || !departement)
       return { created: 0, skipped: dataRows.length, errors: ['Demandeur et Département requis (colonnes A et B)'], total: dataRows.length };
 
-    const societe = String(firstRow.getCell(3).value ?? '').trim() || undefined;       // col C
-    const manager = String(firstRow.getCell(4).value ?? '').trim() || undefined;        // col D
-    const emailDemandeur = String(firstRow.getCell(5).value ?? '').trim() || undefined; // col E
-    const telephoneDestinataire = String(firstRow.getCell(6).value ?? '').trim() || undefined; // col F
-    const adresseLivraison = String(firstRow.getCell(7).value ?? '').trim() || undefined;      // col G
-    const commentaire = String(firstRow.getCell(8).value ?? '').trim() || undefined;           // col H
+    let societe: string | undefined, manager: string | undefined,
+        emailDemandeur: string | undefined, telephoneDestinataire: string | undefined,
+        adresseLivraison: string | undefined, commentaire: string | undefined;
+
+    if (isOldFormat) {
+      // Ancien format : A=demandeur B=dept C=email D=tel E=adresse F=commentaire
+      emailDemandeur        = String(firstRow.getCell(3).value ?? '').trim() || undefined;
+      telephoneDestinataire = String(firstRow.getCell(4).value ?? '').trim() || undefined;
+      adresseLivraison      = String(firstRow.getCell(5).value ?? '').trim() || undefined;
+      commentaire           = String(firstRow.getCell(6).value ?? '').trim() || undefined;
+    } else {
+      // Nouveau format : A=demandeur B=dept C=société D=manager E=email F=tel G=adresse H=commentaire
+      societe               = String(firstRow.getCell(3).value ?? '').trim() || undefined;
+      manager               = String(firstRow.getCell(4).value ?? '').trim() || undefined;
+      emailDemandeur        = String(firstRow.getCell(5).value ?? '').trim() || undefined;
+      telephoneDestinataire = String(firstRow.getCell(6).value ?? '').trim() || undefined;
+      adresseLivraison      = String(firstRow.getCell(7).value ?? '').trim() || undefined;
+      commentaire           = String(firstRow.getCell(8).value ?? '').trim() || undefined;
+    }
 
     let created = 0;
     let skipped = 0;
@@ -502,9 +520,8 @@ export class CommandesService {
 
     const lignes: { articleId: string; quantiteDemandee: number }[] = [];
     for (const row of dataRows) {
-      const refArticle = String(row.getCell(9).value ?? '').trim();  // col I
-      // col J = désignation, ignorée
-      const quantite = parseInt(String(row.getCell(11).value ?? '0')) || 0; // col K
+      const refArticle = String(row.getCell(refCol).value ?? '').trim();
+      const quantite = parseInt(String(row.getCell(qteCol).value ?? '0')) || 0;
       if (!refArticle) continue;
       if (!quantite) { errors.push(`Quantité invalide pour l'article "${refArticle}"`); skipped++; continue; }
       const article = await this.prisma.article.findFirst({ where: { reference: refArticle } });

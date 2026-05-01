@@ -66,7 +66,10 @@ export class InventairesController {
   }
 
   @Get()
-  findAll(@Query() filters: any) { return this.service.findAll(filters); }
+  findAll(@Query() filters: any, @Request() req: any) {
+    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
+    return this.service.findAll({ ...filters, userEntrepots });
+  }
 
   @Get('alertes')
   getAlertes() { return this.service.getAlertes(); }

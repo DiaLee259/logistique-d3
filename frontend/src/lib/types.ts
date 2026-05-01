@@ -125,12 +125,11 @@ export interface LigneCommande {
   id: string;
   commandeId: string;
   articleId: string;
-  quantiteDemandee: number;
-  quantiteValidee?: number;
-  quantiteFournie?: number;
+  quantiteDemandee: number;   // ce que le prestataire a demandé
+  quantiteValidee?: number;   // ce que Log1 a validé
+  quantiteFournie?: number;   // ce que Log2 a réellement livré
   commentaire?: string;
   stockDisponible?: number;
-  entrepotSource?: string;
   article?: Article;
 }
 
@@ -164,6 +163,7 @@ export interface Commande {
   valideurId?: string;
   expediteurId?: string;
   intervenantId?: string;
+  entrepotSource?: string;    // entrepôt choisi par Log1 pour l'expédition
   dateValidation?: string;
   telephoneDestinataire?: string;
   adresseLivraison?: string;

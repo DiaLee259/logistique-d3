@@ -208,6 +208,8 @@ model Commande {
   expediteurId             String?
   intervenantId            String?
 
+  entrepotSource           String?        // entrepôt choisi par Log1 à la validation
+
   valideur     User?        @relation("ValideurLog1", fields: [valideurId], references: [id])
   expediteur   User?        @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
   intervenant  Intervenant? @relation(fields: [intervenantId], references: [id], onDelete: SetNull)

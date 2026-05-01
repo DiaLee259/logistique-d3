@@ -17,7 +17,7 @@ export default function CommandeDetail() {
 
   const [validDialogOpen, setValidDialogOpen] = useState(false);
   const [quantitesValidees, setQuantitesValidees] = useState<Record<string, number>>({});
-  const [entrepotsSource, setEntrepotsSource] = useState<Record<string, string>>({});
+  const [entrepotSourceCommande, setEntrepotSourceCommande] = useState<string>('');
   const [commentaireValid, setCommentaireValid] = useState('');
   const [expedierDialogOpen, setExpedierDialogOpen] = useState(false);
   const [quantitesExpedition, setQuantitesExpedition] = useState<Record<string, number>>({});
@@ -93,13 +93,9 @@ export default function CommandeDetail() {
   const openValidDialog = () => {
     if (!commande?.lignes) return;
     const qtes: Record<string, number> = {};
-    const entSrc: Record<string, string> = {};
-    commande.lignes.forEach(l => {
-      qtes[l.id] = l.quantiteValidee ?? l.quantiteDemandee;
-      if (l.entrepotSource) entSrc[l.id] = l.entrepotSource;
-    });
+    commande.lignes.forEach(l => { qtes[l.id] = l.quantiteValidee ?? l.quantiteDemandee; });
     setQuantitesValidees(qtes);
-    setEntrepotsSource(entSrc);
+    setEntrepotSourceCommande(commande.entrepotSource ?? '');
     setCommentaireValid('');
     setValidDialogOpen(true);
   };
@@ -132,11 +128,8 @@ export default function CommandeDetail() {
 
   const handleValider = () => {
     validerMut.mutate({
-      lignes: Object.entries(quantitesValidees).map(([lid, qte]) => ({
-        id: lid,
-        quantiteValidee: qte,
-        entrepotSource: entrepotsSource[lid] ?? null,
-      })),
+      lignes: Object.entries(quantitesValidees).map(([lid, qte]) => ({ id: lid, quantiteValidee: qte })),
+      entrepotSource: entrepotSourceCommande || null,
       commentaire: commentaireValid,
     });
   };
@@ -250,6 +243,7 @@ export default function CommandeDetail() {
           { label: 'Nb. grilles', value: commande.nombreGrilles ?? '—' },
           { label: 'Type grille', value: commande.typeGrille ?? '—' },
           { label: 'Validé par', value: commande.valideur ? `${commande.valideur.prenom} ${commande.valideur.nom}` : '—' },
+          { label: 'Entrepôt expéd.', value: commande.entrepotSource ? (entrepots.find(e => e.id === commande.entrepotSource)?.code ?? commande.entrepotSource) : '—' },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card rounded-lg border border-border p-2.5">
             <p className="text-xs text-muted-foreground">{label}</p>
@@ -310,8 +304,8 @@ export default function CommandeDetail() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['Référence', 'Désignation', 'Unité', 'Demandé', 'Validé', 'Stock dispo'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                {['Référence', 'Désignation', 'Unité', 'Demandé', 'Validé Log1', 'Livré Log2', 'Stock dispo'].map(h => (
+                  <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-xs">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -325,6 +319,11 @@ export default function CommandeDetail() {
                   <td className="px-4 py-2.5">
                     <span className={cn('font-semibold', l.quantiteValidee != null && l.quantiteValidee < l.quantiteDemandee ? 'text-orange-600' : 'text-foreground')}>
                       {l.quantiteValidee ?? '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={cn('font-semibold', l.quantiteFournie != null && l.quantiteFournie < (l.quantiteValidee ?? l.quantiteDemandee) ? 'text-red-600' : 'text-green-700')}>
+                      {l.quantiteFournie ?? '—'}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{l.stockDisponible ?? '—'}</td>
@@ -423,32 +422,36 @@ export default function CommandeDetail() {
               <button onClick={() => setValidDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-5 space-y-3">
-              <p className="text-xs text-muted-foreground">Ajustez les quantités validées selon le stock disponible.</p>
-              <div className="space-y-2">
+              {/* Entrepôt source — UN seul pour toute la commande */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
+                <label className="block text-xs font-semibold text-blue-800">Entrepôt d'expédition *</label>
+                <p className="text-xs text-blue-600">Choisissez l'entrepôt depuis lequel tous les articles seront expédiés.</p>
+                <select
+                  value={entrepotSourceCommande}
+                  onChange={e => setEntrepotSourceCommande(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                >
+                  <option value="">— Sélectionner un entrepôt —</option>
+                  {entrepots.map(e => (
+                    <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="text-xs text-muted-foreground">Ajustez les quantités validées si nécessaire.</p>
+              <div className="space-y-1.5">
                 {commande.lignes?.map(l => (
-                  <div key={l.id} className="p-2.5 bg-muted/30 rounded-lg space-y-1.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{l.article?.nom}</p>
-                        <p className="text-xs text-muted-foreground">Demandé: {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
-                      </div>
-                      <input type="number" min={0} max={l.quantiteDemandee}
+                  <div key={l.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{l.article?.nom}</p>
+                      <p className="text-xs text-muted-foreground">Demandé : {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground mb-0.5">Qté validée</p>
+                      <input type="number" min={0}
                         value={quantitesValidees[l.id] ?? l.quantiteDemandee}
                         onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
                         className="w-20 px-2 py-1.5 text-xs text-center border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground whitespace-nowrap">Entrepôt source :</label>
-                      <select
-                        value={entrepotsSource[l.id] ?? ''}
-                        onChange={e => setEntrepotsSource(prev => ({ ...prev, [l.id]: e.target.value }))}
-                        className="flex-1 px-2 py-1 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
-                      >
-                        <option value="">— Non défini —</option>
-                        {entrepots.map(e => (
-                          <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>
-                        ))}
-                      </select>
                     </div>
                   </div>
                 ))}
@@ -460,7 +463,7 @@ export default function CommandeDetail() {
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={() => setValidDialogOpen(false)} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-                <button onClick={handleValider} disabled={validerMut.isPending}
+                <button onClick={handleValider} disabled={validerMut.isPending || !entrepotSourceCommande}
                   className="px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
                   Valider → Transmettre au Log2
                 </button>

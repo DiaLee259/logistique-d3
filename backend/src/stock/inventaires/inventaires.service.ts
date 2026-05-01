@@ -14,6 +14,9 @@ export class InventairesService {
     const where: any = {};
     if (filters.entrepotId) where.entrepotId = filters.entrepotId;
     if (filters.articleId) where.articleId = filters.articleId;
+    if ((filters as any).userEntrepots?.length) {
+      where.entrepotId = { in: (filters as any).userEntrepots };
+    }
     if (filters.mois) {
       const [y, m] = filters.mois.split('-').map(Number);
       where.date = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };

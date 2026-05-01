@@ -89,8 +89,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         END $$
       `;
 
-      // Colonne entrepotSource sur lignes_commande
+      // Colonnes entrepotSource
       await this.$executeRaw`ALTER TABLE "lignes_commande" ADD COLUMN IF NOT EXISTS "entrepotSource" TEXT`;
+      await this.$executeRaw`ALTER TABLE "commandes" ADD COLUMN IF NOT EXISTS "entrepotSource" TEXT`;
 
       this.logger.log('Tables societes/intervenants + colonnes vérifiées ✓');
     } catch (err: any) {

@@ -5,9 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export class StockService {
   constructor(private prisma: PrismaService) {}
 
-  async getStockComplet(entrepotId?: string) {
+  async getStockComplet(entrepotId?: string, userEntrepots?: string[]) {
+    const where: any = {};
+    if (entrepotId) where.entrepotId = entrepotId;
+    else if (userEntrepots?.length) where.entrepotId = { in: userEntrepots };
     return this.prisma.stock.findMany({
-      where: entrepotId ? { entrepotId } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       include: {
         article: true,
         entrepot: { select: { id: true, code: true, nom: true } },
