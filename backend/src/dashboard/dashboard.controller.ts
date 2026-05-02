@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -14,8 +14,10 @@ export class DashboardController {
     @Query('dateFin') dateFin?: string,
     @Query('mois') mois?: string,
     @Query('articleId') articleId?: string,
+    @Request() req?: any,
   ) {
-    return this.service.getKpis(entrepotId, dateDebut, dateFin, mois, articleId);
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getKpis(entrepotId, dateDebut, dateFin, mois, articleId, ue);
   }
 
   @Get('evolution')
@@ -25,35 +27,43 @@ export class DashboardController {
     @Query('dateFin') dateFin?: string,
     @Query('mois') mois?: string,
     @Query('articleId') articleId?: string,
+    @Request() req?: any,
   ) {
-    return this.service.getEvolutionStock(entrepotId, dateDebut, dateFin, mois, articleId);
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getEvolutionStock(entrepotId, dateDebut, dateFin, mois, articleId, ue);
   }
 
   @Get('departements')
   getVolumeParDepartement(
     @Query('entrepotId') entrepotId?: string,
     @Query('mois') mois?: string,
+    @Request() req?: any,
   ) {
-    return this.service.getVolumeParDepartement(entrepotId, mois);
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getVolumeParDepartement(entrepotId, mois, ue);
   }
 
   @Get('demandeurs')
-  getVolumeParDemandeur(@Query('mois') mois?: string) {
-    return this.service.getVolumeParDemandeur(mois);
+  getVolumeParDemandeur(@Query('mois') mois?: string, @Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getVolumeParDemandeur(mois, ue);
   }
 
   @Get('delais')
-  getDelaisMoyens() {
-    return this.service.getDelaisMoyens();
+  getDelaisMoyens(@Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getDelaisMoyens(ue);
   }
 
   @Get('top-articles')
-  getTopArticles(@Query('limit') limit?: string) {
-    return this.service.getTopArticles(limit ? parseInt(limit) : 5);
+  getTopArticles(@Query('limit') limit?: string, @Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getTopArticles(limit ? parseInt(limit) : 5, ue);
   }
 
   @Get('commandes')
-  getResumeCommandes() {
-    return this.service.getResumeCommandes();
+  getResumeCommandes(@Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getResumeCommandes(ue);
   }
 }

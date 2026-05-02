@@ -17,7 +17,7 @@ function parseMois(mois?: string): { dateDebut?: string; dateFin?: string } {
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getKpis(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string) {
+  async getKpis(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const debut = parsed.dateDebut ?? dateDebut;
     const fin = parsed.dateFin ?? dateFin;
@@ -28,11 +28,13 @@ export class DashboardService {
 
     const mouvFilter: any = {};
     if (entrepotId) mouvFilter.entrepotId = entrepotId;
+    else if (userEntrepots.length) mouvFilter.entrepotId = { in: userEntrepots };
     if (articleId) mouvFilter.articleId = articleId;
     if (debut || fin) mouvFilter.date = dateFilter;
 
     // Filtre de date pour commandes (sur dateReception)
     const cmdDateFilter: any = { deletedAt: null };
+    if (userEntrepots.length) cmdDateFilter.entrepotSource = { in: userEntrepots };
     if (debut || fin) {
       cmdDateFilter.dateReception = {};
       if (debut) cmdDateFilter.dateReception.gte = new Date(debut);
@@ -91,13 +93,14 @@ export class DashboardService {
     };
   }
 
-  async getEvolutionStock(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string) {
+  async getEvolutionStock(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const debut = parsed.dateDebut ?? dateDebut;
     const fin = parsed.dateFin ?? dateFin;
 
     const where: any = {};
     if (entrepotId) where.entrepotId = entrepotId;
+    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
     if (articleId) where.articleId = articleId;
     if (debut || fin) {
       where.date = {};
@@ -122,10 +125,11 @@ export class DashboardService {
     return Object.entries(byDay).map(([date, v]) => ({ date, ...v }));
   }
 
-  async getVolumeParDepartement(entrepotId?: string, mois?: string) {
+  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { type: TypeMouvement.SORTIE };
     if (entrepotId) where.entrepotId = entrepotId;
+    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
     if (parsed.dateDebut || parsed.dateFin) {
       where.date = {};
       if (parsed.dateDebut) where.date.gte = new Date(parsed.dateDebut);
@@ -145,9 +149,10 @@ export class DashboardService {
     }));
   }
 
-  async getVolumeParDemandeur(mois?: string) {
+  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { statut: { not: 'ANNULEE' }, deletedAt: null };
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
     if (parsed.dateDebut || parsed.dateFin) {
       where.dateReception = {};
       if (parsed.dateDebut) where.dateReception.gte = new Date(parsed.dateDebut);
@@ -168,12 +173,15 @@ export class DashboardService {
     }));
   }
 
-  async getDelaisMoyens() {
+  async getDelaisMoyens(userEntrepots: string[] = []) {
+    const where: any = {
+      deletedAt: null,
+      statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
+    };
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
+
     const commandes = await this.prisma.commande.findMany({
-      where: {
-        deletedAt: null,
-        statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
-      },
+      where,
       select: {
         dateReception: true,
         dateTraitement: true,
@@ -214,10 +222,13 @@ export class DashboardService {
     };
   }
 
-  async getTopArticles(limit = 5) {
+  async getTopArticles(limit = 5, userEntrepots: string[] = []) {
+    const where: any = { type: TypeMouvement.SORTIE };
+    if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
+
     const data = await this.prisma.mouvement.groupBy({
       by: ['articleId'],
-      where: { type: TypeMouvement.SORTIE },
+      where,
       _sum: { quantiteFournie: true },
       orderBy: { _sum: { quantiteFournie: 'desc' } },
       take: limit,
@@ -234,10 +245,13 @@ export class DashboardService {
     }));
   }
 
-  async getResumeCommandes() {
+  async getResumeCommandes(userEntrepots: string[] = []) {
+    const where: any = { deletedAt: null };
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
+
     const par_statut = await this.prisma.commande.groupBy({
       by: ['statut'],
-      where: { deletedAt: null },
+      where,
       _count: { id: true },
     });
     return par_statut.map(s => ({ statut: s.statut, count: s._count.id }));

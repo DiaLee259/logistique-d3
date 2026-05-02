@@ -446,30 +446,33 @@ export default function CommandeDetail() {
                 </select>
               </div>
 
-              <p className="text-xs text-muted-foreground">Ajustez les quantités validées si nécessaire.</p>
               <div className="space-y-1.5">
+                {/* En-tête colonnes */}
+                <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
+                  <span className="flex-1 min-w-0">Article</span>
+                  <span className="w-20 text-center">Demandé</span>
+                  <span className="w-20 text-center">Stock</span>
+                  <span className="w-20 text-center">Validé</span>
+                </div>
                 {commande.lignes?.map(l => {
+                  const unit = l.article?.unite ?? 'u';
                   const stockDispo = entrepotSourceCommande ? (stockByArticle[l.articleId] ?? 0) : null;
                   const qteVal = quantitesValidees[l.id] ?? l.quantiteDemandee;
                   const stockInsuffisant = stockDispo !== null && qteVal > stockDispo;
                   return (
-                    <div key={l.id} className={cn('flex items-center gap-3 p-2.5 rounded-lg border', stockInsuffisant ? 'bg-red-50 border-red-200' : 'bg-muted/30 border-transparent')}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{l.article?.nom}</p>
-                        <p className="text-xs text-muted-foreground">Demandé : {l.quantiteDemandee} {l.article?.unite ?? 'u'}</p>
-                        {stockDispo !== null && (
-                          <p className={cn('text-xs font-semibold mt-0.5', stockInsuffisant ? 'text-red-600' : 'text-green-700')}>
-                            Stock : {stockDispo} {l.article?.unite ?? 'u'}{stockInsuffisant && ' ⚠ insuffisant'}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground mb-0.5">Qté validée</p>
-                        <input type="number" min={0}
-                          value={qteVal}
-                          onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
-                          className={cn('w-20 px-2 py-1.5 text-xs text-center border rounded-lg focus:outline-none focus:ring-2', stockInsuffisant ? 'border-red-300 focus:ring-red-200' : 'border-border focus:ring-primary/20')} />
-                      </div>
+                    <div key={l.id} className={cn('flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs', stockInsuffisant ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800' : 'bg-muted/30 border-transparent')}>
+                      <span className="flex-1 min-w-0 font-medium truncate" title={l.article?.nom}>{l.article?.nom}</span>
+                      <span className="w-20 text-center text-muted-foreground whitespace-nowrap">{l.quantiteDemandee} {unit}</span>
+                      {stockDispo !== null
+                        ? <span className={cn('w-20 text-center font-semibold whitespace-nowrap', stockInsuffisant ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400')}>
+                            {stockDispo} {unit}{stockInsuffisant && ' ⚠'}
+                          </span>
+                        : <span className="w-20 text-center text-muted-foreground">—</span>
+                      }
+                      <input type="number" min={0}
+                        value={qteVal}
+                        onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
+                        className={cn('w-20 px-2 py-1 text-xs text-center border rounded-lg focus:outline-none focus:ring-2', stockInsuffisant ? 'border-red-300 focus:ring-red-200' : 'border-border focus:ring-primary/20')} />
                     </div>
                   );
                 })}
