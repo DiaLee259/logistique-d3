@@ -160,6 +160,75 @@ export class RepertoireService {
     return result;
   }
 
+  // ── Stats prestataires (par société/demandeur des commandes) ─────────────────
+
+  async getStatsPrestataires() {
+    const commandes = await this.prisma.commande.findMany({
+      where: { deletedAt: null, statut: { not: 'ANNULEE' } },
+      include: {
+        lignes: {
+          include: { article: { select: { id: true, nom: true, reference: true, unite: true } } },
+        },
+      },
+    });
+
+    const groupMap = new Map<string, {
+      key: string;
+      type: 'societe' | 'demandeur';
+      nbCommandes: number;
+      totalDemande: number;
+      totalValide: number;
+      totalFourni: number;
+      articles: Map<string, {
+        articleId: string; nom: string; reference: string; unite: string;
+        quantiteDemandee: number; quantiteValidee: number; quantiteFournie: number;
+      }>;
+    }>();
+
+    for (const commande of commandes) {
+      const societe = commande.societe?.trim() ?? '';
+      const isAuto = societe === '' || societe.toLowerCase() === 'auto';
+      const key = isAuto ? (commande.demandeur?.trim() || 'Non identifié') : societe;
+      const type: 'societe' | 'demandeur' = isAuto ? 'demandeur' : 'societe';
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, { key, type, nbCommandes: 0, totalDemande: 0, totalValide: 0, totalFourni: 0, articles: new Map() });
+      }
+      const group = groupMap.get(key)!;
+      group.nbCommandes++;
+
+      for (const ligne of commande.lignes) {
+        group.totalDemande += ligne.quantiteDemandee ?? 0;
+        group.totalValide += (ligne as any).quantiteValidee ?? 0;
+        group.totalFourni += ligne.quantiteFournie ?? 0;
+
+        const artKey = ligne.articleId;
+        if (!group.articles.has(artKey)) {
+          group.articles.set(artKey, {
+            articleId: artKey,
+            nom: ligne.article.nom,
+            reference: ligne.article.reference,
+            unite: ligne.article.unite,
+            quantiteDemandee: 0,
+            quantiteValidee: 0,
+            quantiteFournie: 0,
+          });
+        }
+        const art = group.articles.get(artKey)!;
+        art.quantiteDemandee += ligne.quantiteDemandee ?? 0;
+        art.quantiteValidee += (ligne as any).quantiteValidee ?? 0;
+        art.quantiteFournie += ligne.quantiteFournie ?? 0;
+      }
+    }
+
+    return Array.from(groupMap.values())
+      .sort((a, b) => b.nbCommandes - a.nbCommandes)
+      .map(g => ({
+        ...g,
+        articles: Array.from(g.articles.values()).sort((a, b) => b.quantiteDemandee - a.quantiteDemandee),
+      }));
+  }
+
   // ── Import Excel ──────────────────────────────────────────────────────────────
 
   async importSocietes(buffer: Buffer<ArrayBufferLike>) {

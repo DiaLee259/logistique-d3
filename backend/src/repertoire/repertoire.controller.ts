@@ -95,6 +95,11 @@ export class RepertoireController {
     return this.service.getIntervenantsWithStats();
   }
 
+  @Get('stats-prestataires')
+  getStatsPrestataires() {
+    return this.service.getStatsPrestataires();
+  }
+
   @Get('intervenants/:id/stats')
   getStatsIntervenant(@Param('id') id: string) {
     return this.service.getStatsIntervenant(id);

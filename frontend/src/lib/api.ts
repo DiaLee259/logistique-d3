@@ -246,6 +246,7 @@ export const repertoireApi = {
   importIntervenants: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/repertoire/intervenants/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
   statsIntervenants: () => api.get('/repertoire/intervenants/stats').then(r => r.data),
   statsIntervenant: (id: string) => api.get(`/repertoire/intervenants/${id}/stats`).then(r => r.data),
+  statsPrestataires: () => api.get('/repertoire/stats-prestataires').then(r => r.data),
 };
 
 // ── Notifications ─────────────────────────────────────────────────────────────
