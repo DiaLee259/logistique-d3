@@ -92,15 +92,13 @@ export default function AppSidebar() {
       collapsed ? 'w-14' : 'w-56',
     )}>
       {/* Logo */}
-      <div className="flex items-center border-b border-sidebar-border overflow-hidden bg-sidebar" style={{ minHeight: 76 }}>
+      <div className="flex items-center justify-center border-b border-sidebar-border/50 py-4" style={{ minHeight: 76 }}>
         {collapsed ? (
-          <div className="w-14 flex items-center justify-center py-3">
-            <Logo variant="icon" height={44} />
+          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-black text-primary tracking-tight">TS</span>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center px-3 py-3">
-            <Logo variant="full" height={62} />
-          </div>
+          <Logo variant="full" height={64} style={{ mixBlendMode: 'screen', filter: 'drop-shadow(0 0 10px rgba(99,102,241,0.3))' }} />
         )}
       </div>
 

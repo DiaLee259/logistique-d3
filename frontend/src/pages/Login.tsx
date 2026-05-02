@@ -40,10 +40,14 @@ export default function Login() {
       <div className="w-full max-w-sm">
 
         {/* Logo TechnoSmart */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="rounded-2xl overflow-hidden mb-4 px-8 py-4" style={{ background: 'hsl(220, 25%, 12%)' }}>
-            <Logo height={64} />
-          </div>
+        <div className="flex flex-col items-center mb-8 gap-3">
+          <Logo
+            height={80}
+            style={{
+              mixBlendMode: 'screen',
+              filter: 'drop-shadow(0 0 20px rgba(99,102,241,0.5))',
+            }}
+          />
           <p className="text-blue-300/60 text-xs tracking-wide uppercase">Logistique · Fibre Optique</p>
         </div>
 
