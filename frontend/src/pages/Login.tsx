@@ -6,7 +6,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import Logo from '@/components/Logo';
+import BrandMark from '@/components/BrandMark';
 
 const schema = z.object({
   email: z.string().email('Email invalide'),
@@ -39,16 +39,9 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0f1523 0%, #181d2e 50%, #0f1523 100%)' }}>
       <div className="w-full max-w-sm">
 
-        {/* Logo TechnoSmart */}
-        <div className="flex flex-col items-center mb-8 gap-3">
-          <Logo
-            height={80}
-            style={{
-              mixBlendMode: 'screen',
-              filter: 'drop-shadow(0 0 20px rgba(99,102,241,0.5))',
-            }}
-          />
-          <p className="text-blue-300/60 text-xs tracking-wide uppercase">Logistique · Fibre Optique</p>
+        {/* Brand */}
+        <div className="flex flex-col items-center mb-8">
+          <BrandMark size="lg" light />
         </div>
 
         {/* Card connexion */}

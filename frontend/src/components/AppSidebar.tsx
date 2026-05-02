@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import Logo from '@/components/Logo';
+import BrandMark from '@/components/BrandMark';
 
 const navItems = [
   {
@@ -91,14 +91,21 @@ export default function AppSidebar() {
       'flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out',
       collapsed ? 'w-14' : 'w-56',
     )}>
-      {/* Logo */}
-      <div className="flex items-center justify-center border-b border-sidebar-border/50 py-4" style={{ minHeight: 76 }}>
+      {/* Brand */}
+      <div className="flex items-center justify-center border-b border-sidebar-border/50" style={{ minHeight: 76, padding: '14px 10px' }}>
         {collapsed ? (
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-black text-primary tracking-tight">TS</span>
-          </div>
+          <span style={{
+            fontFamily: "'Rajdhani', 'Arial Narrow', Arial, sans-serif",
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            letterSpacing: '0.1em',
+            color: 'rgba(255,255,255,0.85)',
+            userSelect: 'none',
+          }}>
+            TS
+          </span>
         ) : (
-          <Logo variant="full" height={64} style={{ mixBlendMode: 'screen', filter: 'drop-shadow(0 0 10px rgba(99,102,241,0.3))' }} />
+          <BrandMark size="sm" light />
         )}
       </div>
 
