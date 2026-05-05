@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 export type ThemeName =
   | 'light' | 'dark'
   | 'ocean' | 'foret' | 'ardoise' | 'amethyste' | 'aurore'
-  | 'corail' | 'lavande' | 'menthe' | 'ciel' | 'bordeaux';
+  | 'corail' | 'lavande' | 'menthe' | 'ciel' | 'bordeaux' | 'pivoine';
 
 export const THEMES: { name: ThemeName; label: string; primary: string; bg: string; dark: boolean }[] = [
   // Clairs
@@ -12,6 +12,7 @@ export const THEMES: { name: ThemeName; label: string; primary: string; bg: stri
   { name: 'lavande',    label: 'Lavande',    primary: '#7c4dcc', bg: '#f8f7ff', dark: false },
   { name: 'menthe',     label: 'Menthe',     primary: '#1e9e5a', bg: '#f3faf5', dark: false },
   { name: 'ciel',       label: 'Ciel',       primary: '#1a7dd6', bg: '#f0f6fd', dark: false },
+  { name: 'pivoine',    label: 'Pivoine',    primary: '#c4557a', bg: '#fdf7f9', dark: false },
   // Sombres
   { name: 'dark',       label: 'Sombre',     primary: '#4d88ff', bg: '#1e2330', dark: true  },
   { name: 'ocean',      label: 'Océan',      primary: '#2ab8b8', bg: '#0e1929', dark: true  },
@@ -36,7 +37,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 const THEME_CLASSES = [
   'theme-ocean', 'theme-foret', 'theme-ardoise', 'theme-amethyste', 'theme-aurore',
-  'theme-corail', 'theme-lavande', 'theme-menthe', 'theme-ciel', 'theme-bordeaux',
+  'theme-corail', 'theme-lavande', 'theme-menthe', 'theme-ciel', 'theme-bordeaux', 'theme-pivoine',
 ];
 
 function applyTheme(name: ThemeName) {
