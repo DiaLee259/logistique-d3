@@ -422,6 +422,38 @@
     --sidebar-ring: 340 55% 65%;
   }
 
+  /* ── THEME DRAGON BALL Z ──────────────────────────────────────────── */
+  .dark.theme-dbz {
+    --background: 222 55% 8%;
+    --foreground: 40 25% 92%;
+    --card: 222 50% 12%;
+    --card-foreground: 40 25% 92%;
+    --popover: 222 50% 12%;
+    --popover-foreground: 40 25% 92%;
+    --primary: 24 98% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 45% 18%;
+    --secondary-foreground: 40 20% 82%;
+    --muted: 222 45% 16%;
+    --muted-foreground: 222 15% 58%;
+    --accent: 46 98% 52%;
+    --accent-foreground: 222 55% 8%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 45% 20%;
+    --input: 222 45% 20%;
+    --ring: 24 98% 52%;
+    /* Sidebar bleu espace profond — contraste avec orange Goku */
+    --sidebar-background: 230 70% 5%;
+    --sidebar-foreground: 40 22% 85%;
+    --sidebar-primary: 24 98% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 60% 10%;
+    --sidebar-accent-foreground: 40 20% 88%;
+    --sidebar-border: 230 60% 12%;
+    --sidebar-ring: 24 98% 58%;
+  }
+
   * { @apply border-border; }
   body {
     @apply bg-background text-foreground font-sans antialiased;
