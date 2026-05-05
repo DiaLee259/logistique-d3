@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Bell, LogOut, RefreshCw, Sun, Moon, Check, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Bell, LogOut, RefreshCw, Check, X, Palette } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme, THEMES } from '@/contexts/ThemeContext';
 import { notificationsApi } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { getRoleShortLabel } from '@/config/roles';
@@ -20,11 +20,21 @@ const pageTitles: Record<string, string> = {
 
 export default function AppHeader() {
   const { logout, user } = useAuth();
-  const { theme, toggle } = useTheme();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const qc = useQueryClient();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const themeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setThemeOpen(false);
+    };
+    if (themeOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [themeOpen]);
 
   const title = Object.entries(pageTitles)
     .reverse()
@@ -56,14 +66,52 @@ export default function AppHeader() {
 
       <div className="flex items-center gap-1.5">
 
-        {/* Dark/Light toggle */}
-        <button
-          onClick={toggle}
-          title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-          className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-        >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
+        {/* Sélecteur de thème */}
+        <div className="relative" ref={themeRef}>
+          <button
+            onClick={() => setThemeOpen(p => !p)}
+            title="Choisir un thème"
+            className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          >
+            <Palette className="w-4 h-4" />
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-border/60 flex-shrink-0"
+              style={{ backgroundColor: THEMES.find(t => t.name === theme)?.primary ?? '#2563eb' }}
+            />
+          </button>
+
+          {themeOpen && (
+            <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-xl p-3 w-52">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 px-1">Apparence</p>
+              <div className="space-y-0.5">
+                {THEMES.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => { setTheme(t.name); setThemeOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs transition-colors',
+                      theme === t.name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm"
+                      style={{ backgroundColor: t.bg, boxShadow: `0 0 0 2px ${t.primary}55` }}
+                    >
+                      <span
+                        className="block w-2 h-2 rounded-full m-1"
+                        style={{ backgroundColor: t.primary }}
+                      />
+                    </span>
+                    <span className="flex-1 text-left">{t.label}</span>
+                    {theme === t.name && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Refresh global */}
         <button

@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Thème Clair (défaut) ──────────────────────────────────────────────── */
   :root {
     --background: 220 20% 97%;
     --foreground: 220 25% 10%;
@@ -36,6 +37,7 @@
     --sidebar-ring: 217 71% 55%;
   }
 
+  /* ── Thème Sombre ──────────────────────────────────────────────────────── */
   .dark {
     --background: 220 18% 16%;
     --foreground: 220 15% 90%;
@@ -48,7 +50,7 @@
     --secondary: 220 18% 27%;
     --secondary-foreground: 220 15% 82%;
     --muted: 220 18% 25%;
-    --muted-foreground: 220 10% 75%;
+    --muted-foreground: 220 10% 62%;
     --accent: 38 92% 55%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62% 55%;
@@ -56,6 +58,169 @@
     --border: 220 18% 30%;
     --input: 220 18% 30%;
     --ring: 217 71% 58%;
+    --sidebar-background: 220 25% 11%;
+    --sidebar-foreground: 220 15% 80%;
+    --sidebar-primary: 217 71% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 22% 17%;
+    --sidebar-accent-foreground: 220 15% 85%;
+    --sidebar-border: 220 22% 20%;
+    --sidebar-ring: 217 71% 58%;
+  }
+
+  /* ── Thème Océan (bleu marine + teal) ─────────────────────────────────── */
+  .dark.theme-ocean {
+    --background: 218 55% 9%;
+    --foreground: 195 45% 92%;
+    --card: 218 50% 14%;
+    --card-foreground: 195 45% 92%;
+    --popover: 218 50% 14%;
+    --popover-foreground: 195 45% 92%;
+    --primary: 185 72% 44%;
+    --primary-foreground: 218 55% 9%;
+    --secondary: 218 44% 20%;
+    --secondary-foreground: 195 35% 80%;
+    --muted: 218 44% 17%;
+    --muted-foreground: 210 28% 62%;
+    --accent: 185 72% 44%;
+    --accent-foreground: 218 55% 9%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 40% 23%;
+    --input: 218 40% 23%;
+    --ring: 185 72% 44%;
+    --sidebar-background: 218 62% 6%;
+    --sidebar-foreground: 195 35% 78%;
+    --sidebar-primary: 185 72% 48%;
+    --sidebar-primary-foreground: 218 55% 9%;
+    --sidebar-accent: 218 50% 12%;
+    --sidebar-accent-foreground: 195 35% 82%;
+    --sidebar-border: 218 45% 15%;
+    --sidebar-ring: 185 72% 48%;
+  }
+
+  /* ── Thème Forêt (vert profond + émeraude) ─────────────────────────────── */
+  .dark.theme-foret {
+    --background: 152 38% 8%;
+    --foreground: 140 28% 91%;
+    --card: 152 33% 13%;
+    --card-foreground: 140 28% 91%;
+    --popover: 152 33% 13%;
+    --popover-foreground: 140 28% 91%;
+    --primary: 151 62% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 152 28% 18%;
+    --secondary-foreground: 140 22% 78%;
+    --muted: 152 28% 15%;
+    --muted-foreground: 145 20% 60%;
+    --accent: 151 62% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 152 28% 21%;
+    --input: 152 28% 21%;
+    --ring: 151 62% 40%;
+    --sidebar-background: 152 44% 5%;
+    --sidebar-foreground: 140 22% 76%;
+    --sidebar-primary: 151 62% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 152 35% 11%;
+    --sidebar-accent-foreground: 140 22% 80%;
+    --sidebar-border: 152 33% 13%;
+    --sidebar-ring: 151 62% 45%;
+  }
+
+  /* ── Thème Ardoise (slate chaud + bleu acier) ──────────────────────────── */
+  .dark.theme-ardoise {
+    --background: 213 20% 12%;
+    --foreground: 35 18% 88%;
+    --card: 213 17% 18%;
+    --card-foreground: 35 18% 88%;
+    --popover: 213 17% 18%;
+    --popover-foreground: 35 18% 88%;
+    --primary: 204 62% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 16% 24%;
+    --secondary-foreground: 35 14% 76%;
+    --muted: 213 16% 21%;
+    --muted-foreground: 213 14% 60%;
+    --accent: 204 62% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 17% 28%;
+    --input: 213 17% 28%;
+    --ring: 204 62% 52%;
+    --sidebar-background: 213 25% 8%;
+    --sidebar-foreground: 35 14% 74%;
+    --sidebar-primary: 204 65% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 20% 16%;
+    --sidebar-accent-foreground: 35 14% 80%;
+    --sidebar-border: 213 20% 18%;
+    --sidebar-ring: 204 65% 58%;
+  }
+
+  /* ── Thème Améthyste (violet profond + lilas) ──────────────────────────── */
+  .dark.theme-amethyste {
+    --background: 264 32% 11%;
+    --foreground: 270 28% 92%;
+    --card: 264 28% 16%;
+    --card-foreground: 270 28% 92%;
+    --popover: 264 28% 16%;
+    --popover-foreground: 270 28% 92%;
+    --primary: 263 68% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 264 26% 21%;
+    --secondary-foreground: 270 22% 80%;
+    --muted: 264 26% 18%;
+    --muted-foreground: 265 20% 63%;
+    --accent: 263 68% 62%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 264 26% 24%;
+    --input: 264 26% 24%;
+    --ring: 263 68% 62%;
+    --sidebar-background: 264 38% 7%;
+    --sidebar-foreground: 270 22% 78%;
+    --sidebar-primary: 263 68% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 264 30% 14%;
+    --sidebar-accent-foreground: 270 22% 82%;
+    --sidebar-border: 264 30% 16%;
+    --sidebar-ring: 263 68% 65%;
+  }
+
+  /* ── Thème Aurore (brun chaud profond + ambre doré) ────────────────────── */
+  .dark.theme-aurore {
+    --background: 24 22% 9%;
+    --foreground: 40 32% 91%;
+    --card: 24 20% 14%;
+    --card-foreground: 40 32% 91%;
+    --popover: 24 20% 14%;
+    --popover-foreground: 40 32% 91%;
+    --primary: 38 86% 52%;
+    --primary-foreground: 24 40% 10%;
+    --secondary: 24 18% 20%;
+    --secondary-foreground: 40 24% 78%;
+    --muted: 24 17% 17%;
+    --muted-foreground: 35 20% 58%;
+    --accent: 38 86% 52%;
+    --accent-foreground: 24 40% 10%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 24 18% 24%;
+    --input: 24 18% 24%;
+    --ring: 38 86% 52%;
+    --sidebar-background: 24 28% 6%;
+    --sidebar-foreground: 40 24% 76%;
+    --sidebar-primary: 38 86% 55%;
+    --sidebar-primary-foreground: 24 40% 10%;
+    --sidebar-accent: 24 22% 12%;
+    --sidebar-accent-foreground: 40 24% 80%;
+    --sidebar-border: 24 22% 14%;
+    --sidebar-ring: 38 86% 55%;
   }
 
   * { @apply border-border; }
@@ -64,7 +229,6 @@
     font-size: 13px;
     line-height: 1.5;
   }
-  /* Uniformisation des tailles de police */
   h1 { font-size: 1.1rem; }
   h2 { font-size: 1rem; }
   h3 { font-size: 0.875rem; }
