@@ -44,26 +44,40 @@ export class DashboardController {
   }
 
   @Get('demandeurs')
-  getVolumeParDemandeur(@Query('mois') mois?: string, @Request() req?: any) {
+  getVolumeParDemandeur(
+    @Query('mois') mois?: string,
+    @Query('entrepotId') entrepotId?: string,
+    @Request() req?: any,
+  ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getVolumeParDemandeur(mois, ue);
+    return this.service.getVolumeParDemandeur(mois, ue, entrepotId);
   }
 
   @Get('delais')
-  getDelaisMoyens(@Request() req?: any) {
+  getDelaisMoyens(
+    @Query('entrepotId') entrepotId?: string,
+    @Request() req?: any,
+  ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getDelaisMoyens(ue);
+    return this.service.getDelaisMoyens(ue, entrepotId);
   }
 
   @Get('top-articles')
-  getTopArticles(@Query('limit') limit?: string, @Request() req?: any) {
+  getTopArticles(
+    @Query('limit') limit?: string,
+    @Query('entrepotId') entrepotId?: string,
+    @Request() req?: any,
+  ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getTopArticles(limit ? parseInt(limit) : 5, ue);
+    return this.service.getTopArticles(limit ? parseInt(limit) : 5, ue, entrepotId);
   }
 
   @Get('commandes')
-  getResumeCommandes(@Request() req?: any) {
+  getResumeCommandes(
+    @Query('entrepotId') entrepotId?: string,
+    @Request() req?: any,
+  ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getResumeCommandes(ue);
+    return this.service.getResumeCommandes(ue, entrepotId);
   }
 }

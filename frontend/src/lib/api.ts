@@ -48,10 +48,12 @@ export const dashboardApi = {
     api.get('/dashboard/departements', { params }).then(r => r.data),
   demandeurs: (params?: Record<string, string>) =>
     api.get('/dashboard/demandeurs', { params }).then(r => r.data),
-  delais: () => api.get('/dashboard/delais').then(r => r.data),
-  topArticles: (limit = 5) =>
-    api.get('/dashboard/top-articles', { params: { limit } }).then(r => r.data),
-  commandes: () => api.get('/dashboard/commandes').then(r => r.data),
+  delais: (params?: Record<string, string>) =>
+    api.get('/dashboard/delais', { params }).then(r => r.data),
+  topArticles: (params?: Record<string, string>) =>
+    api.get('/dashboard/top-articles', { params: { limit: 5, ...params } }).then(r => r.data),
+  commandes: (params?: Record<string, string>) =>
+    api.get('/dashboard/commandes', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
