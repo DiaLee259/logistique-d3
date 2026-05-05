@@ -60,6 +60,9 @@ export default function AppHeader() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
+  const lightThemes = THEMES.filter(t => !t.dark);
+  const darkThemes = THEMES.filter(t => t.dark);
+
   return (
     <header className="flex items-center justify-between px-5 py-2.5 bg-card border-b border-border">
       <h1 className="text-sm font-semibold text-foreground">{title}</h1>
@@ -81,10 +84,10 @@ export default function AppHeader() {
           </button>
 
           {themeOpen && (
-            <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-xl p-3 w-52">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 px-1">Apparence</p>
-              <div className="space-y-0.5">
-                {THEMES.map(t => (
+            <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-xl p-3 w-56">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Clairs</p>
+              <div className="space-y-0.5 mb-3">
+                {lightThemes.map(t => (
                   <button
                     key={t.name}
                     onClick={() => { setTheme(t.name); setThemeOpen(false); }}
@@ -96,11 +99,38 @@ export default function AppHeader() {
                     )}
                   >
                     <span
-                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm"
-                      style={{ backgroundColor: t.bg, boxShadow: `0 0 0 2px ${t.primary}55` }}
+                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: t.bg }}
                     >
                       <span
-                        className="block w-2 h-2 rounded-full m-1"
+                        className="block w-2 h-2 rounded-full absolute top-1 left-1"
+                        style={{ backgroundColor: t.primary }}
+                      />
+                    </span>
+                    <span className="flex-1 text-left">{t.label}</span>
+                    {theme === t.name && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Sombres</p>
+              <div className="space-y-0.5">
+                {darkThemes.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => { setTheme(t.name); setThemeOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs transition-colors',
+                      theme === t.name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: t.bg }}
+                    >
+                      <span
+                        className="block w-2 h-2 rounded-full absolute top-1 left-1"
                         style={{ backgroundColor: t.primary }}
                       />
                     </span>
