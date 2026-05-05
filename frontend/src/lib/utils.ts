@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { getRoleLabel } from '../config/roles';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -47,13 +48,7 @@ export function statutCommandeColor(s: string) {
 }
 
 export function roleLabel(r: string) {
-  const map: Record<string, string> = {
-    ADMIN: 'Administrateur',
-    LOGISTICIEN_1: 'Logisticien 1',
-    LOGISTICIEN_2: 'Logisticien 2',
-    CHEF_PROJET: 'Chef de projet',
-  };
-  return map[r] ?? r;
+  return getRoleLabel(r);
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

@@ -6,6 +6,7 @@ import {
   ClipboardCheck, BookOpen, Trash2, UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getRoleShortLabel } from '@/config/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import BrandMark from '@/components/BrandMark';
 
@@ -150,9 +151,7 @@ export default function AppSidebar() {
             <div className="overflow-hidden">
               <p className="text-xs font-medium text-sidebar-foreground truncate">{user.prenom} {user.nom}</p>
               <p className="text-xs text-sidebar-foreground/50 truncate">
-                {user.role === 'LOGISTICIEN_1' ? 'Log. Backoffice' :
-                 user.role === 'LOGISTICIEN_2' ? 'Log. Terrain' :
-                 user.role === 'CHEF_PROJET' ? 'Chef de projet' : 'Admin'}
+                {getRoleShortLabel(user.role)}
               </p>
             </div>
           </div>

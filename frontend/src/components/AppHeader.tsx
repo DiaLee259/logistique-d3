@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { notificationsApi } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
+import { getRoleShortLabel } from '@/config/roles';
 import type { Notification } from '@/lib/types';
 
 const pageTitles: Record<string, string> = {
@@ -141,9 +142,7 @@ export default function AppHeader() {
           <div className="hidden sm:block text-right">
             <p className="text-xs font-medium text-foreground leading-tight">{user?.prenom} {user?.nom}</p>
             <p className="text-xs text-muted-foreground leading-tight">
-              {user?.role === 'LOGISTICIEN_1' ? 'Log. Backoffice' :
-               user?.role === 'LOGISTICIEN_2' ? 'Log. Terrain' :
-               user?.role === 'CHEF_PROJET' ? 'Chef de projet' : 'Admin'}
+              {user?.role ? getRoleShortLabel(user.role) : ''}
             </p>
           </div>
           <button

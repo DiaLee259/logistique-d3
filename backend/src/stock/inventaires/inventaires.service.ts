@@ -188,6 +188,9 @@ export class InventairesService {
     const rows: ExcelJS.Row[] = [];
     ws.eachRow((row, idx) => { if (idx > 1) rows.push(row); });
 
+    // Timestamp unique pour tout l'import — évite que des lignes tombent dans deux "sessions" différentes
+    const importDate = new Date();
+
     for (const row of rows) {
       const codeEntrepot = String(row.getCell(1).value ?? '').trim();
       const refArticle   = String(row.getCell(2).value ?? '').trim();
@@ -215,7 +218,7 @@ export class InventairesService {
             quantite,
             commentaire,
             userId: userId ?? null,
-            date: new Date(),
+            date: importDate,
           },
         });
         // Recalculer avec formule hybride (inventaire comme nouvelle base)

@@ -1,4 +1,4 @@
-import { PrismaClient, Role, TypeMouvement, StatutCommande, ProdSav } from '@prisma/client';
+import { PrismaClient, TypeMouvement, StatutCommande, ProdSav } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -12,25 +12,25 @@ async function main() {
   const admin = await prisma.user.upsert({
     where: { email: 'admin@logistique-d3.fr' },
     update: {},
-    create: { email: 'admin@logistique-d3.fr', password: passwordHash, nom: 'Admin', prenom: 'Super', role: Role.ADMIN },
+    create: { email: 'admin@logistique-d3.fr', password: passwordHash, nom: 'Admin', prenom: 'Super', role: 'ADMIN' },
   });
 
   const log1 = await prisma.user.upsert({
     where: { email: 'log1@logistique-d3.fr' },
     update: {},
-    create: { email: 'log1@logistique-d3.fr', password: passwordHash, nom: 'Martin', prenom: 'Sophie', role: Role.LOGISTICIEN_1 },
+    create: { email: 'log1@logistique-d3.fr', password: passwordHash, nom: 'Martin', prenom: 'Sophie', role: 'LOGISTICIEN_1' },
   });
 
   const log2 = await prisma.user.upsert({
     where: { email: 'log2@logistique-d3.fr' },
     update: {},
-    create: { email: 'log2@logistique-d3.fr', password: passwordHash, nom: 'Dupont', prenom: 'Thomas', role: Role.LOGISTICIEN_2 },
+    create: { email: 'log2@logistique-d3.fr', password: passwordHash, nom: 'Dupont', prenom: 'Thomas', role: 'LOGISTICIEN_2' },
   });
 
   const chef = await prisma.user.upsert({
     where: { email: 'chef@logistique-d3.fr' },
     update: {},
-    create: { email: 'chef@logistique-d3.fr', password: passwordHash, nom: 'Bernard', prenom: 'Pierre', role: Role.CHEF_PROJET },
+    create: { email: 'chef@logistique-d3.fr', password: passwordHash, nom: 'Bernard', prenom: 'Pierre', role: 'CHEF_PROJET' },
   });
 
   console.log('✅ Utilisateurs créés');

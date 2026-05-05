@@ -10,12 +10,6 @@ datasource db {
 
 // ─── ENUMS ────────────────────────────────────────────────────────────────────
 
-enum Role {
-  ADMIN
-  LOGISTICIEN_1
-  LOGISTICIEN_2
-  CHEF_PROJET
-}
 
 enum TypeMouvement {
   ENTREE
@@ -54,7 +48,7 @@ model User {
   password   String
   nom        String
   prenom     String
-  role       Role     @default(LOGISTICIEN_2)
+  role       String   @default("LOGISTICIEN_2")
   actif      Boolean  @default(true)
   privileges Json?    // UserPrivileges JSON object
   createdAt  DateTime @default(now())

@@ -1,5 +1,5 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsBoolean } from 'class-validator';
-import { Role } from '@prisma/client';
+import { IsEmail, IsString, MinLength, IsIn, IsOptional, IsBoolean } from 'class-validator';
+import { ROLES } from '../../config/roles.config';
 
 export class UpdateUserDto {
   @IsEmail()
@@ -19,9 +19,9 @@ export class UpdateUserDto {
   @IsOptional()
   prenom?: string;
 
-  @IsEnum(Role)
+  @IsIn(ROLES)
   @IsOptional()
-  role?: Role;
+  role?: string;
 
   @IsBoolean()
   @IsOptional()
