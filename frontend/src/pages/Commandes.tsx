@@ -110,6 +110,7 @@ export default function Commandes() {
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterManager, setFilterManager] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
 
   // Expand / sélection
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -156,14 +157,20 @@ export default function Commandes() {
     if (filterDateFin) p.dateFin = filterDateFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
     if (filterManager) p.manager = filterManager;
+    p.page = String(page);
     return p;
   };
 
+  // Réinitialiser la page quand un filtre change
+  const resetPage = () => setPage(1);
+
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager, page],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
+
+  const totalPages = result?.totalPages ?? 1;
 
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots'],
@@ -279,27 +286,27 @@ export default function Commandes() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…"
+          <input value={search} onChange={e => { setSearch(e.target.value); resetPage(); }} placeholder="Rechercher…"
             className="w-full pl-8 pr-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
 
-        <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
+        <select value={filterStatut} onChange={e => { setFilterStatut(e.target.value); resetPage(); }}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
           <option value="">Tous statuts</option>
           {statuts.map(s => <option key={s} value={s}>{statutCommandeLabel(s)}</option>)}
         </select>
 
-        <select value={filterEntrepot} onChange={e => setFilterEntrepot(e.target.value)}
+        <select value={filterEntrepot} onChange={e => { setFilterEntrepot(e.target.value); resetPage(); }}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
           <option value="">Tous entrepôts</option>
           {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
         </select>
 
         <div className="relative min-w-32">
-          <input value={filterManager} onChange={e => setFilterManager(e.target.value)} placeholder="Filtrer manager…"
+          <input value={filterManager} onChange={e => { setFilterManager(e.target.value); resetPage(); }} placeholder="Filtrer manager…"
             className="w-full px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20" />
           {filterManager && (
-            <button onClick={() => setFilterManager('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => { setFilterManager(''); resetPage(); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -359,7 +366,7 @@ export default function Commandes() {
               className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
           </div>
           <div className="flex items-end">
-            <button onClick={() => { setFilterMois(''); setFilterDateDebut(''); setFilterDateFin(''); }}
+            <button onClick={() => { setFilterMois(''); setFilterDateDebut(''); setFilterDateFin(''); resetPage(); }}
               className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
               Réinitialiser
             </button>
@@ -502,9 +509,43 @@ export default function Commandes() {
             </tbody>
           </table>
         </div>
-        {result && (
+        {result && totalPages > 0 && (
           <div className="px-3 py-2 border-t border-border flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{result.total} commande(s) — page {result.page}/{result.totalPages}</p>
+            <p className="text-xs text-muted-foreground">
+              {result.total} commande(s) — page {page} / {totalPages}
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="px-2.5 py-1 text-xs border border-border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Préc.
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={cn(
+                      'w-7 h-7 text-xs rounded-lg border transition-colors',
+                      p === page
+                        ? 'bg-primary text-white border-primary font-semibold'
+                        : 'border-border hover:bg-muted'
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="px-2.5 py-1 text-xs border border-border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Suiv. →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
