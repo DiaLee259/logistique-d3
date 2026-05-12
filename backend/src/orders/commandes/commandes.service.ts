@@ -442,8 +442,14 @@ export class CommandesService {
     });
   }
 
-  async annuler(id: string) {
-    return this.prisma.commande.update({ where: { id }, data: { statut: StatutCommande.ANNULEE } });
+  async annuler(id: string, motif?: string) {
+    return this.prisma.commande.update({
+      where: { id },
+      data: {
+        statut: StatutCommande.ANNULEE,
+        ...(motif?.trim() ? { commentaireRefus: motif.trim() } : {}),
+      },
+    });
   }
 
   // ─── Liens prestataire ──────────────────────────────────────────────────────

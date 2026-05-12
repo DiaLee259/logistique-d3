@@ -199,8 +199,8 @@ export class CommandesController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/annuler')
-  annuler(@Param('id') id: string) {
-    return this.service.annuler(id);
+  annuler(@Param('id') id: string, @Body() body: { motif?: string }) {
+    return this.service.annuler(id, body?.motif);
   }
 
   @UseGuards(JwtAuthGuard)

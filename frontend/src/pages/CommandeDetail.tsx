@@ -87,6 +87,7 @@ export default function CommandeDetail() {
   const [expedierDialogOpen, setExpedierDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [refuserDialogOpen, setRefuserDialogOpen] = useState(false);
+  const [annulerDialogOpen, setAnnulerDialogOpen] = useState(false);
 
   // Validation (Log1)
   const [quantitesValidees, setQuantitesValidees] = useState<Record<string, number>>({});
@@ -101,6 +102,8 @@ export default function CommandeDetail() {
 
   // Refus (Log1)
   const [motifRefus, setMotifRefus] = useState('');
+  // Annulation
+  const [motifAnnulation, setMotifAnnulation] = useState('');
 
   // Divers
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -121,7 +124,7 @@ export default function CommandeDetail() {
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles-all'],
     queryFn: () => articlesApi.list(),
-    enabled: validDialogOpen || expedierDialogOpen,
+    staleTime: 5 * 60 * 1000, // garder en cache 5 min
   });
 
   const { data: stocksEntrepot = [] } = useQuery<any[]>({
@@ -180,8 +183,13 @@ export default function CommandeDetail() {
   });
 
   const annulerMut = useMutation({
-    mutationFn: () => commandesApi.annuler(id!),
-    onSuccess: () => { invalider(); toast.success('Commande annulée'); },
+    mutationFn: (motif: string) => commandesApi.annuler(id!, motif || undefined),
+    onSuccess: () => {
+      invalider();
+      toast.success('Commande annulée');
+      setAnnulerDialogOpen(false);
+      setMotifAnnulation('');
+    },
   });
 
   const handleTelechargerPDF = async () => {
@@ -283,10 +291,10 @@ export default function CommandeDetail() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge statut={commande.statut} />
-          {!isAnnulee && !isRefusee && hasRole('ADMIN') && commande.statut === 'EN_ATTENTE' && (
-            <button onClick={() => { if (confirm('Annuler cette commande ?')) annulerMut.mutate(); }}
+          {!isAnnulee && !isRefusee && hasRole('ADMIN') && !['EXPEDIEE', 'LIVREE'].includes(commande.statut) && (
+            <button onClick={() => { setMotifAnnulation(''); setAnnulerDialogOpen(true); }}
               className="px-3 py-1.5 text-xs border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors">
-              Annuler
+              Annuler commande
             </button>
           )}
         </div>
@@ -508,6 +516,49 @@ export default function CommandeDetail() {
           </button>
         )}
       </div>
+
+      {/* ── Dialog ANNULATION ────────────────────────────────────────────────── */}
+      {annulerDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div>
+                <h2 className="text-sm font-semibold text-red-600">Annuler la commande</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{commande.numero}</p>
+              </div>
+              <button onClick={() => setAnnulerDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Motif d'annulation <span className="text-muted-foreground">(optionnel)</span>
+                </label>
+                <textarea
+                  value={motifAnnulation}
+                  onChange={e => setMotifAnnulation(e.target.value)}
+                  rows={3}
+                  placeholder="Ex : Doublon avec une commande précédente, commande passée par erreur…"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                  autoFocus
+                />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs text-amber-700">⚠️ Cette action est irréversible. La commande passera en statut <strong>Annulée</strong>.</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setAnnulerDialogOpen(false)} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Retour</button>
+                <button
+                  onClick={() => annulerMut.mutate(motifAnnulation)}
+                  disabled={annulerMut.isPending}
+                  className="px-3 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
+                >
+                  {annulerMut.isPending ? 'Annulation…' : 'Confirmer l\'annulation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Dialog REFUS ─────────────────────────────────────────────────────── */}
       {refuserDialogOpen && (

@@ -127,7 +127,7 @@ export const commandesApi = {
     api.patch(`/commandes/${id}/expedier`, data ?? {}).then(r => r.data),
   marquerLivree: (id: string) =>
     api.patch(`/commandes/${id}/livree`).then(r => r.data),
-  annuler: (id: string) => api.patch(`/commandes/${id}/annuler`).then(r => r.data),
+  annuler: (id: string, motif?: string) => api.patch(`/commandes/${id}/annuler`, { motif }).then(r => r.data),
   marquerEmailEnvoye: (id: string) =>
     api.patch(`/commandes/${id}/email-envoye`).then(r => r.data),
   marquerBonRetourRecu: (id: string, url?: string) =>
