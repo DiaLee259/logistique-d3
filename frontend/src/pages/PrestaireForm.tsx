@@ -13,6 +13,7 @@ const statutLabel: Record<string, { label: string; color: string; icon: string }
   EXPEDIEE:        { label: 'Expédiée — en transit',    color: 'text-indigo-700 bg-indigo-50 border-indigo-200', icon: '🚚' },
   LIVREE:          { label: 'Livrée',                   color: 'text-green-700 bg-green-50 border-green-200',   icon: '📦' },
   ANNULEE:         { label: 'Annulée',                  color: 'text-red-700 bg-red-50 border-red-200',         icon: '❌' },
+  REFUSEE:         { label: 'Refusée par le logisticien', color: 'text-red-800 bg-red-100 border-red-300',       icon: '🚫' },
 };
 
 export default function PrestaireForm() {
@@ -372,6 +373,14 @@ function TrackingResult({ commande }: { commande: any }) {
           </div>
         </div>
       </div>
+
+      {/* Motif de refus visible par le prestataire */}
+      {commande.statut === 'REFUSEE' && commande.commentaireRefus && (
+        <div className="border border-red-200 bg-red-50 rounded-xl p-3 text-xs text-red-800">
+          <p className="font-semibold mb-1">Motif du refus :</p>
+          <p>{commande.commentaireRefus}</p>
+        </div>
+      )}
 
       <div className="space-y-1.5 text-xs px-1">
         {[

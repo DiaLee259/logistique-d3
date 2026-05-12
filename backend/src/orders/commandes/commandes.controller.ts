@@ -143,6 +143,13 @@ export class CommandesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1')
+  @Patch(':id/refuser')
+  refuser(@Param('id') id: string, @Body() body: { motif: string }) {
+    return this.service.refuser(id, body.motif);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
   @Patch(':id/valider')
   valider(@Param('id') id: string, @Body() body: any, @Request() req: any) {

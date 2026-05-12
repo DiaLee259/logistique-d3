@@ -143,6 +143,25 @@ export class CommandesService {
     return commande;
   }
 
+  // Refuser une commande (Log1) avec motif obligatoire
+  async refuser(id: string, motif: string) {
+    const commande = await this.findById(id);
+    if (!['EN_ATTENTE', 'EN_VALIDATION'].includes(commande.statut)) {
+      throw new BadRequestException('Seule une commande en attente peut être refusée');
+    }
+    if (!motif?.trim()) {
+      throw new BadRequestException('Un motif de refus est obligatoire');
+    }
+    return this.prisma.commande.update({
+      where: { id },
+      data: {
+        statut: 'REFUSEE' as any,
+        commentaireRefus: motif.trim(),
+        dateTraitement: new Date(),
+      },
+    });
+  }
+
   // Suivi public d'une commande par numéro
   async getSuiviPublic(numero: string) {
     const commande = await this.prisma.commande.findFirst({
@@ -158,6 +177,7 @@ export class CommandesService {
         dateTraitement: true,
         dateExpedition: true,
         dateLivraison: true,
+        commentaireRefus: true,
         lignes: {
           select: {
             quantiteDemandee: true,
@@ -231,12 +251,12 @@ export class CommandesService {
       throw new BadRequestException('Commande ne peut pas être validée dans cet état');
     }
 
-    // entrepotSource est désormais au niveau commande (choix unique de Log1)
     const entrepotId = data.entrepotSource ?? undefined;
     const stockRef = entrepotId
-      ? null // calculé par ligne
+      ? null
       : await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
 
+    // Mettre à jour les lignes existantes
     for (const ligne of data.lignes || []) {
       const ligneCmd = commande.lignes.find(l => l.id === ligne.id);
       const stock = entrepotId
@@ -248,6 +268,24 @@ export class CommandesService {
         data: {
           quantiteValidee: ligne.quantiteValidee,
           stockDisponible: stock?.quantite ?? 0,
+        },
+      });
+    }
+
+    // Créer les nouvelles lignes ajoutées par Log1 (article substitué)
+    for (const nl of data.nouvelleLignes || []) {
+      if (!nl.articleId || nl.quantiteValidee <= 0) continue;
+      const stock = entrepotId
+        ? await this.prisma.stock.findUnique({ where: { articleId_entrepotId: { articleId: nl.articleId, entrepotId } } })
+        : stockRef;
+      await this.prisma.ligneCommande.create({
+        data: {
+          commandeId: id,
+          articleId: nl.articleId,
+          quantiteDemandee: nl.quantiteValidee,
+          quantiteValidee: nl.quantiteValidee,
+          stockDisponible: stock?.quantite ?? 0,
+          commentaire: nl.commentaire ?? null,
         },
       });
     }
@@ -285,13 +323,12 @@ export class CommandesService {
     return this.prisma.commande.update({ where: { id }, data: update });
   }
 
-  async expedier(id: string, userId: string, data: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[] }) {
+  async expedier(id: string, userId: string, data: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[]; nouvelleLignes?: { articleId: string; quantite: number; commentaire?: string }[] }) {
     const commande = await this.findById(id);
     if (!['VALIDEE', 'EN_ATTENTE_LOG2'].includes(commande.statut)) {
       throw new BadRequestException('La commande doit être validée avant expédition');
     }
 
-    // Entrepôt source : défini au niveau commande par Log1
     let entrepotId: string | undefined = (commande as any).entrepotSource ?? undefined;
     if (!entrepotId) {
       const stock = await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
@@ -299,16 +336,15 @@ export class CommandesService {
     }
     if (!entrepotId) throw new BadRequestException('Aucun entrepôt disponible pour l\'expédition');
 
-    // Créer un mouvement SORTIE pour chaque ligne avec la quantité réelle envoyée par Log2
+    // Traiter les lignes existantes
     for (const ligne of commande.lignes) {
       const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
-      // quantiteLivree = ce que Log2 a réellement envoyé (peut différer du validé)
       const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
       if (!quantiteLivree || quantiteLivree <= 0) continue;
 
       await this.prisma.ligneCommande.update({
         where: { id: ligne.id },
-        data: { quantiteFournie: quantiteLivree }, // quantiteFournie = quantité livrée réelle
+        data: { quantiteFournie: quantiteLivree },
       });
 
       await this.prisma.mouvement.create({
@@ -329,6 +365,40 @@ export class CommandesService {
       });
 
       await this.calculator.sync(ligne.articleId, entrepotId);
+    }
+
+    // Créer et expédier les nouvelles lignes ajoutées par Log2 (article substitué)
+    for (const nl of data.nouvelleLignes || []) {
+      if (!nl.articleId || nl.quantite <= 0) continue;
+      const nouvelleLigne = await this.prisma.ligneCommande.create({
+        data: {
+          commandeId: id,
+          articleId: nl.articleId,
+          quantiteDemandee: nl.quantite,
+          quantiteValidee: nl.quantite,
+          quantiteFournie: nl.quantite,
+          commentaire: nl.commentaire ?? null,
+        },
+      });
+
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: nl.articleId,
+          entrepotId,
+          type: 'SORTIE' as any,
+          quantiteDemandee: nl.quantite,
+          quantiteValidee: nl.quantite,
+          quantiteFournie: nl.quantite,
+          departement: commande.departement,
+          manager: (commande as any).manager ?? null,
+          numeroCommande: commande.numero,
+          numeroOperation: commande.numero,
+          sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
+          commandeId: id,
+        } as any,
+      });
+
+      await this.calculator.sync(nl.articleId, entrepotId);
     }
 
     return this.prisma.commande.update({

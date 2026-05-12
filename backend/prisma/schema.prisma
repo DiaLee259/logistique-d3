@@ -24,6 +24,7 @@ enum StatutCommande {
   EXPEDIEE             // Expédiée par Log2
   LIVREE               // Confirmée reçue par le prestataire
   ANNULEE
+  REFUSEE              // Refusée par Log1 avec motif
 }
 
 enum StatutLivraison {
@@ -186,6 +187,7 @@ model Commande {
   statut               StatutCommande @default(EN_ATTENTE)
   commentaire          String?
   commentaireLog2      String?
+  commentaireRefus     String?   // motif de refus Log1
   fichierExcelUrl      String?
   fichierPerceptionUrl String?
   bonRetourUrl         String?

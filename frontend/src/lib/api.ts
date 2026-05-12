@@ -117,6 +117,8 @@ export const commandesApi = {
   viderCorbeille: () => api.delete('/commandes/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/commandes/${id}`).then(r => r.data),
   create: (data: any) => api.post('/commandes', data).then(r => r.data),
+  refuser: (id: string, motif: string) =>
+    api.patch(`/commandes/${id}/refuser`, { motif }).then(r => r.data),
   valider: (id: string, data: any) =>
     api.patch(`/commandes/${id}/valider`, data).then(r => r.data),
   modifier: (id: string, data: any) =>

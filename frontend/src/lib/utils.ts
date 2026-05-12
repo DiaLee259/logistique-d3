@@ -30,6 +30,7 @@ export function statutCommandeLabel(s: string) {
     EXPEDIEE: 'Expédiée',
     LIVREE: 'Livrée',
     ANNULEE: 'Annulée',
+    REFUSEE: 'Refusée',
   };
   return map[s] ?? s;
 }
@@ -43,6 +44,7 @@ export function statutCommandeColor(s: string) {
     EXPEDIEE: 'bg-purple-100 text-purple-800 border-purple-200',
     LIVREE: 'bg-gray-100 text-gray-700 border-gray-200',
     ANNULEE: 'bg-red-100 text-red-700 border-red-200',
+    REFUSEE: 'bg-red-100 text-red-800 border-red-300',
   };
   return map[s] ?? 'bg-gray-100 text-gray-700';
 }
