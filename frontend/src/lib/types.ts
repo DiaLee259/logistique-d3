@@ -1,7 +1,7 @@
 export type Role = string;
 export type TypeMouvement = 'ENTREE' | 'SORTIE';
 export type ProdSav = 'PROD' | 'SAV' | 'MALFACON' | 'AUTRE';
-export type StatutCommande = 'EN_ATTENTE' | 'EN_VALIDATION' | 'VALIDEE' | 'EN_ATTENTE_LOG2' | 'EXPEDIEE' | 'LIVREE' | 'ANNULEE';
+export type StatutCommande = 'EN_ATTENTE' | 'EN_VALIDATION' | 'VALIDEE' | 'EN_ATTENTE_LOG2' | 'EXPEDIEE' | 'LIVREE' | 'ANNULEE' | 'REFUSEE';
 export type StatutLivraison = 'EN_ATTENTE' | 'EN_COURS' | 'LIVREE' | 'INCIDENT';
 
 export type PrivilegeLevel = 'NONE' | 'LECTURE' | 'EDITEUR' | 'ADMIN';
