@@ -360,43 +360,67 @@ function TrackingSection({ numero, setNumero, result, error, loading, onSearch }
 }
 
 function TrackingResult({ commande }: { commande: any }) {
-  const info = statutLabel[commande.statut] ?? { label: commande.statut, color: 'text-gray-700 bg-gray-50 border-gray-200', icon: '❓' };
+  const isAnnulee = commande.statut === 'ANNULEE';
+  const isRefusee = commande.statut === 'REFUSEE';
+  const isTerminal = isAnnulee || isRefusee;
+
+  // Étapes normales du parcours
+  const baseSteps = [
+    { label: 'Reçue',           date: commande.dateReception,  done: true },
+    { label: 'Traitée (Log1)',  date: commande.dateTraitement, done: !!commande.dateTraitement && !isTerminal },
+    { label: 'Expédiée (Log2)', date: commande.dateExpedition, done: !!commande.dateExpedition },
+    { label: 'Livrée',          date: commande.dateLivraison,  done: !!commande.dateLivraison },
+  ];
+
+  // Pour ANNULEE/REFUSEE : on garde seulement les étapes faites AVANT la rupture, puis on ajoute l'étape terminale
+  const terminalStep = isRefusee
+    ? { label: 'Refusée par le logisticien', date: commande.dateTraitement, done: true, terminal: true, motif: commande.commentaireRefus }
+    : isAnnulee
+    ? { label: 'Annulée', date: commande.dateTraitement ?? commande.dateReception, done: true, terminal: true, motif: commande.commentaireRefus }
+    : null;
+
+  // Filtrer les étapes : pour REFUSEE on ne montre que "Reçue", pour ANNULEE on montre tout ce qui est done
+  const steps = isTerminal
+    ? [...baseSteps.filter(s => s.done), terminalStep!]
+    : baseSteps;
+
   return (
     <div className="space-y-3">
-      <div className={`border rounded-xl p-3 ${info.color}`}>
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{info.icon}</span>
-          <div>
-            <p className="text-xs font-mono font-bold">{commande.numero}</p>
-            <p className="text-sm font-semibold">{info.label}</p>
-            {commande.demandeur && <p className="text-xs mt-0.5">Demandeur : <strong>{commande.demandeur}</strong></p>}
-          </div>
-        </div>
+      {/* En-tête compact */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="font-mono text-xs font-bold text-gray-700">{commande.numero}</span>
+        {commande.demandeur && <span className="text-xs text-gray-400">· {commande.demandeur}</span>}
       </div>
 
-      {/* Motif de refus visible par le prestataire */}
-      {commande.statut === 'REFUSEE' && commande.commentaireRefus && (
-        <div className="border border-red-200 bg-red-50 rounded-xl p-3 text-xs text-red-800">
-          <p className="font-semibold mb-1">Motif du refus :</p>
-          <p>{commande.commentaireRefus}</p>
-        </div>
-      )}
-
+      {/* Timeline */}
       <div className="space-y-1.5 text-xs px-1">
-        {[
-          { label: 'Reçue',            date: commande.dateReception,  done: true },
-          { label: 'Traitée (Log1)',   date: commande.dateTraitement, done: !!commande.dateTraitement },
-          { label: 'Expédiée (Log2)',  date: commande.dateExpedition, done: !!commande.dateExpedition },
-          { label: 'Livrée',           date: commande.dateLivraison,  done: !!commande.dateLivraison },
-        ].map((step, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${step.done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
-              {step.done ? '✓' : i + 1}
+        {steps.map((step, i) => {
+          const isT = (step as any).terminal;
+          return (
+            <div key={i} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${isT ? 'bg-red-50 border border-red-200' : ''}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5 ${
+                isT ? 'bg-red-500 text-white' : step.done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+              }`}>
+                {isT ? '✕' : step.done ? '✓' : i + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`font-medium ${isT ? 'text-red-700' : step.done ? 'text-gray-800' : 'text-gray-400'}`}>
+                    {step.label}
+                  </span>
+                  {step.date && (
+                    <span className="text-gray-400 flex-shrink-0">
+                      {new Date(step.date).toLocaleDateString('fr-FR')}
+                    </span>
+                  )}
+                </div>
+                {isT && (step as any).motif && (
+                  <p className="text-red-600 mt-0.5 text-xs leading-relaxed">{(step as any).motif}</p>
+                )}
+              </div>
             </div>
-            <span className={step.done ? 'text-gray-800 font-medium' : 'text-gray-400'}>{step.label}</span>
-            {step.date && <span className="text-gray-400 ml-auto">{new Date(step.date).toLocaleDateString('fr-FR')}</span>}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {commande.lignes?.length > 0 && (
