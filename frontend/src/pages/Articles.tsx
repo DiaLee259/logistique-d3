@@ -183,127 +183,175 @@ export default function Articles() {
 
       {/* Vue Stock */}
       {view === 'stock' && (
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Désignation</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unité</th>
-                  {entrepots.map(e => (
-                    <th key={e.id} className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{e.code}</th>
-                  ))}
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
-                  {canEdit && <th className="w-16" />}
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
-                ) : filtered.map(a => (
-                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.reference}</td>
-                    <td className="px-3 py-2">
-                      <p className="font-medium text-foreground text-xs">{a.nom}</p>
-                      {a.regleConsommation && <p className="text-xs text-muted-foreground">{a.regleConsommation}</p>}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{a.unite}</td>
-                    {entrepots.map(e => {
-                      const s = a.stocks?.find(st => st.entrepotId === e.id);
-                      const qte = s?.quantite ?? 0;
-                      return (
-                        <td key={e.id} className={cn('px-3 py-2 text-right text-xs font-medium', qte <= a.seuilAlerte ? 'text-amber-600' : 'text-foreground')}>
-                          {formatNumber(qte)}
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-right text-xs font-bold text-foreground">{formatNumber(a.stockTotal ?? 0)}</td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.seuilAlerte}</td>
-                    <td className="px-3 py-2">
-                      {a.enAlerte ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
-                          <AlertTriangle className="w-3 h-3" /> Alerte
-                        </span>
-                      ) : (
-                        <span className="inline-flex text-xs font-medium text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">OK</span>
-                      )}
-                    </td>
-                    {canEdit && (
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(a)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => { if (confirm(`Supprimer ${a.nom} ?`)) deleteMut.mutate(a.id); }} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+        <div className="space-y-2">
+          {/* Légende */}
+          <div className="flex flex-wrap gap-3 px-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-primary inline-block" />
+              <strong>Théorique</strong> = dernier inventaire + entrées − sorties depuis inventaire
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+              <strong>Physique</strong> = quantité du dernier inventaire saisi
+            </span>
+          </div>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Désignation</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unité</th>
+                    {entrepots.map(e => (
+                      <th key={e.id} className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <div>{e.code}</div>
+                        <div className="text-muted-foreground/60 font-normal normal-case">théo / phys</div>
+                      </th>
+                    ))}
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      <div>Total</div>
+                      <div className="text-muted-foreground/60 font-normal normal-case">théo / phys</div>
+                    </th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
+                    {canEdit && <th className="w-16" />}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                  ) : filtered.length === 0 ? (
+                    <tr><td colSpan={20} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
+                  ) : filtered.map(a => (
+                    <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.reference}</td>
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-foreground text-xs">{a.nom}</p>
+                        {a.regleConsommation && <p className="text-xs text-muted-foreground">{a.regleConsommation}</p>}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{a.unite}</td>
+                      {entrepots.map(e => {
+                        const s = (a as any).stocks?.find((st: any) => st.entrepotId === e.id);
+                        const theo = s?.quantiteTheorique ?? s?.quantite ?? 0;
+                        const phys = s?.quantitePhysique ?? null;
+                        return (
+                          <td key={e.id} className="px-3 py-2 text-right text-xs">
+                            <span className={cn('font-semibold', theo <= a.seuilAlerte ? 'text-amber-600' : 'text-foreground')}>{formatNumber(theo)}</span>
+                            <span className="text-muted-foreground/60 mx-1">/</span>
+                            <span className="text-blue-500">{phys !== null ? formatNumber(phys) : '—'}</span>
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-right text-xs">
+                        <span className="font-bold text-foreground">{formatNumber((a as any).stockTotal ?? 0)}</span>
+                        <span className="text-muted-foreground/60 mx-1">/</span>
+                        <span className="text-blue-500">{formatNumber((a as any).stockTotalPhysique ?? 0)}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.seuilAlerte}</td>
+                      <td className="px-3 py-2">
+                        {a.enAlerte ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
+                            <AlertTriangle className="w-3 h-3" /> Alerte
+                          </span>
+                        ) : (
+                          <span className="inline-flex text-xs font-medium text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">OK</span>
+                        )}
+                      </td>
+                      {canEdit && (
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => openEdit(a)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { if (confirm(`Supprimer ${a.nom} ?`)) deleteMut.mutate(a.id); }} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* Vue Stats */}
       {view === 'stats' && (
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Désignation</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">Entrées</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-orange-600 uppercase tracking-wide">Sorties</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock physique</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock théorique</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Écart</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {statsLoading ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
-                ) : filteredStats.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
-                ) : filteredStats.map(a => (
-                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.reference}</td>
-                    <td className="px-3 py-2">
-                      <p className="font-medium text-foreground text-xs">{a.nom}</p>
-                      {a.regleConsommation && <p className="text-xs text-muted-foreground">{a.regleConsommation}</p>}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs font-semibold text-green-600">{formatNumber(a.totalEntrees)}</td>
-                    <td className="px-3 py-2 text-right text-xs font-semibold text-orange-600">{formatNumber(a.totalSorties)}</td>
-                    <td className="px-3 py-2 text-right text-xs font-bold text-foreground">{formatNumber(a.stockPhysique)}</td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground">{formatNumber(a.stockTheorique)}</td>
-                    <td className={cn('px-3 py-2 text-right text-xs font-semibold', a.ecart > 0 ? 'text-green-600' : a.ecart < 0 ? 'text-red-600' : 'text-muted-foreground')}>
-                      {a.ecart > 0 ? '+' : ''}{formatNumber(a.ecart)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.seuilAlerte}</td>
-                    <td className="px-3 py-2">
-                      {a.enAlerte ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
-                          <AlertTriangle className="w-3 h-3" /> Alerte
-                        </span>
-                      ) : (
-                        <span className="inline-flex text-xs font-medium text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">OK</span>
-                      )}
-                    </td>
+        <div className="space-y-2">
+          {/* Légende */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-muted/20 rounded-lg border border-border text-xs text-muted-foreground">
+            <div><span className="font-semibold text-green-600">Entrées</span> — Mouvements ENTREE sur la période sélectionnée</div>
+            <div><span className="font-semibold text-orange-600">Sorties</span> — Mouvements SORTIE sur la période sélectionnée</div>
+            <div><span className="font-semibold text-blue-600">Stock physique</span> — Quantité du dernier inventaire saisi</div>
+            <div><span className="font-semibold text-foreground">Stock théorique</span> — Dernier inventaire + entrées − sorties depuis cet inventaire</div>
+            <div><span className="font-semibold">Écart</span> — Théorique − Physique (positif = surplus, négatif = déficit)</div>
+          </div>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Désignation</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-green-600 uppercase tracking-wide">
+                      <div>Entrées</div>
+                      <div className="text-green-500/60 font-normal normal-case">période</div>
+                    </th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-orange-600 uppercase tracking-wide">
+                      <div>Sorties</div>
+                      <div className="text-orange-500/60 font-normal normal-case">période</div>
+                    </th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                      <div>Physique</div>
+                      <div className="text-blue-500/60 font-normal normal-case">dernier inv.</div>
+                    </th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">
+                      <div>Théorique</div>
+                      <div className="text-muted-foreground/60 font-normal normal-case">inv. + mouvements</div>
+                    </th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Écart</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {statsLoading ? (
+                    <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                  ) : filteredStats.length === 0 ? (
+                    <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
+                  ) : filteredStats.map(a => (
+                    <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.reference}</td>
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-foreground text-xs">{a.nom}</p>
+                        {a.regleConsommation && <p className="text-xs text-muted-foreground">{a.regleConsommation}</p>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs font-semibold text-green-600">{formatNumber(a.totalEntrees)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-semibold text-orange-600">{formatNumber(a.totalSorties)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-bold text-blue-600">{formatNumber(a.stockPhysique)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-bold text-foreground">{formatNumber(a.stockTheorique)}</td>
+                      <td className={cn('px-3 py-2 text-right text-xs font-semibold', a.ecart > 0 ? 'text-green-600' : a.ecart < 0 ? 'text-red-600' : 'text-muted-foreground')}>
+                        {a.ecart > 0 ? '+' : ''}{formatNumber(a.ecart)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.seuilAlerte}</td>
+                      <td className="px-3 py-2">
+                        {a.enAlerte ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
+                            <AlertTriangle className="w-3 h-3" /> Alerte
+                          </span>
+                        ) : (
+                          <span className="inline-flex text-xs font-medium text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
