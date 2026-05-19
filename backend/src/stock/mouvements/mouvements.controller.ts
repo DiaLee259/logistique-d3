@@ -80,7 +80,7 @@ export class MouvementsController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'CHEF_PROJET')
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.service.delete(id);

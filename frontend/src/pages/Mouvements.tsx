@@ -67,8 +67,8 @@ const downloadBlob = (blob: Blob, filename: string) => {
 };
 
 export default function Mouvements() {
-  const { hasRole } = useAuth();
-  const isAdmin = hasRole('ADMIN');
+  const { user } = useAuth();
+  const canDelete = user?.role === 'ADMIN' || user?.privileges?.actions?.supprimerRecord === true;
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -261,10 +261,10 @@ export default function Mouvements() {
                   <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.numeroOperation ?? '—'}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.sourceDestination ?? '—'}</td>
                   <td className="px-3 py-1.5">
-                    {isAdmin && (
+                    {canDelete && (
                       <button onClick={() => { if (confirm('Supprimer ce mouvement ? Le stock sera recalculé.')) deleteMut.mutate(m.id); }}
                         className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-                        title="Supprimer (admin uniquement)">
+                        title="Supprimer">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
