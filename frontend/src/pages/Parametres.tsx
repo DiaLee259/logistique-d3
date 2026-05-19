@@ -293,6 +293,78 @@ export default function Parametres() {
     }),
   }));
 
+  // ── Liens prestataires ───────────────────────────────────────────────────────
+  const [lienDialog, setLienDialog] = useState(false);
+  const [editLien, setEditLien] = useState<any | null>(null);
+  const [lienForm, setLienForm] = useState({ nom: '', managerZoneId: '', typePrestataire: '', departementsActifs: [] as string[], expiresInDays: '' });
+
+  const { data: liens = [], refetch: refetchLiens } = useQuery<any[]>({
+    queryKey: ['liens-prestataire'],
+    queryFn: () => commandesApi.liens.list(),
+    enabled: tab === 'managers-zone',
+  });
+
+  const createLienMut = useMutation({
+    mutationFn: (data: any) => commandesApi.liens.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Lien créé'); setLienDialog(false); setEditLien(null); },
+    onError: () => toast.error('Erreur lors de la création'),
+  });
+
+  const updateLienMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => commandesApi.liens.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Lien mis à jour'); setLienDialog(false); setEditLien(null); },
+    onError: () => toast.error('Erreur lors de la mise à jour'),
+  });
+
+  const desactiverLienMut = useMutation({
+    mutationFn: ({ id, actif }: { id: string; actif: boolean }) => commandesApi.liens.update(id, { actif }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); },
+  });
+
+  const openCreateLien = () => {
+    setEditLien(null);
+    setLienForm({ nom: '', managerZoneId: '', typePrestataire: 'SOCIETE', departementsActifs: [], expiresInDays: '' });
+    setLienDialog(true);
+  };
+
+  const openEditLien = (l: any) => {
+    setEditLien(l);
+    setLienForm({
+      nom: l.nom,
+      managerZoneId: l.managerZoneId ?? '',
+      typePrestataire: l.typePrestataire ?? 'SOCIETE',
+      departementsActifs: l.departementsActifs ?? [],
+      expiresInDays: '',
+    });
+    setLienDialog(true);
+  };
+
+  const handleSaveLien = () => {
+    if (!lienForm.nom.trim()) { toast.error('Nom requis'); return; }
+    const payload: any = {
+      nom: lienForm.nom,
+      managerZoneId: lienForm.managerZoneId || null,
+      typePrestataire: lienForm.typePrestataire || null,
+      departementsActifs: lienForm.departementsActifs,
+    };
+    if (editLien) {
+      updateLienMut.mutate({ id: editLien.id, data: payload });
+    } else {
+      if (lienForm.expiresInDays) payload.expiresInDays = parseInt(lienForm.expiresInDays);
+      createLienMut.mutate(payload);
+    }
+  };
+
+  const toggleDeptActif = (code: string) =>
+    setLienForm(p => ({
+      ...p,
+      departementsActifs: p.departementsActifs.includes(code)
+        ? p.departementsActifs.filter(d => d !== code)
+        : [...p.departementsActifs, code],
+    }));
+
+  const lienUrl = (token: string) => `${window.location.origin}/commande/${token}`;
+
   // ── Répertoire Sociétés / Intervenants ───────────────────────────────────────
   const [repertoireSection, setRepertoireSection] = useState<'societes' | 'intervenants'>('societes');
   const [societeDialog, setSocieteDialog] = useState(false);
@@ -1203,6 +1275,93 @@ export default function Parametres() {
         </div>
       )}
 
+      {/* ── Section Liens prestataires (dans managers-zone) ── */}
+      {tab === 'managers-zone' && canManageManagersZone && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold">Liens prestataires</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{liens.length} lien(s) · {liens.filter(l => l.actif).length} actif(s)</p>
+            </div>
+            <button onClick={openCreateLien}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+              <Plus className="w-3.5 h-3.5" /> Nouveau lien
+            </button>
+          </div>
+
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    {['Nom du lien', 'Manager', 'Type', 'Départements actifs', 'Utilisations', 'Statut', ''].map(h => (
+                      <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {liens.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Aucun lien créé</td></tr>
+                  ) : liens.map((l: any) => (
+                    <tr key={l.id} className={cn('border-b border-border/50 hover:bg-muted/20', !l.actif && 'opacity-50')}>
+                      <td className="px-3 py-2.5">
+                        <div className="font-medium whitespace-nowrap">{l.nom}</div>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(lienUrl(l.token)); toast.success('URL copiée !'); }}
+                          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-0.5"
+                          title={lienUrl(l.token)}
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span className="text-xs truncate max-w-48">{lienUrl(l.token)}</span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
+                        {l.managerZone?.nom ?? <span className="italic text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        {l.typePrestataire === 'SOCIETE' ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">Société</span>
+                        ) : l.typePrestataire === 'AUTO' ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Auto</span>
+                        ) : <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {(l.departementsActifs ?? []).length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(l.departementsActifs as string[]).map(d => (
+                              <span key={d} className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">{d}</span>
+                            ))}
+                          </div>
+                        ) : <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-center font-semibold">{l.utilisations}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', l.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
+                          {l.actif ? 'Actif' : 'Inactif'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEditLien(l)}
+                            className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted transition-colors">
+                            Modifier
+                          </button>
+                          <button onClick={() => desactiverLienMut.mutate({ id: l.id, actif: !l.actif })}
+                            className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
+                              l.actif ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
+                            {l.actif ? 'Désactiver' : 'Activer'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── TAB REMISE À ZÉRO ── */}
       {tab === 'remise-a-zero' && hasRole('ADMIN') && (
         <div className="space-y-4 max-w-2xl">
@@ -1257,6 +1416,125 @@ export default function Parametres() {
               <RotateCcw className="w-3.5 h-3.5" />
               {resetCompletMut.isPending ? 'Remise à zéro en cours…' : 'Tout remettre à zéro'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog Lien prestataire */}
+      {lienDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-primary" />
+                {editLien ? `Modifier — ${editLien.nom}` : 'Nouveau lien prestataire'}
+              </h2>
+              <button onClick={() => { setLienDialog(false); setEditLien(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Nom */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Nom du lien *</label>
+                <input value={lienForm.nom} onChange={e => setLienForm(p => ({ ...p, nom: e.target.value }))}
+                  placeholder="Ex: Formulaire Dept 49 — Dupont"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+
+              {/* Manager de zone */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Manager de zone</label>
+                <select value={lienForm.managerZoneId}
+                  onChange={e => setLienForm(p => ({ ...p, managerZoneId: e.target.value, departementsActifs: [] }))}
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
+                  <option value="">— Sans manager —</option>
+                  {managersZone.filter(m => m.actif).map(m => (
+                    <option key={m.id} value={m.id}>{m.nom}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Type prestataire */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-2">Type de prestataire</label>
+                <div className="flex gap-3">
+                  {[{ val: 'SOCIETE', label: 'Société', color: 'bg-violet-100 text-violet-700 border-violet-300' }, { val: 'AUTO', label: 'Auto-entrepreneur', color: 'bg-orange-100 text-orange-700 border-orange-300' }].map(({ val, label, color }) => (
+                    <button key={val} type="button"
+                      onClick={() => setLienForm(p => ({ ...p, typePrestataire: val }))}
+                      className={cn('flex-1 px-3 py-2 text-xs rounded-lg border font-medium transition-colors',
+                        lienForm.typePrestataire === val ? color + ' border-2' : 'border-border text-muted-foreground hover:bg-muted')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Départements actifs (checkboxes depuis le manager sélectionné) */}
+              {lienForm.managerZoneId && (() => {
+                const mgr = managersZone.find(m => m.id === lienForm.managerZoneId);
+                const depts = (mgr?.departements ?? []) as { code: string; entrepotId: string; entrepotCode: string }[];
+                return depts.length > 0 ? (
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                      Départements actifs pour ce lien <span className="text-muted-foreground/60">(cocher ceux qui doivent apparaître dans le formulaire)</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {depts.map(d => {
+                        const checked = lienForm.departementsActifs.includes(d.code);
+                        return (
+                          <label key={d.code} className={cn(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors',
+                            checked ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary'
+                          )}>
+                            <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleDeptActif(d.code)} />
+                            <span className="font-semibold">{d.code}</span>
+                            <span className="opacity-70">— {d.entrepotCode || 'ENT?'}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {lienForm.departementsActifs.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">⚠ Aucun département coché — le formulaire prestataire aura un champ libre</p>
+                    )}
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Expiration (seulement à la création) */}
+              {!editLien && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Expiration (optionnel)</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="1" value={lienForm.expiresInDays}
+                      onChange={e => setLienForm(p => ({ ...p, expiresInDays: e.target.value }))}
+                      placeholder="Ex: 30"
+                      className="w-24 px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    <span className="text-xs text-muted-foreground">jours (vide = pas d'expiration)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Aperçu URL (si modification) */}
+              {editLien && (
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">URL du lien</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs text-primary break-all flex-1">{lienUrl(editLien.token)}</code>
+                    <button onClick={() => { navigator.clipboard.writeText(lienUrl(editLien.token)); toast.success('URL copiée !'); }}
+                      className="flex-shrink-0 p-1.5 hover:bg-muted rounded border border-border">
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { setLienDialog(false); setEditLien(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={handleSaveLien} disabled={createLienMut.isPending || updateLienMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> {editLien ? 'Enregistrer' : 'Créer le lien'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
