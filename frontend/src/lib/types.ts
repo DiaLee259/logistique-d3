@@ -19,11 +19,12 @@ export interface UserPrivileges {
   };
   entrepots: string[];   // [] = tous visibles, sinon liste d'IDs
   actions: {
-    importExcel:       boolean;
-    exportExcel:       boolean;
-    creerArticle:      boolean;
-    supprimerRecord:   boolean;
-    gererUtilisateurs: boolean;
+    importExcel:                boolean;
+    exportExcel:                boolean;
+    creerArticle:               boolean;
+    supprimerRecord:            boolean;
+    gererUtilisateurs:          boolean;
+    voirCommandesSansEntrepot:  boolean;  // voir les commandes sans entrepôt assigné
   };
 }
 
@@ -40,11 +41,12 @@ export const DEFAULT_PRIVILEGES: UserPrivileges = {
   },
   entrepots: [],
   actions: {
-    importExcel:       true,
-    exportExcel:       true,
-    creerArticle:      false,
-    supprimerRecord:   false,
-    gererUtilisateurs: false,
+    importExcel:                true,
+    exportExcel:                true,
+    creerArticle:               false,
+    supprimerRecord:            false,
+    gererUtilisateurs:          false,
+    voirCommandesSansEntrepot:  false,
   },
 };
 

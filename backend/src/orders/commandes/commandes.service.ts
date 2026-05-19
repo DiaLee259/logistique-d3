@@ -26,10 +26,9 @@ export class CommandesService {
 
     // Filtrage par entrepôt selon les privilèges du user
     if (filters.userEntrepots?.length) {
-      const isLog1OrAdmin = ['ADMIN', 'LOGISTICIEN_1'].includes(filters.userRole ?? '');
       andClauses.push({ OR: [
         { entrepotSource: { in: filters.userEntrepots } },
-        ...(isLog1OrAdmin ? [{ entrepotSource: null }] : []),
+        ...(filters.voirSansEntrepot !== false ? [{ entrepotSource: null }] : []),
       ]});
     }
 

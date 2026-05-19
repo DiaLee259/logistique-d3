@@ -288,7 +288,6 @@ export default function Articles() {
             <div><span className="font-semibold text-orange-600">Sorties</span> — Mouvements SORTIE sur la période sélectionnée</div>
             <div><span className="font-semibold text-blue-600">Stock physique</span> — Quantité du dernier inventaire saisi</div>
             <div><span className="font-semibold text-foreground">Stock théorique</span> — Dernier inventaire + entrées − sorties depuis cet inventaire</div>
-            <div><span className="font-semibold">Écart</span> — Théorique − Physique (positif = surplus, négatif = déficit)</div>
           </div>
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
@@ -313,16 +312,15 @@ export default function Articles() {
                       <div>Théorique</div>
                       <div className="text-muted-foreground/60 font-normal normal-case">inv. + mouvements</div>
                     </th>
-                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Écart</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
                     <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
                   </tr>
                 </thead>
                 <tbody>
                   {statsLoading ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                    <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
                   ) : filteredStats.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
+                    <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Aucun article trouvé</td></tr>
                   ) : filteredStats.map(a => (
                     <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                       <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.reference}</td>
@@ -334,9 +332,6 @@ export default function Articles() {
                       <td className="px-3 py-2 text-right text-xs font-semibold text-orange-600">{formatNumber(a.totalSorties)}</td>
                       <td className="px-3 py-2 text-right text-xs font-bold text-blue-600">{formatNumber(a.stockPhysique)}</td>
                       <td className="px-3 py-2 text-right text-xs font-bold text-foreground">{formatNumber(a.stockTheorique)}</td>
-                      <td className={cn('px-3 py-2 text-right text-xs font-semibold', a.ecart > 0 ? 'text-green-600' : a.ecart < 0 ? 'text-red-600' : 'text-muted-foreground')}>
-                        {a.ecart > 0 ? '+' : ''}{formatNumber(a.ecart)}
-                      </td>
                       <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.seuilAlerte}</td>
                       <td className="px-3 py-2">
                         {a.enAlerte ? (

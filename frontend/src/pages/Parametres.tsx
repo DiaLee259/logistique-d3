@@ -22,6 +22,7 @@ export default function Parametres() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
   const [showUserPass, setShowUserPass] = useState(false);
+  const [userFilter, setUserFilter] = useState<'all' | 'actif' | 'inactif'>('all');
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
@@ -374,7 +375,7 @@ export default function Parametres() {
   const canSeeRepertoire = hasRole('ADMIN') || (user?.privileges?.modules?.parametres ?? 'NONE') !== 'NONE';
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4 max-w-7xl">
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/30 rounded-xl p-1 w-fit">
         {[
@@ -403,49 +404,66 @@ export default function Parametres() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h2 className="text-sm font-semibold">Gestion des comptes</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">{users.length} compte(s) enregistré(s)</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {users.filter(u => userFilter === 'all' ? true : userFilter === 'actif' ? u.actif : !u.actif).length} compte(s) affiché(s) · {users.filter(u => u.actif).length} actif(s) · {users.filter(u => !u.actif).length} inactif(s)
+                  </p>
                 </div>
-                {hasRole('ADMIN') && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        usersApi.export().then(blob => {
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `export-comptes-${new Date().toISOString().slice(0, 10)}.xlsx`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        })
-                      }
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border rounded-lg bg-card hover:border-green-500 hover:text-green-700 transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Exporter comptes
-                    </button>
-                    <button onClick={openCreateUser}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-                      <Plus className="w-3.5 h-3.5" /> Nouveau compte
-                    </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Filtre actif/inactif */}
+                  <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
+                    {(['all', 'actif', 'inactif'] as const).map(f => (
+                      <button key={f} onClick={() => setUserFilter(f)}
+                        className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
+                          userFilter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                        {f === 'all' ? 'Tous' : f === 'actif' ? 'Actifs' : 'Inactifs'}
+                      </button>
+                    ))}
                   </div>
-                )}
+                  {hasRole('ADMIN') && (
+                    <>
+                      <button
+                        onClick={() =>
+                          usersApi.export().then(blob => {
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `export-comptes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          })
+                        }
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border rounded-lg bg-card hover:border-green-500 hover:text-green-700 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Exporter
+                      </button>
+                      <button onClick={openCreateUser}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                        <Plus className="w-3.5 h-3.5" /> Nouveau compte
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       {['Utilisateur', 'Email', 'Rôle', 'Créé le', 'Statut', ''].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                        <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map(u => (
-                      <tr key={u.id} className="border-b border-border/50 hover:bg-muted/20">
-                        <td className="px-4 py-3">
+                    {users
+                      .filter(u => userFilter === 'all' ? true : userFilter === 'actif' ? u.actif : !u.actif)
+                      .map(u => (
+                      <tr key={u.id} className={cn('border-b border-border/50 hover:bg-muted/20', !u.actif && 'opacity-60')}>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
                               <span className="text-xs font-bold text-primary">{u.prenom[0]}{u.nom[0]}</span>
@@ -454,19 +472,19 @@ export default function Parametres() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', roleColor(u.role))}>
                             {roleLabel(u.role)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{formatDate(u.createdAt)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(u.createdAt)}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                             u.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                             {u.actif ? 'Actif' : 'Inactif'}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           {hasRole('ADMIN') && (
                             <div className="flex items-center gap-1.5">
                               <button onClick={() => openEditUser(u)}
@@ -489,6 +507,7 @@ export default function Parametres() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {/* Explications des rôles */}
@@ -527,29 +546,30 @@ export default function Parametres() {
           </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   {['Code', 'Nom', 'Localisation', 'Gestionnaire', 'Téléphone', 'Email', 'Statut', ''].map(h => (
-                    <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                    <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {visibleEntrepots.map(e => (
                   <tr key={e.id} className="border-b border-border/50 hover:bg-muted/20">
-                    <td className="px-3 py-2.5 font-mono font-bold text-primary">{e.code}</td>
-                    <td className="px-3 py-2.5 font-medium">{e.nom}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{e.localisation}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{e.gestionnaire ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{e.telephone ?? '—'}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-primary whitespace-nowrap">{e.code}</td>
+                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">{e.nom}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.localisation}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.gestionnaire ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.telephone ?? '—'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground">{e.email ?? '—'}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', e.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                         {e.actif ? 'Actif' : 'Inactif'}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       {canManageEntrepots && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => openEditEntrepot(e)}
@@ -568,6 +588,7 @@ export default function Parametres() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -1453,6 +1474,7 @@ export default function Parametres() {
                       { key: 'creerArticle' as const, label: 'Créer des articles' },
                       { key: 'supprimerRecord' as const, label: 'Supprimer des enregistrements' },
                       { key: 'gererUtilisateurs' as const, label: 'Gérer les utilisateurs' },
+                      { key: 'voirCommandesSansEntrepot' as const, label: 'Voir les commandes sans entrepôt assigné' },
                     ] as { key: keyof UserPrivileges['actions']; label: string }[]).map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-2.5 bg-muted/20 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
                         <input
