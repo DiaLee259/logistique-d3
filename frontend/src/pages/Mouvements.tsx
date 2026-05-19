@@ -4,6 +4,7 @@ import { Plus, Search, Download, X, Trash2, ArrowLeftRight, ChevronDown } from '
 import { toast } from 'sonner';
 import { mouvementsApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Mouvement, Article, Entrepot } from '@/lib/types';
 
 const PROD_SAV = ['PROD', 'SAV', 'MALFACON', 'AUTRE'];
@@ -66,6 +67,8 @@ const downloadBlob = (blob: Blob, filename: string) => {
 };
 
 export default function Mouvements() {
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('ADMIN');
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -258,10 +261,13 @@ export default function Mouvements() {
                   <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.numeroOperation ?? '—'}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.sourceDestination ?? '—'}</td>
                   <td className="px-3 py-1.5">
-                    <button onClick={() => { if (confirm('Supprimer ce mouvement ?')) deleteMut.mutate(m.id); }}
-                      className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {isAdmin && (
+                      <button onClick={() => { if (confirm('Supprimer ce mouvement ? Le stock sera recalculé.')) deleteMut.mutate(m.id); }}
+                        className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                        title="Supprimer (admin uniquement)">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

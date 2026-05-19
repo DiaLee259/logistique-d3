@@ -5,6 +5,8 @@ import { MouvementsService } from './mouvements.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { RolesGuard } from '../../auth/roles.guard';
+import { Roles } from '../../auth/roles.decorator';
 import * as ExcelJS from 'exceljs';
 
 @Controller('mouvements')
@@ -77,6 +79,8 @@ export class MouvementsController {
     return this.service.update(id, dto);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.service.delete(id);
