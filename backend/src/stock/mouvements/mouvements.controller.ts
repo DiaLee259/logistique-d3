@@ -66,6 +66,11 @@ export class MouvementsController {
     return this.service.createMultiple(body.items, req.user?.id);
   }
 
+  @Post('transfert')
+  transferer(@Body() body: any, @Request() req) {
+    return this.service.transferer({ ...body, userId: req.user?.id });
+  }
+
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: Partial<CreateMouvementDto>) {
     return this.service.update(id, dto);

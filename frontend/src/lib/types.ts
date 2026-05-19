@@ -117,6 +117,7 @@ export interface Mouvement {
   cout?: number;
   envoye: boolean;
   recu: boolean;
+  transfertId?: string | null;  // présent si c'est un transfert inter-entrepôt
   article?: Article;
   entrepot?: Entrepot;
   user?: User;

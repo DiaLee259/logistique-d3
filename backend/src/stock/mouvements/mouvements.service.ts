@@ -5,6 +5,7 @@ import { StockCalculatorService } from '../stock-calculator.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
 import * as ExcelJS from 'exceljs';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MouvementsService {
@@ -37,6 +38,11 @@ export class MouvementsService {
     if ((filters as any).userEntrepots?.length) {
       where.entrepotId = { in: (filters as any).userEntrepots };
     }
+    // Filtre transferts uniquement
+    if ((filters as any).transfert === 'true') {
+      where.transfertId = { not: null };
+    }
+
     if (filters.search) {
       where.OR = [
         { article: { nom: { contains: filters.search, mode: 'insensitive' } } },
@@ -121,9 +127,95 @@ export class MouvementsService {
 
   async delete(id: string) {
     const m = await this.findById(id);
+
+    if (m.transfertId) {
+      // Supprimer les deux legs du transfert atomiquement
+      const legs = await this.prisma.mouvement.findMany({
+        where: { transfertId: m.transfertId },
+        select: { id: true, articleId: true, entrepotId: true },
+      });
+      await this.prisma.mouvement.deleteMany({ where: { transfertId: m.transfertId } });
+      for (const leg of legs) {
+        await this.calculator.sync(leg.articleId, leg.entrepotId);
+      }
+      return m;
+    }
+
     await this.prisma.mouvement.delete({ where: { id } });
     await this.calculator.sync(m.articleId, m.entrepotId);
     return m;
+  }
+
+  /** Transfert inter-entrepôt : crée une SORTIE sur la source et une ENTREE sur la destination */
+  async transferer(dto: {
+    articleId: string;
+    entrepotSourceId: string;
+    entrepotDestinationId: string;
+    quantite: number;
+    commentaire?: string;
+    userId?: string;
+  }) {
+    if (dto.entrepotSourceId === dto.entrepotDestinationId) {
+      throw new BadRequestException('Source et destination doivent être différentes');
+    }
+
+    await this.validateStockSuffisant(dto.articleId, dto.entrepotSourceId, dto.quantite);
+
+    const [entrepotSrc, entrepotDst] = await Promise.all([
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotSourceId } }),
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotDestinationId } }),
+    ]);
+    if (!entrepotSrc || !entrepotDst) throw new BadRequestException('Entrepôt introuvable');
+
+    const transfertId = uuidv4();
+    const now = new Date();
+
+    // SORTIE sur l'entrepôt source
+    const sortie = await this.prisma.mouvement.create({
+      data: {
+        articleId: dto.articleId,
+        entrepotId: dto.entrepotSourceId,
+        type: TypeMouvement.SORTIE,
+        quantiteDemandee: dto.quantite,
+        quantiteFournie: dto.quantite,
+        sourceDestination: `→ ${entrepotDst.code}`,
+        commentaire: dto.commentaire ?? null,
+        userId: dto.userId ?? null,
+        transfertId,
+        date: now,
+      },
+      include: { article: true, entrepot: true },
+    });
+
+    // ENTREE sur l'entrepôt destination
+    const entree = await this.prisma.mouvement.create({
+      data: {
+        articleId: dto.articleId,
+        entrepotId: dto.entrepotDestinationId,
+        type: TypeMouvement.ENTREE,
+        quantiteDemandee: dto.quantite,
+        quantiteFournie: dto.quantite,
+        sourceDestination: `← ${entrepotSrc.code}`,
+        commentaire: dto.commentaire ?? null,
+        userId: dto.userId ?? null,
+        transfertId,
+        date: now,
+      },
+      include: { article: true, entrepot: true },
+    });
+
+    // Recalcul des deux entrepôts
+    await this.calculator.sync(dto.articleId, dto.entrepotSourceId);
+    await this.calculator.sync(dto.articleId, dto.entrepotDestinationId);
+
+    return {
+      transfertId,
+      from: entrepotSrc.code,
+      to: entrepotDst.code,
+      quantite: dto.quantite,
+      sortie,
+      entree,
+    };
   }
 
   async toggleField(id: string, field: 'envoye' | 'recu') {

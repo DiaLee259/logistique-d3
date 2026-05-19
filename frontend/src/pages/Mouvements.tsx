@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, X, Trash2 } from 'lucide-react';
+import { Plus, Search, Download, X, Trash2, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { mouvementsApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -19,14 +19,16 @@ export default function Mouvements() {
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({ type: '', entrepotId: '', departement: '', dateDebut: '', dateFin: '', mois: '', manager: '' });
+  const [filters, setFilters] = useState({ type: '', entrepotId: '', departement: '', dateDebut: '', dateFin: '', mois: '', manager: '', transfert: '' });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [transfertDialogOpen, setTransfertDialogOpen] = useState(false);
+  const [transfertForm, setTransfertForm] = useState({ articleId: '', entrepotSourceId: '', entrepotDestinationId: '', quantite: 1, commentaire: '' });
   // Multi-lignes pour création batch
   const [lignes, setLignes] = useState([{ articleId: '', entrepotId: '', type: 'SORTIE', quantiteDemandee: 1, quantiteFournie: 1, departement: '', manager: '', numeroOperation: '', commentaire: '', prodSav: 'PROD' }]);
 
-  const queryParams = { ...filters, search, page: String(page), limit: '20' };
+  const queryParams = { ...filters, search, page: String(page), limit: '20' } as Record<string, string>;
   const { data: result, isLoading } = useQuery({
     queryKey: ['mouvements', queryParams],
     queryFn: () => mouvementsApi.list(queryParams),
@@ -40,6 +42,18 @@ export default function Mouvements() {
   const createMut = useMutation({
     mutationFn: (items: any[]) => items.length === 1 ? mouvementsApi.create(items[0]) : mouvementsApi.createBatch(items),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mouvements'] }); qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Mouvement(s) créé(s)'); closeDialog(); },
+  });
+
+  const transfertMut = useMutation({
+    mutationFn: (data: typeof transfertForm) => mouvementsApi.transfert(data),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['mouvements'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      toast.success(`Transfert effectué : ${res.quantite} unité(s) de ${res.from} → ${res.to}`);
+      setTransfertDialogOpen(false);
+      setTransfertForm({ articleId: '', entrepotSourceId: '', entrepotDestinationId: '', quantite: 1, commentaire: '' });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Erreur lors du transfert'),
   });
 
   const deleteMut = useMutation({
@@ -93,12 +107,18 @@ export default function Mouvements() {
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Rechercher…"
             className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
-        <select value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value }))}
+        <select value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value, transfert: '' }))}
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none">
           <option value="">Tous types</option>
           <option value="ENTREE">Entrée</option>
           <option value="SORTIE">Sortie</option>
         </select>
+        <button
+          onClick={() => setFilters(p => ({ ...p, transfert: p.transfert === 'true' ? '' : 'true', type: '' }))}
+          className={cn('flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border transition-colors', filters.transfert === 'true' ? 'bg-violet-100 border-violet-300 text-violet-700' : 'bg-card border-border text-muted-foreground hover:border-violet-300')}
+        >
+          <ArrowLeftRight className="w-3.5 h-3.5" /> Transferts
+        </button>
         <select value={filters.entrepotId} onChange={e => setFilters(p => ({ ...p, entrepotId: e.target.value }))}
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none">
           <option value="">Tous entrepôts</option>
@@ -132,6 +152,9 @@ export default function Mouvements() {
           </button>
           <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
         </div>
+        <button onClick={() => setTransfertDialogOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
+          <ArrowLeftRight className="w-4 h-4" /> Transfert
+        </button>
         <button onClick={() => setDialogOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
           <Plus className="w-4 h-4" /> Ajouter
         </button>
@@ -160,9 +183,15 @@ export default function Mouvements() {
                   <td className="px-3 py-1.5 text-xs font-medium text-foreground whitespace-nowrap max-w-[220px] truncate" title={m.article?.nom}>{m.article?.nom}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{m.entrepot?.code}</td>
                   <td className="px-3 py-1.5">
-                    <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap', m.type === 'ENTREE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
-                      {m.type === 'ENTREE' ? '↑ Entrée' : '↓ Sortie'}
-                    </span>
+                    {m.transfertId ? (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-100 text-violet-700">
+                        ⇄ {m.type === 'SORTIE' ? 'Transfert (départ)' : 'Transfert (arrivée)'}
+                      </span>
+                    ) : (
+                      <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap', m.type === 'ENTREE' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
+                        {m.type === 'ENTREE' ? '↑ Entrée' : '↓ Sortie'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-right text-xs text-muted-foreground">{formatNumber(m.quantiteDemandee)}</td>
                   <td className="px-3 py-1.5 text-right text-xs text-blue-600">{m.quantiteValidee != null ? formatNumber(m.quantiteValidee) : <span className="text-muted-foreground">—</span>}</td>
@@ -195,6 +224,87 @@ export default function Mouvements() {
           </div>
         )}
       </div>
+
+      {/* ── Dialog TRANSFERT ────────────────────────────────────────────────── */}
+      {transfertDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="font-semibold flex items-center gap-2"><ArrowLeftRight className="w-4 h-4 text-violet-600" /> Transfert inter-entrepôt</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Crée une sortie sur la source et une entrée sur la destination</p>
+              </div>
+              <button onClick={() => setTransfertDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Article *</label>
+                <select value={transfertForm.articleId} onChange={e => setTransfertForm(p => ({ ...p, articleId: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
+                  <option value="">— Choisir un article —</option>
+                  {articles.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Entrepôt source *</label>
+                  <select value={transfertForm.entrepotSourceId} onChange={e => setTransfertForm(p => ({ ...p, entrepotSourceId: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
+                    <option value="">— Source —</option>
+                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertForm.entrepotDestinationId}>{e.code}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Entrepôt destination *</label>
+                  <select value={transfertForm.entrepotDestinationId} onChange={e => setTransfertForm(p => ({ ...p, entrepotDestinationId: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
+                    <option value="">— Destination —</option>
+                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertForm.entrepotSourceId}>{e.code}</option>)}
+                  </select>
+                </div>
+              </div>
+              {/* Flèche visuelle */}
+              {transfertForm.entrepotSourceId && transfertForm.entrepotDestinationId && (
+                <div className="flex items-center justify-center gap-3 py-2">
+                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold">
+                    {entrepots.find(e => e.id === transfertForm.entrepotSourceId)?.code}
+                  </span>
+                  <ArrowLeftRight className="w-5 h-5 text-violet-500" />
+                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold">
+                    {entrepots.find(e => e.id === transfertForm.entrepotDestinationId)?.code}
+                  </span>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Quantité *</label>
+                <input type="number" min={1} value={transfertForm.quantite}
+                  onChange={e => setTransfertForm(p => ({ ...p, quantite: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Commentaire (optionnel)</label>
+                <input value={transfertForm.commentaire}
+                  onChange={e => setTransfertForm(p => ({ ...p, commentaire: e.target.value }))}
+                  placeholder="Raison du transfert…"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300" />
+              </div>
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
+                <p className="text-xs text-violet-700">ℹ️ Le stock global reste identique. Seule la répartition entre entrepôts change.</p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setTransfertDialogOpen(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button
+                  onClick={() => transfertMut.mutate(transfertForm)}
+                  disabled={!transfertForm.articleId || !transfertForm.entrepotSourceId || !transfertForm.entrepotDestinationId || transfertForm.quantite <= 0 || transfertMut.isPending}
+                  className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {transfertMut.isPending ? 'Transfert…' : 'Valider le transfert'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog création */}
       {dialogOpen && (
