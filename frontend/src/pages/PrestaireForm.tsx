@@ -26,7 +26,7 @@ export default function PrestaireForm() {
 
   const [formData, setFormData] = useState({
     departement: '', demandeur: '', emailDemandeur: '',
-    societe: '', manager: '', nombreGrilles: '', typeGrille: '',
+    societe: '', nombreGrilles: '', typeGrille: '',
     telephoneDestinataire: '', adresseLivraison: '', commentaire: '',
   });
 
@@ -162,14 +162,22 @@ export default function PrestaireForm() {
             <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">1</span>
             Vos informations
           </h2>
+          {lien?.managerNom && (
+            <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+              Manager de zone : <span className="font-semibold">{lien.managerNom}</span>
+              {lien.typePrestataire && (
+                <span className="ml-2 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                  {lien.typePrestataire === 'SOCIETE' ? 'Société' : 'Auto-entrepreneur'}
+                </span>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             {[
               { field: 'demandeur',      label: 'Nom et prénom *',              placeholder: 'Jean Dupont',            type: 'text',  col: '2' },
               { field: 'societe',        label: 'Société / Entreprise',         placeholder: 'BTP Telecom 49',         type: 'text',  col: '1' },
               { field: 'emailDemandeur', label: 'Email',                        placeholder: 'jean@exemple.fr',        type: 'email', col: '1' },
-              { field: 'departement',         label: 'Département *',                placeholder: 'Ex: 49, 75, Loire...',        type: 'text',  col: '1' },
-              { field: 'manager',             label: 'Responsable / Interlocuteur',  placeholder: 'Nom du responsable',          type: 'text',  col: '1' },
-              { field: 'telephoneDestinataire', label: 'Téléphone',                  placeholder: '06 XX XX XX XX',              type: 'tel',   col: '1' },
+              { field: 'telephoneDestinataire', label: 'Téléphone',             placeholder: '06 XX XX XX XX',         type: 'tel',   col: '1' },
             ].map(({ field, label, placeholder, type, col }) => (
               <div key={field} className={col === '2' ? 'col-span-2' : ''}>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
@@ -179,6 +187,25 @@ export default function PrestaireForm() {
                   className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all" />
               </div>
             ))}
+            {/* Département : dropdown si departementsActifs, sinon texte libre */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Département *</label>
+              {lien?.departementsActifs && lien.departementsActifs.length > 0 ? (
+                <select value={formData.departement}
+                  onChange={e => setFormData(prev => ({ ...prev, departement: e.target.value }))}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all">
+                  <option value="">— Choisir un département —</option>
+                  {(lien.departementsActifs as string[]).map((d: string) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              ) : (
+                <input type="text" value={formData.departement}
+                  onChange={e => setFormData(prev => ({ ...prev, departement: e.target.value }))}
+                  placeholder="Ex: 49, 75, Loire..."
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all" />
+              )}
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre de grilles</label>
               <input type="number" min={0} value={formData.nombreGrilles}

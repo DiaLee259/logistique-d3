@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff, RotateCcw, AlertTriangle, Link2, Copy, Network } from 'lucide-react';
 import { toast } from 'sonner';
-import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi } from '@/lib/api';
+import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi, commandesApi } from '@/lib/api';
 import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
 import { ROLES_CONFIG, getRoleColor } from '@/config/roles';
-import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges } from '@/lib/types';
+import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges, ManagerZone } from '@/lib/types';
 import { DEFAULT_PRIVILEGES } from '@/lib/types';
 
-type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero';
+type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero' | 'managers-zone';
 
 export default function Parametres() {
   const { hasRole, user } = useAuth();
@@ -100,7 +100,7 @@ export default function Parametres() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots-all'],
     queryFn: () => entrepotsApi.list(true),
-    enabled: tab === 'entrepots' || privilegeDialog,
+    enabled: tab === 'entrepots' || tab === 'managers-zone' || privilegeDialog,
   });
 
   const createEntrepotMut = useMutation({
@@ -226,6 +226,72 @@ export default function Parametres() {
     if (catalogueFilter === 'inactif') return !a.actif;
     return true;
   });
+
+  // ── Managers de zone ─────────────────────────────────────────────────────────
+  const [managerZoneDialog, setManagerZoneDialog] = useState(false);
+  const [editManagerZone, setEditManagerZone] = useState<ManagerZone | null>(null);
+  const [managerZoneForm, setManagerZoneForm] = useState({ nom: '', departements: [] as { code: string; entrepotId: string; entrepotCode: string }[] });
+
+  const { data: managersZone = [] } = useQuery<ManagerZone[]>({
+    queryKey: ['managers-zone'],
+    queryFn: () => commandesApi.managers.list(),
+    enabled: tab === 'managers-zone',
+  });
+
+  const createManagerZoneMut = useMutation({
+    mutationFn: (data: any) => commandesApi.managers.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone créé'); setManagerZoneDialog(false); setEditManagerZone(null); },
+    onError: () => toast.error('Erreur lors de la création'),
+  });
+
+  const updateManagerZoneMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => commandesApi.managers.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone mis à jour'); setManagerZoneDialog(false); setEditManagerZone(null); },
+    onError: () => toast.error('Erreur lors de la mise à jour'),
+  });
+
+  const deleteManagerZoneMut = useMutation({
+    mutationFn: (id: string) => commandesApi.managers.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone supprimé'); },
+    onError: () => toast.error('Impossible de supprimer — des liens sont peut-être rattachés'),
+  });
+
+  const openCreateManagerZone = () => {
+    setEditManagerZone(null);
+    setManagerZoneForm({ nom: '', departements: [] });
+    setManagerZoneDialog(true);
+  };
+
+  const openEditManagerZone = (mz: ManagerZone) => {
+    setEditManagerZone(mz);
+    setManagerZoneForm({ nom: mz.nom, departements: [...(mz.departements as any[])] });
+    setManagerZoneDialog(true);
+  };
+
+  const handleSaveManagerZone = () => {
+    if (!managerZoneForm.nom) { toast.error('Le nom est obligatoire'); return; }
+    if (editManagerZone) {
+      updateManagerZoneMut.mutate({ id: editManagerZone.id, data: { nom: managerZoneForm.nom, departements: managerZoneForm.departements } });
+    } else {
+      createManagerZoneMut.mutate({ nom: managerZoneForm.nom, departements: managerZoneForm.departements });
+    }
+  };
+
+  const addDeptLine = () => setManagerZoneForm(p => ({ ...p, departements: [...p.departements, { code: '', entrepotId: '', entrepotCode: '' }] }));
+  const removeDeptLine = (i: number) => setManagerZoneForm(p => ({ ...p, departements: p.departements.filter((_, j) => j !== i) }));
+  const updateDeptLine = (i: number, field: string, value: string) => setManagerZoneForm(p => ({
+    ...p,
+    departements: p.departements.map((d, j) => {
+      if (j !== i) return d;
+      const updated = { ...d, [field]: value };
+      // auto-fill entrepotCode when entrepotId changes
+      if (field === 'entrepotId') {
+        const e = entrepots.find(x => x.id === value);
+        updated.entrepotCode = e?.code ?? '';
+      }
+      return updated;
+    }),
+  }));
 
   // ── Répertoire Sociétés / Intervenants ───────────────────────────────────────
   const [repertoireSection, setRepertoireSection] = useState<'societes' | 'intervenants'>('societes');
@@ -373,6 +439,7 @@ export default function Parametres() {
     : entrepots;
   const canManageEntrepots = hasRole('ADMIN', 'LOGISTICIEN_1') && allowedEntrepots.length === 0;
   const canSeeRepertoire = hasRole('ADMIN') || (user?.privileges?.modules?.parametres ?? 'NONE') !== 'NONE';
+  const canManageManagersZone = hasRole('ADMIN') || (user?.privileges?.actions?.gererManagersZone ?? false);
 
   return (
     <div className="space-y-4 max-w-7xl">
@@ -383,6 +450,7 @@ export default function Parametres() {
           { key: 'entrepots' as Tab, label: 'Entrepôts', icon: Warehouse },
           { key: 'catalogue' as Tab, label: 'Catalogue articles', icon: BookOpen },
           ...(canSeeRepertoire ? [{ key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 }] : []),
+          ...(canManageManagersZone ? [{ key: 'managers-zone' as Tab, label: 'Managers de zone', icon: Network }] : []),
           { key: 'workflow' as Tab, label: 'Guide & Workflow', icon: HelpCircle },
           ...(hasRole('ADMIN') ? [{ key: 'remise-a-zero' as Tab, label: 'Remise à zéro', icon: RotateCcw }] : []),
         ].map(({ key, label, icon: Icon }) => (
@@ -1055,6 +1123,86 @@ export default function Parametres() {
         </div>
       )}
 
+      {/* ── TAB MANAGERS DE ZONE ── */}
+      {tab === 'managers-zone' && canManageManagersZone && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold">Managers de zone</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{managersZone.length} manager(s) configuré(s)</p>
+            </div>
+            <button onClick={openCreateManagerZone}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+              <Plus className="w-3.5 h-3.5" /> Nouveau manager
+            </button>
+          </div>
+
+          {managersZone.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-xs">
+              Aucun manager de zone. Créez-en un pour enrichir les liens prestataires.
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    {['Nom', 'Départements + entrepôts', 'Liens actifs', 'Statut', ''].map(h => (
+                      <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {managersZone.map(mz => (
+                    <tr key={mz.id} className={cn('border-b border-border/50 hover:bg-muted/20', !mz.actif && 'opacity-60')}>
+                      <td className="px-3 py-2.5 font-medium">{mz.nom}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {(mz.departements as any[]).map((d: any, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-mono">
+                              {d.code} → {d.entrepotCode || '?'}
+                            </span>
+                          ))}
+                          {(mz.departements as any[]).length === 0 && <span className="text-muted-foreground italic">Aucun département</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {(mz.liens ?? []).length > 0 ? (
+                          <span className="font-medium text-foreground">{(mz.liens ?? []).length} lien(s)</span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', mz.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                          {mz.actif ? 'Actif' : 'Inactif'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEditManagerZone(mz)}
+                            className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted">
+                            Modifier
+                          </button>
+                          <button onClick={() => updateManagerZoneMut.mutate({ id: mz.id, data: { actif: !mz.actif } })}
+                            className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
+                              mz.actif ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
+                            {mz.actif ? 'Désactiver' : 'Activer'}
+                          </button>
+                          {(mz.liens ?? []).length === 0 && (
+                            <button onClick={() => { if (confirm(`Supprimer le manager "${mz.nom}" ?`)) deleteManagerZoneMut.mutate(mz.id); }}
+                              className="px-2.5 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── TAB REMISE À ZÉRO ── */}
       {tab === 'remise-a-zero' && hasRole('ADMIN') && (
         <div className="space-y-4 max-w-2xl">
@@ -1109,6 +1257,71 @@ export default function Parametres() {
               <RotateCcw className="w-3.5 h-3.5" />
               {resetCompletMut.isPending ? 'Remise à zéro en cours…' : 'Tout remettre à zéro'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog Manager de zone */}
+      {managerZoneDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold">{editManagerZone ? `Modifier — ${editManagerZone.nom}` : 'Nouveau manager de zone'}</h2>
+              <button onClick={() => { setManagerZoneDialog(false); setEditManagerZone(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Nom du manager *</label>
+                <input value={managerZoneForm.nom} onChange={e => setManagerZoneForm(p => ({ ...p, nom: e.target.value }))}
+                  placeholder="Ex: Manager Ouest"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted-foreground">Départements et entrepôts associés</label>
+                  <button type="button" onClick={addDeptLine} className="text-xs text-primary hover:underline flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Ajouter
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {managerZoneForm.departements.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic px-1">Aucun département — cliquez sur Ajouter</p>
+                  )}
+                  {managerZoneForm.departements.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        value={d.code}
+                        onChange={e => updateDeptLine(i, 'code', e.target.value)}
+                        placeholder="Code dept (ex: 49)"
+                        className="w-28 px-2 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <select
+                        value={d.entrepotId}
+                        onChange={e => updateDeptLine(i, 'entrepotId', e.target.value)}
+                        className="flex-1 px-2 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card"
+                      >
+                        <option value="">— Entrepôt associé —</option>
+                        {entrepots.filter(e => e.actif).map(e => (
+                          <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => removeDeptLine(i)} className="p-1.5 text-muted-foreground hover:text-red-500 transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { setManagerZoneDialog(false); setEditManagerZone(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={handleSaveManagerZone} disabled={createManagerZoneMut.isPending || updateManagerZoneMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> {editManagerZone ? 'Enregistrer' : 'Créer'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1475,6 +1688,7 @@ export default function Parametres() {
                       { key: 'supprimerRecord' as const, label: 'Supprimer des enregistrements' },
                       { key: 'gererUtilisateurs' as const, label: 'Gérer les utilisateurs' },
                       { key: 'voirCommandesSansEntrepot' as const, label: 'Voir les commandes sans entrepôt assigné' },
+                      { key: 'gererManagersZone' as const, label: 'Gérer les managers de zone' },
                     ] as { key: keyof UserPrivileges['actions']; label: string }[]).map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-2.5 bg-muted/20 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
                         <input

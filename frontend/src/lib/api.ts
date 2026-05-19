@@ -143,6 +143,18 @@ export const commandesApi = {
     api.post('/commandes/liens', { nom, expiresInDays }).then(r => r.data),
   desactiverLien: (id: string) =>
     api.patch(`/commandes/liens/${id}/desactiver`).then(r => r.data),
+  managers: {
+    list: () => api.get('/commandes/managers-zone').then(r => r.data),
+    create: (data: any) => api.post('/commandes/managers-zone', data).then(r => r.data),
+    update: (id: string, data: any) => api.patch(`/commandes/managers-zone/${id}`, data).then(r => r.data),
+    delete: (id: string) => api.delete(`/commandes/managers-zone/${id}`).then(r => r.data),
+  },
+  liens: {
+    list: () => api.get('/commandes/liens').then(r => r.data),
+    create: (data: any) => api.post('/commandes/liens', data).then(r => r.data),
+    update: (id: string, data: any) => api.patch(`/commandes/liens/${id}`, data).then(r => r.data),
+    desactiver: (id: string) => api.patch(`/commandes/liens/${id}/desactiver`).then(r => r.data),
+  },
   // Public (no auth)
   getPublic: (token: string) =>
     api.get(`/commandes/public/${token}`).then(r => r.data),

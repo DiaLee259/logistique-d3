@@ -208,6 +208,10 @@ model Commande {
 
   entrepotSource           String?        // entrepôt choisi par Log1 à la validation
 
+  lienId           String?
+  typePrestataire  String?
+  lien             LienPrestataire? @relation(fields: [lienId], references: [id])
+
   valideur     User?        @relation("ValideurLog1", fields: [valideurId], references: [id])
   expediteur   User?        @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
   intervenant  Intervenant? @relation(fields: [intervenantId], references: [id], onDelete: SetNull)
@@ -239,17 +243,37 @@ model LigneCommande {
   @@map("lignes_commande")
 }
 
+// ─── MANAGER DE ZONE ──────────────────────────────────────────────────────────
+
+model ManagerZone {
+  id           String              @id @default(uuid())
+  nom          String
+  departements Json                @default("[]")
+  actif        Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  liens        LienPrestataire[]
+
+  @@map("managers_zone")
+}
+
 // ─── LIEN PRESTATAIRE ─────────────────────────────────────────────────────────
 
 model LienPrestataire {
-  id          String    @id @default(uuid())
-  token       String    @unique @default(uuid())
-  nom         String    // libellé du lien ex: "Formulaire commande Dept 49"
-  actif       Boolean   @default(true)
-  expiresAt   DateTime?
-  createdBy   String?
-  utilisations Int      @default(0)
-  createdAt   DateTime  @default(now())
+  id                 String       @id @default(uuid())
+  token              String       @unique @default(uuid())
+  nom                String
+  actif              Boolean      @default(true)
+  expiresAt          DateTime?
+  createdBy          String?
+  utilisations       Int          @default(0)
+  createdAt          DateTime     @default(now())
+
+  managerZoneId      String?
+  typePrestataire    String?
+  departementsActifs String[]     @default([])
+
+  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id])
+  commandes          Commande[]
 
   @@map("liens_prestataire")
 }

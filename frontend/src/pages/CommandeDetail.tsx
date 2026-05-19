@@ -349,6 +349,7 @@ export default function CommandeDetail() {
           { label: 'Type grille', value: commande.typeGrille ?? '—' },
           { label: 'Validé par', value: commande.valideur ? `${commande.valideur.prenom} ${commande.valideur.nom}` : '—' },
           { label: 'Entrepôt expéd.', value: commande.entrepotSource ? (entrepots.find(e => e.id === commande.entrepotSource)?.code ?? commande.entrepotSource) : '—' },
+          { label: 'Type prestataire', value: (commande as any).typePrestataire === 'SOCIETE' ? 'Société' : (commande as any).typePrestataire === 'AUTO' ? 'Auto-entrepreneur' : '—' },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card rounded-lg border border-border p-2.5">
             <p className="text-xs text-muted-foreground">{label}</p>
@@ -366,6 +367,22 @@ export default function CommandeDetail() {
           <div className="flex items-center gap-1.5 text-xs text-blue-700">
             <span className="font-semibold">📞 Téléphone :</span>
             <span>{commande.telephoneDestinataire ?? '—'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Lien prestataire */}
+      {(commande as any).lienId && (commande as any).lien && (
+        <div className="bg-muted/20 border border-border rounded-xl p-3 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Lien prestataire :</span>
+            <span>{(commande as any).lien?.nom ?? '—'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground font-semibold">URL :</span>
+            <span className="font-mono text-xs text-primary break-all">
+              {window.location.origin}/commande-publique/{(commande as any).lien?.token}
+            </span>
           </div>
         </div>
       )}

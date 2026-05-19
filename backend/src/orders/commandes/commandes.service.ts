@@ -86,6 +86,7 @@ export class CommandesService {
         expediteur: { select: { id: true, nom: true, prenom: true } },
         intervenant: { select: { id: true, nom: true, prenom: true } },
         livraisons: true,
+        lien: { select: { id: true, nom: true, token: true } },
       },
     });
     if (!c || c.deletedAt) throw new NotFoundException('Commande introuvable');
@@ -193,9 +194,20 @@ export class CommandesService {
 
   // Créer depuis formulaire public prestataire
   async createPublique(token: string, dto: any) {
-    const lien = await this.prisma.lienPrestataire.findUnique({ where: { token } });
+    const lien = await this.prisma.lienPrestataire.findUnique({
+      where: { token },
+      include: { managerZone: true },
+    });
     if (!lien || !lien.actif) throw new BadRequestException('Lien invalide ou expiré');
     if (lien.expiresAt && lien.expiresAt < new Date()) throw new BadRequestException('Lien expiré');
+
+    // Détecter l'entrepôt depuis le département sélectionné
+    let entrepotSource: string | undefined;
+    if (lien.managerZone && dto.departement) {
+      const depts = lien.managerZone.departements as { code: string; entrepotId: string; entrepotCode: string }[];
+      const dept = depts.find(d => d.code === dto.departement);
+      if (dept) entrepotSource = dept.entrepotId;
+    }
 
     const numero = await this.genNumeroCommande();
 
@@ -207,13 +219,16 @@ export class CommandesService {
         emailDemandeur: dto.emailDemandeur,
         societe: dto.societe,
         interlocuteur: dto.interlocuteur,
-        manager: dto.manager,
+        manager: lien.managerZone?.nom ?? dto.manager,
         nombreGrilles: dto.nombreGrilles ? parseInt(dto.nombreGrilles) : undefined,
         typeGrille: dto.typeGrille,
         telephoneDestinataire: dto.telephoneDestinataire,
         adresseLivraison: dto.adresseLivraison,
         commentaire: dto.commentaire,
         statut: StatutCommande.EN_ATTENTE,
+        entrepotSource: entrepotSource ?? null,
+        lienId: lien.id,
+        typePrestataire: lien.typePrestataire ?? null,
         lignes: {
           create: (dto.lignes || []).map((l: any) => ({
             articleId: l.articleId,
@@ -225,13 +240,11 @@ export class CommandesService {
       include: { lignes: { include: { article: true } } },
     });
 
-    // Incrémenter le compteur d'utilisations
     await this.prisma.lienPrestataire.update({
       where: { token },
       data: { utilisations: { increment: 1 } },
     });
 
-    // Notification broadcast
     await this.prisma.notification.create({
       data: {
         type: 'NOUVELLE_COMMANDE',
@@ -453,19 +466,72 @@ export class CommandesService {
 
   // ─── Liens prestataire ──────────────────────────────────────────────────────
 
-  async genererLienPrestataire(nom: string, userId: string, expiresInDays?: number) {
+  async genererLienPrestataire(data: {
+    nom: string;
+    expiresInDays?: number;
+    managerZoneId?: string;
+    typePrestataire?: string;
+    departementsActifs?: string[];
+  }, userId: string) {
     const token = uuidv4();
-    const expiresAt = expiresInDays
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    const expiresAt = data.expiresInDays
+      ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
       : null;
 
     return this.prisma.lienPrestataire.create({
-      data: { token, nom, createdBy: userId, expiresAt },
+      data: {
+        token,
+        nom: data.nom,
+        createdBy: userId,
+        expiresAt,
+        managerZoneId: data.managerZoneId ?? null,
+        typePrestataire: data.typePrestataire ?? null,
+        departementsActifs: data.departementsActifs ?? [],
+      },
+      include: { managerZone: true },
+    });
+  }
+
+  async updateLienPrestataire(id: string, data: {
+    nom?: string;
+    managerZoneId?: string | null;
+    typePrestataire?: string | null;
+    departementsActifs?: string[];
+    actif?: boolean;
+  }) {
+    return this.prisma.lienPrestataire.update({
+      where: { id },
+      data,
+      include: { managerZone: true },
     });
   }
 
   async listLiensPrestataire() {
-    return this.prisma.lienPrestataire.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.lienPrestataire.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { managerZone: { select: { id: true, nom: true, departements: true } } },
+    });
+  }
+
+  // ─── Managers de zone ───────────────────────────────────────────────────────
+
+  async listManagersZone() {
+    return this.prisma.managerZone.findMany({
+      orderBy: { nom: 'asc' },
+      include: { liens: { where: { actif: true }, select: { id: true, nom: true } } },
+    });
+  }
+
+  async createManagerZone(data: { nom: string; departements: any[] }) {
+    return this.prisma.managerZone.create({ data });
+  }
+
+  async updateManagerZone(id: string, data: { nom?: string; departements?: any[]; actif?: boolean }) {
+    return this.prisma.managerZone.update({ where: { id }, data });
+  }
+
+  async deleteManagerZone(id: string) {
+    return this.prisma.managerZone.delete({ where: { id } });
   }
 
   async desactiverLien(id: string) {
@@ -553,17 +619,28 @@ export class CommandesService {
   }
 
   async getLienPublic(token: string) {
-    const lien = await this.prisma.lienPrestataire.findUnique({ where: { token } });
+    const lien = await this.prisma.lienPrestataire.findUnique({
+      where: { token },
+      include: { managerZone: true },
+    });
     if (!lien || !lien.actif) throw new NotFoundException('Lien invalide ou expiré');
 
-    // Retourner la liste des articles pour le formulaire
     const articles = await this.prisma.article.findMany({
       where: { actif: true },
       select: { id: true, nom: true, reference: true, unite: true, description: true },
       orderBy: { createdAt: 'asc' },
     });
 
-    return { lien: { nom: lien.nom, expiresAt: lien.expiresAt }, articles };
+    return {
+      lien: {
+        nom: lien.nom,
+        expiresAt: lien.expiresAt,
+        typePrestataire: lien.typePrestataire,
+        managerNom: lien.managerZone?.nom ?? null,
+        departementsActifs: lien.departementsActifs,
+      },
+      articles,
+    };
   }
 
   async importCommandes(buffer: Buffer, userId?: string) {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards, UseInterceptors, UploadedFile, HttpCode, HttpStatus } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -100,14 +100,44 @@ export class CommandesController {
 
   @UseGuards(JwtAuthGuard)
   @Post('liens')
-  genererLien(@Body() body: { nom: string; expiresInDays?: number }, @Request() req: any) {
-    return this.service.genererLienPrestataire(body.nom, req.user.id, body.expiresInDays);
+  genererLien(@Body() body: any, @Request() req: any) {
+    return this.service.genererLienPrestataire(body, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('liens/:id')
+  updateLien(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateLienPrestataire(id, body);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('liens/:id/desactiver')
   desactiverLien(@Param('id') id: string) {
     return this.service.desactiverLien(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('managers-zone')
+  listManagersZone() {
+    return this.service.listManagersZone();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('managers-zone')
+  createManagerZone(@Body() body: any) {
+    return this.service.createManagerZone(body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('managers-zone/:id')
+  updateManagerZone(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateManagerZone(id, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('managers-zone/:id')
+  deleteManagerZone(@Param('id') id: string) {
+    return this.service.deleteManagerZone(id);
   }
 
   @UseGuards(JwtAuthGuard)

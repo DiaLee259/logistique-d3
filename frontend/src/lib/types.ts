@@ -25,6 +25,7 @@ export interface UserPrivileges {
     supprimerRecord:            boolean;
     gererUtilisateurs:          boolean;
     voirCommandesSansEntrepot:  boolean;  // voir les commandes sans entrepôt assigné
+    gererManagersZone:          boolean;
   };
 }
 
@@ -47,6 +48,7 @@ export const DEFAULT_PRIVILEGES: UserPrivileges = {
     supprimerRecord:            false,
     gererUtilisateurs:          false,
     voirCommandesSansEntrepot:  false,
+    gererManagersZone:          false,
   },
 };
 
@@ -137,6 +139,36 @@ export interface LigneCommande {
   article?: Article;
 }
 
+export interface ManagerZoneDept {
+  code: string;
+  entrepotId: string;
+  entrepotCode: string;
+}
+
+export interface ManagerZone {
+  id: string;
+  nom: string;
+  departements: ManagerZoneDept[];
+  actif: boolean;
+  createdAt: string;
+  liens?: { id: string; nom: string }[];
+}
+
+export interface LienPrestataire {
+  id: string;
+  token: string;
+  nom: string;
+  actif: boolean;
+  expiresAt?: string | null;
+  createdBy?: string | null;
+  utilisations: number;
+  createdAt: string;
+  managerZoneId?: string | null;
+  typePrestataire?: string | null;
+  departementsActifs: string[];
+  managerZone?: { id: string; nom: string; departements: ManagerZoneDept[] } | null;
+}
+
 export interface Commande {
   id: string;
   numero: string;
@@ -168,6 +200,8 @@ export interface Commande {
   expediteurId?: string;
   intervenantId?: string;
   entrepotSource?: string;    // entrepôt choisi par Log1 pour l'expédition
+  lienId?: string | null;
+  typePrestataire?: string | null;
   dateValidation?: string;
   telephoneDestinataire?: string;
   adresseLivraison?: string;

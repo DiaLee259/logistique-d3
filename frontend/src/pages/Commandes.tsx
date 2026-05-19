@@ -109,6 +109,7 @@ export default function Commandes() {
   const [filterDateFin, setFilterDateFin] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterManager, setFilterManager] = useState('');
+  const [filterTypePrestataire, setFilterTypePrestataire] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -157,6 +158,7 @@ export default function Commandes() {
     if (filterDateFin) p.dateFin = filterDateFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
     if (filterManager) p.manager = filterManager;
+    if (filterTypePrestataire) p.typePrestataire = filterTypePrestataire;
     p.page = String(page);
     return p;
   };
@@ -165,7 +167,7 @@ export default function Commandes() {
   const resetPage = () => setPage(1);
 
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager, page],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager, filterTypePrestataire, page],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
@@ -312,6 +314,13 @@ export default function Commandes() {
           )}
         </div>
 
+        <select value={filterTypePrestataire} onChange={e => { setFilterTypePrestataire(e.target.value); resetPage(); }}
+          className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">Tous types</option>
+          <option value="SOCIETE">Société</option>
+          <option value="AUTO">Auto-entrepreneur</option>
+        </select>
+
         <button onClick={() => setShowFilters(v => !v)}
           className={cn('flex items-center gap-1.5 px-3 py-2 text-xs border rounded-lg transition-colors',
             hasActiveFilters ? 'bg-primary text-white border-primary' : 'bg-card border-border hover:border-primary')}>
@@ -412,16 +421,16 @@ export default function Commandes() {
                   </th>
                 )}
                 <th className="w-6 px-1 py-2.5" />
-                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Manager', 'Entrepôt', 'Statut', ''].map(h => (
+                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Manager', 'Type', 'Entrepôt', 'Statut', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
               ) : commandes.length === 0 ? (
-                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
               ) : commandes.map(c => {
                 const isExpanded = expandedIds.has(c.id);
                 const isSelected = selectedIds.has(c.id);
@@ -457,6 +466,15 @@ export default function Commandes() {
                       <td className="px-3 py-2.5 text-muted-foreground">{c.societe ?? '—'}</td>
                       <td className="px-3 py-2.5 text-muted-foreground">{c.manager ?? '—'}</td>
                       <td className="px-3 py-2.5">
+                        {(c as any).typePrestataire === 'SOCIETE' ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">Société</span>
+                        ) : (c as any).typePrestataire === 'AUTO' ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Auto</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
                         {entrepotCode
                           ? <span className="font-mono text-xs font-semibold text-primary">{entrepotCode}</span>
                           : <span className="text-muted-foreground text-xs">—</span>}
@@ -477,7 +495,7 @@ export default function Commandes() {
                     </tr>
                     {isExpanded && c.lignes && c.lignes.length > 0 && (
                       <tr className="bg-muted/10 border-b border-border/50">
-                        <td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="px-6 py-2">
+                        <td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="px-6 py-2">
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-muted-foreground">
