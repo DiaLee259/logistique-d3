@@ -105,7 +105,7 @@ export const mouvementsApi = {
     api.patch(`/mouvements/${id}/toggle/${field}`).then(r => r.data),
   template: () => api.get('/mouvements/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/mouvements/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
-  transfert: (data: { articleId: string; entrepotSourceId: string; entrepotDestinationId: string; quantite: number; commentaire?: string }) =>
+  transfert: (data: { entrepotSourceId: string; entrepotDestinationId: string; lignes: { articleId: string; quantite: number }[]; commentaire?: string }) =>
     api.post('/mouvements/transfert', data).then(r => r.data),
 };
 

@@ -1,12 +1,62 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, X, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Plus, Search, Download, X, Trash2, ArrowLeftRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { mouvementsApi, articlesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import type { Mouvement, Article, Entrepot } from '@/lib/types';
 
 const PROD_SAV = ['PROD', 'SAV', 'MALFACON', 'AUTRE'];
+
+// Combobox article avec saisie texte
+function ArticleCombobox({ articles, value, onChange }: { articles: any[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = articles.find(a => a.id === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filtered = articles.filter(a => {
+    const q = search.toLowerCase();
+    return a.nom.toLowerCase().includes(q) || a.reference.toLowerCase().includes(q);
+  });
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div onClick={() => { setOpen(v => !v); setSearch(''); }}
+        className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg cursor-pointer hover:border-primary/50 bg-card">
+        {open ? (
+          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom ou référence…"
+            className="flex-1 bg-transparent outline-none text-sm"
+            onClick={e => e.stopPropagation()} />
+        ) : (
+          <span className={cn('flex-1 truncate text-sm', !selected && 'text-muted-foreground')}>
+            {selected ? `${selected.nom} (${selected.reference})` : '— Choisir un article —'}
+          </span>
+        )}
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">Aucun article trouvé</p>
+          ) : filtered.map(a => (
+            <div key={a.id} onMouseDown={() => { onChange(a.id); setOpen(false); setSearch(''); }}
+              className={cn('px-3 py-2 text-sm cursor-pointer hover:bg-muted/50', a.id === value && 'bg-primary/10 text-primary font-medium')}>
+              <span className="font-mono text-xs text-muted-foreground mr-2">{a.reference}</span>{a.nom}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
@@ -24,7 +74,8 @@ export default function Mouvements() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [transfertDialogOpen, setTransfertDialogOpen] = useState(false);
-  const [transfertForm, setTransfertForm] = useState({ articleId: '', entrepotSourceId: '', entrepotDestinationId: '', quantite: 1, commentaire: '' });
+  const [transfertEntrepots, setTransfertEntrepots] = useState({ sourceId: '', destinationId: '', commentaire: '' });
+  const [transfertLignes, setTransfertLignes] = useState([{ articleId: '', quantite: 1 }]);
   // Multi-lignes pour création batch
   const [lignes, setLignes] = useState([{ articleId: '', entrepotId: '', type: 'SORTIE', quantiteDemandee: 1, quantiteFournie: 1, departement: '', manager: '', numeroOperation: '', commentaire: '', prodSav: 'PROD' }]);
 
@@ -45,13 +96,19 @@ export default function Mouvements() {
   });
 
   const transfertMut = useMutation({
-    mutationFn: (data: typeof transfertForm) => mouvementsApi.transfert(data),
+    mutationFn: () => mouvementsApi.transfert({
+      entrepotSourceId: transfertEntrepots.sourceId,
+      entrepotDestinationId: transfertEntrepots.destinationId,
+      lignes: transfertLignes.filter(l => l.articleId && l.quantite > 0),
+      commentaire: transfertEntrepots.commentaire || undefined,
+    }),
     onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ['mouvements'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
-      toast.success(`Transfert effectué : ${res.quantite} unité(s) de ${res.from} → ${res.to}`);
+      toast.success(`Transfert ${res.numeroOperation} : ${res.from} → ${res.to} (${res.lignes?.length} article(s))`);
       setTransfertDialogOpen(false);
-      setTransfertForm({ articleId: '', entrepotSourceId: '', entrepotDestinationId: '', quantite: 1, commentaire: '' });
+      setTransfertEntrepots({ sourceId: '', destinationId: '', commentaire: '' });
+      setTransfertLignes([{ articleId: '', quantite: 1 }]);
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Erreur lors du transfert'),
   });
@@ -228,77 +285,105 @@ export default function Mouvements() {
       {/* ── Dialog TRANSFERT ────────────────────────────────────────────────── */}
       {transfertDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <div>
                 <h2 className="font-semibold flex items-center gap-2"><ArrowLeftRight className="w-4 h-4 text-violet-600" /> Transfert inter-entrepôt</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Crée une sortie sur la source et une entrée sur la destination</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Un numéro TRF-YYYY-XXXX est généré automatiquement</p>
               </div>
-              <button onClick={() => setTransfertDialogOpen(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+              <button onClick={() => { setTransfertDialogOpen(false); setTransfertEntrepots({ sourceId: '', destinationId: '', commentaire: '' }); setTransfertLignes([{ articleId: '', quantite: 1 }]); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Article *</label>
-                <select value={transfertForm.articleId} onChange={e => setTransfertForm(p => ({ ...p, articleId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
-                  <option value="">— Choisir un article —</option>
-                  {articles.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
-                </select>
-              </div>
+            <div className="p-6 space-y-5">
+              {/* Entrepôts */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Entrepôt source *</label>
-                  <select value={transfertForm.entrepotSourceId} onChange={e => setTransfertForm(p => ({ ...p, entrepotSourceId: e.target.value }))}
+                  <select value={transfertEntrepots.sourceId} onChange={e => setTransfertEntrepots(p => ({ ...p, sourceId: e.target.value }))}
                     className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
                     <option value="">— Source —</option>
-                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertForm.entrepotDestinationId}>{e.code}</option>)}
+                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertEntrepots.destinationId}>{e.code} — {e.nom}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Entrepôt destination *</label>
-                  <select value={transfertForm.entrepotDestinationId} onChange={e => setTransfertForm(p => ({ ...p, entrepotDestinationId: e.target.value }))}
+                  <select value={transfertEntrepots.destinationId} onChange={e => setTransfertEntrepots(p => ({ ...p, destinationId: e.target.value }))}
                     className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300 bg-card">
                     <option value="">— Destination —</option>
-                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertForm.entrepotSourceId}>{e.code}</option>)}
+                    {entrepots.map(e => <option key={e.id} value={e.id} disabled={e.id === transfertEntrepots.sourceId}>{e.code} — {e.nom}</option>)}
                   </select>
                 </div>
               </div>
+
               {/* Flèche visuelle */}
-              {transfertForm.entrepotSourceId && transfertForm.entrepotDestinationId && (
-                <div className="flex items-center justify-center gap-3 py-2">
-                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold">
-                    {entrepots.find(e => e.id === transfertForm.entrepotSourceId)?.code}
+              {transfertEntrepots.sourceId && transfertEntrepots.destinationId && (
+                <div className="flex items-center justify-center gap-3">
+                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold border border-violet-200">
+                    {entrepots.find(e => e.id === transfertEntrepots.sourceId)?.code}
                   </span>
                   <ArrowLeftRight className="w-5 h-5 text-violet-500" />
-                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold">
-                    {entrepots.find(e => e.id === transfertForm.entrepotDestinationId)?.code}
+                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-sm font-bold border border-violet-200">
+                    {entrepots.find(e => e.id === transfertEntrepots.destinationId)?.code}
                   </span>
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Quantité *</label>
-                <input type="number" min={1} value={transfertForm.quantite}
-                  onChange={e => setTransfertForm(p => ({ ...p, quantite: parseInt(e.target.value) || 1 }))}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300" />
+
+              {/* Lignes articles */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Articles à transférer *</label>
+                  <button type="button"
+                    onClick={() => setTransfertLignes(p => [...p, { articleId: '', quantite: 1 }])}
+                    className="text-xs text-violet-600 hover:underline font-medium">+ Ajouter un article</button>
+                </div>
+                {transfertLignes.map((ligne, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2.5 bg-muted/30 rounded-lg border border-border">
+                    <div className="flex-1 min-w-0">
+                      <ArticleCombobox
+                        articles={articles}
+                        value={ligne.articleId}
+                        onChange={id => setTransfertLignes(p => p.map((l, j) => j === i ? { ...l, articleId: id } : l))}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <input type="number" min={1} value={ligne.quantite}
+                        onChange={e => setTransfertLignes(p => p.map((l, j) => j === i ? { ...l, quantite: parseInt(e.target.value) || 1 } : l))}
+                        className="w-20 px-2 py-2 text-sm border border-border rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-violet-300" />
+                      {transfertLignes.length > 1 && (
+                        <button onClick={() => setTransfertLignes(p => p.filter((_, j) => j !== i))}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              {/* Commentaire */}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Commentaire (optionnel)</label>
-                <input value={transfertForm.commentaire}
-                  onChange={e => setTransfertForm(p => ({ ...p, commentaire: e.target.value }))}
-                  placeholder="Raison du transfert…"
+                <input value={transfertEntrepots.commentaire}
+                  onChange={e => setTransfertEntrepots(p => ({ ...p, commentaire: e.target.value }))}
+                  placeholder="Raison du transfert, dépannage…"
                   className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300" />
               </div>
+
               <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
-                <p className="text-xs text-violet-700">ℹ️ Le stock global reste identique. Seule la répartition entre entrepôts change.</p>
+                <p className="text-xs text-violet-700">ℹ️ Le stock global reste identique. Un numéro <strong>TRF-YYYY-XXXX</strong> est attribué à l'opération.</p>
               </div>
               <div className="flex justify-end gap-3">
-                <button onClick={() => setTransfertDialogOpen(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={() => { setTransfertDialogOpen(false); setTransfertEntrepots({ sourceId: '', destinationId: '', commentaire: '' }); setTransfertLignes([{ articleId: '', quantite: 1 }]); }}
+                  className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Annuler</button>
                 <button
-                  onClick={() => transfertMut.mutate(transfertForm)}
-                  disabled={!transfertForm.articleId || !transfertForm.entrepotSourceId || !transfertForm.entrepotDestinationId || transfertForm.quantite <= 0 || transfertMut.isPending}
+                  onClick={() => transfertMut.mutate()}
+                  disabled={
+                    !transfertEntrepots.sourceId || !transfertEntrepots.destinationId ||
+                    transfertLignes.filter(l => l.articleId && l.quantite > 0).length === 0 ||
+                    transfertMut.isPending
+                  }
                   className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-60"
                 >
-                  {transfertMut.isPending ? 'Transfert…' : 'Valider le transfert'}
+                  {transfertMut.isPending ? 'Transfert…' : `Valider (${transfertLignes.filter(l => l.articleId).length} article(s))`}
                 </button>
               </div>
             </div>

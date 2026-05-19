@@ -146,20 +146,28 @@ export class MouvementsService {
     return m;
   }
 
-  /** Transfert inter-entrepôt : crée une SORTIE sur la source et une ENTREE sur la destination */
+  /** Génère un numéro de transfert unique : TRF-YYYY-XXXX */
+  private async genNumeroTransfert(): Promise<string> {
+    const count = await this.prisma.mouvement.count({
+      where: { transfertId: { not: null }, type: TypeMouvement.SORTIE },
+    });
+    return `TRF-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+  }
+
+  /** Transfert inter-entrepôt : accepte plusieurs articles en une seule opération */
   async transferer(dto: {
-    articleId: string;
     entrepotSourceId: string;
     entrepotDestinationId: string;
-    quantite: number;
+    lignes: { articleId: string; quantite: number }[];
     commentaire?: string;
     userId?: string;
   }) {
     if (dto.entrepotSourceId === dto.entrepotDestinationId) {
       throw new BadRequestException('Source et destination doivent être différentes');
     }
-
-    await this.validateStockSuffisant(dto.articleId, dto.entrepotSourceId, dto.quantite);
+    if (!dto.lignes?.length) {
+      throw new BadRequestException('Au moins un article requis');
+    }
 
     const [entrepotSrc, entrepotDst] = await Promise.all([
       this.prisma.entrepot.findUnique({ where: { id: dto.entrepotSourceId } }),
@@ -167,54 +175,63 @@ export class MouvementsService {
     ]);
     if (!entrepotSrc || !entrepotDst) throw new BadRequestException('Entrepôt introuvable');
 
+    // Valider le stock pour chaque article
+    for (const ligne of dto.lignes) {
+      await this.validateStockSuffisant(ligne.articleId, dto.entrepotSourceId, ligne.quantite);
+    }
+
     const transfertId = uuidv4();
+    const numeroOperation = await this.genNumeroTransfert();
     const now = new Date();
+    const results: any[] = [];
 
-    // SORTIE sur l'entrepôt source
-    const sortie = await this.prisma.mouvement.create({
-      data: {
-        articleId: dto.articleId,
-        entrepotId: dto.entrepotSourceId,
-        type: TypeMouvement.SORTIE,
-        quantiteDemandee: dto.quantite,
-        quantiteFournie: dto.quantite,
-        sourceDestination: `→ ${entrepotDst.code}`,
-        commentaire: dto.commentaire ?? null,
-        userId: dto.userId ?? null,
-        transfertId,
-        date: now,
-      },
-      include: { article: true, entrepot: true },
-    });
+    for (const ligne of dto.lignes) {
+      // SORTIE sur l'entrepôt source
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: ligne.articleId,
+          entrepotId: dto.entrepotSourceId,
+          type: TypeMouvement.SORTIE,
+          quantiteDemandee: ligne.quantite,
+          quantiteFournie: ligne.quantite,
+          sourceDestination: `→ ${entrepotDst.code}`,
+          numeroOperation,
+          commentaire: dto.commentaire ?? null,
+          userId: dto.userId ?? null,
+          transfertId,
+          date: now,
+        },
+      });
 
-    // ENTREE sur l'entrepôt destination
-    const entree = await this.prisma.mouvement.create({
-      data: {
-        articleId: dto.articleId,
-        entrepotId: dto.entrepotDestinationId,
-        type: TypeMouvement.ENTREE,
-        quantiteDemandee: dto.quantite,
-        quantiteFournie: dto.quantite,
-        sourceDestination: `← ${entrepotSrc.code}`,
-        commentaire: dto.commentaire ?? null,
-        userId: dto.userId ?? null,
-        transfertId,
-        date: now,
-      },
-      include: { article: true, entrepot: true },
-    });
+      // ENTREE sur l'entrepôt destination
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: ligne.articleId,
+          entrepotId: dto.entrepotDestinationId,
+          type: TypeMouvement.ENTREE,
+          quantiteDemandee: ligne.quantite,
+          quantiteFournie: ligne.quantite,
+          sourceDestination: `← ${entrepotSrc.code}`,
+          numeroOperation,
+          commentaire: dto.commentaire ?? null,
+          userId: dto.userId ?? null,
+          transfertId,
+          date: now,
+        },
+      });
 
-    // Recalcul des deux entrepôts
-    await this.calculator.sync(dto.articleId, dto.entrepotSourceId);
-    await this.calculator.sync(dto.articleId, dto.entrepotDestinationId);
+      // Recalcul des deux entrepôts
+      await this.calculator.sync(ligne.articleId, dto.entrepotSourceId);
+      await this.calculator.sync(ligne.articleId, dto.entrepotDestinationId);
+      results.push(ligne);
+    }
 
     return {
       transfertId,
+      numeroOperation,
       from: entrepotSrc.code,
       to: entrepotDst.code,
-      quantite: dto.quantite,
-      sortie,
-      entree,
+      lignes: results,
     };
   }
 
