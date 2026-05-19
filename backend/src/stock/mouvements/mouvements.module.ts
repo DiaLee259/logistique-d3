@@ -8,6 +8,6 @@ import { StockCalculatorService } from '../stock-calculator.service';
   imports: [MulterModule.register({ limits: { fileSize: 5 * 1024 * 1024 } })],
   controllers: [MouvementsController],
   providers: [MouvementsService, StockCalculatorService],
-  exports: [MouvementsService],
+  exports: [MouvementsService, StockCalculatorService],
 })
 export class MouvementsModule {}

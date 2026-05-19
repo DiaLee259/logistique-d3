@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { StatutLivraison, TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MouvementsService } from '../../stock/mouvements/mouvements.service';
+import { StockCalculatorService } from '../../stock/stock-calculator.service';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class LivraisonsService {
   constructor(
     private prisma: PrismaService,
     private mouvementsService: MouvementsService,
+    private calculator: StockCalculatorService,
   ) {}
 
   async findAll(filters: any) {
@@ -77,7 +79,7 @@ export class LivraisonsService {
       include: { lignes: { include: { article: true } }, entrepot: true },
     });
 
-    // Créer les mouvements d'entrée en stock
+    // Créer les mouvements d'entrée en stock, liés à cette livraison
     for (const ligne of data.lignes) {
       if (ligne.quantiteRecue > 0) {
         await this.mouvementsService.create({
@@ -88,7 +90,8 @@ export class LivraisonsService {
           quantiteFournie: ligne.quantiteRecue,
           sourceDestination: data.fournisseur,
           commentaire: `Livraison ${numero}`,
-        }, userId);
+          livraisonId: livraison.id,
+        } as any, userId);
       }
     }
 
@@ -124,12 +127,48 @@ export class LivraisonsService {
   }
 
   async supprimerDefinitivement(id: string) {
+    // Récupérer les mouvements liés avant suppression pour recalculer le stock
+    const mouvements = await this.prisma.mouvement.findMany({
+      where: { livraisonId: id },
+      select: { articleId: true, entrepotId: true },
+    });
+
+    // Supprimer les mouvements liés (le ON DELETE SET NULL est ignoré ici, on les supprime vraiment)
+    await this.prisma.mouvement.deleteMany({ where: { livraisonId: id } });
+
     // LigneLivraison a onDelete: Cascade → supprimées automatiquement
-    return this.prisma.livraison.delete({ where: { id } });
+    const result = await this.prisma.livraison.delete({ where: { id } });
+
+    // Recalculer le stock pour chaque article/entrepôt impacté
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+
+    return result;
   }
 
   async viderCorbeille() {
-    return this.prisma.livraison.deleteMany({ where: { NOT: { deletedAt: null } } });
+    const livraisons = await this.prisma.livraison.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: { id: true },
+    });
+    if (!livraisons.length) return { count: 0 };
+    const ids = livraisons.map(l => l.id);
+
+    // Récupérer les mouvements liés pour recalcul
+    const mouvements = await this.prisma.mouvement.findMany({
+      where: { livraisonId: { in: ids } },
+      select: { articleId: true, entrepotId: true },
+    });
+
+    await this.prisma.mouvement.deleteMany({ where: { livraisonId: { in: ids } } });
+    const result = await this.prisma.livraison.deleteMany({ where: { id: { in: ids } } });
+
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+
+    return result;
   }
 
   async findCorbeille() {

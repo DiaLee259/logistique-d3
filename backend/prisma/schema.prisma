@@ -156,14 +156,16 @@ model Mouvement {
   recu               Boolean       @default(false)
   userId             String?
   commandeId         String?
+  livraisonId        String?       // livraison fournisseur qui a généré ce mouvement
   transfertId        String?       // UUID liant les 2 mouvements d'un transfert inter-entrepôt
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  article  Article   @relation(fields: [articleId], references: [id])
-  entrepot Entrepot  @relation(fields: [entrepotId], references: [id])
-  user     User?     @relation(fields: [userId], references: [id])
-  commande Commande? @relation(fields: [commandeId], references: [id])
+  article   Article    @relation(fields: [articleId], references: [id])
+  entrepot  Entrepot   @relation(fields: [entrepotId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
+  commande  Commande?  @relation(fields: [commandeId], references: [id])
+  livraison Livraison? @relation(fields: [livraisonId], references: [id], onDelete: SetNull)
 
   @@map("mouvements")
 }
@@ -300,9 +302,10 @@ model Livraison {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  entrepot Entrepot         @relation(fields: [entrepotId], references: [id])
-  commande Commande?        @relation(fields: [commandeId], references: [id])
-  lignes   LigneLivraison[]
+  entrepot   Entrepot         @relation(fields: [entrepotId], references: [id])
+  commande   Commande?        @relation(fields: [commandeId], references: [id])
+  lignes     LigneLivraison[]
+  mouvements Mouvement[]
 
   @@map("livraisons")
 }
