@@ -48,7 +48,8 @@ export class MouvementsController {
   @Get()
   findAll(@Query() filters: FilterMouvementsDto, @Request() req: any) {
     const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
-    return this.service.findAll({ ...filters, userEntrepots } as any);
+    const managerZone = req.user?.managerZone ?? null;
+    return this.service.findAll({ ...filters, userEntrepots, managerZone } as any);
   }
 
   @Get(':id')

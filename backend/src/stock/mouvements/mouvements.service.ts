@@ -35,7 +35,16 @@ export class MouvementsService {
     if (filters.type) where.type = filters.type;
     if (filters.envoye !== undefined) where.envoye = filters.envoye === 'true';
     if (filters.recu !== undefined) where.recu = filters.recu === 'true';
-    if ((filters as any).userEntrepots?.length) {
+    // Filtrage selon le rôle : manager de zone ou privilèges entrepôt
+    if ((filters as any).managerZone) {
+      const mz = (filters as any).managerZone as { id: string; nom: string; departements: any[] };
+      const entrepotIds = [...new Set(
+        (mz.departements as any[]).map((d: any) => d.entrepotId).filter(Boolean)
+      )] as string[];
+      if (entrepotIds.length) {
+        where.entrepotId = { in: entrepotIds };
+      }
+    } else if ((filters as any).userEntrepots?.length) {
       where.entrepotId = { in: (filters as any).userEntrepots };
     }
     // Filtre transferts uniquement

@@ -17,7 +17,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { role: true, privileges: true, actif: true },
+      select: {
+        role: true,
+        privileges: true,
+        actif: true,
+        managerZoneId: true,
+        managerZone: {
+          select: { id: true, nom: true, departements: true },
+        },
+      },
     });
 
     // Déconnexion immédiate si le compte a été désactivé
@@ -30,6 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       role: user.role,
       privileges: (user.privileges ?? null) as any,
+      managerZone: user.managerZone ?? null,
     };
   }
 }

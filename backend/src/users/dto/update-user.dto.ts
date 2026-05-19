@@ -26,4 +26,8 @@ export class UpdateUserDto {
   @IsBoolean()
   @IsOptional()
   actif?: boolean;
+
+  @IsString()
+  @IsOptional()
+  managerZoneId?: string | null;
 }

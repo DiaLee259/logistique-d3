@@ -44,21 +44,23 @@ enum ProdSav {
 // ─── UTILISATEURS ─────────────────────────────────────────────────────────────
 
 model User {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  password   String
-  nom        String
-  prenom     String
-  role       String   @default("LOGISTICIEN_2")
-  actif      Boolean  @default(true)
-  privileges Json?    // UserPrivileges JSON object
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  nom            String
+  prenom         String
+  role           String   @default("LOGISTICIEN_2")
+  actif          Boolean  @default(true)
+  privileges     Json?    // UserPrivileges JSON object
+  managerZoneId  String?  // liaison optionnelle à un ManagerZone
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   commandesValidees  Commande[] @relation("ValideurLog1")
   commandesExpediees Commande[] @relation("ExpediteurLog2")
   mouvements         Mouvement[]
   commandesTS        CommandeTS[]
+  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -252,6 +254,7 @@ model ManagerZone {
   actif        Boolean             @default(true)
   createdAt    DateTime            @default(now())
   liens        LienPrestataire[]
+  users        User[]
 
   @@map("managers_zone")
 }

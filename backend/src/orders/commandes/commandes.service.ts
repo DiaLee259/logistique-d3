@@ -24,8 +24,17 @@ export class CommandesService {
 
     const andClauses: any[] = [];
 
-    // Filtrage par entrepôt selon les privilèges du user
-    if (filters.userEntrepots?.length) {
+    // Filtrage selon le rôle : manager de zone ou privilèges entrepôt
+    if (filters.managerZone) {
+      const mz = filters.managerZone as { id: string; nom: string; departements: any[] };
+      const entrepotIds = [...new Set(
+        (mz.departements as any[]).map((d: any) => d.entrepotId).filter(Boolean)
+      )] as string[];
+      andClauses.push({ OR: [
+        { manager: { equals: mz.nom, mode: 'insensitive' } },
+        ...(entrepotIds.length ? [{ entrepotSource: { in: entrepotIds } }] : []),
+      ]});
+    } else if (filters.userEntrepots?.length) {
       andClauses.push({ OR: [
         { entrepotSource: { in: filters.userEntrepots } },
         ...(filters.voirSansEntrepot !== false ? [{ entrepotSource: null }] : []),
@@ -201,12 +210,17 @@ export class CommandesService {
     if (!lien || !lien.actif) throw new BadRequestException('Lien invalide ou expiré');
     if (lien.expiresAt && lien.expiresAt < new Date()) throw new BadRequestException('Lien expiré');
 
-    // Détecter l'entrepôt depuis le département sélectionné
+    // Détecter l'entrepôt depuis le(s) département(s) sélectionné(s)
+    // dto.departement peut être "49" ou "49,75" (multi-sélection)
     let entrepotSource: string | undefined;
     if (lien.managerZone && dto.departement) {
       const depts = lien.managerZone.departements as { code: string; entrepotId: string; entrepotCode: string }[];
-      const dept = depts.find(d => d.code === dto.departement);
-      if (dept) entrepotSource = dept.entrepotId;
+      const selectedCodes = String(dto.departement).split(',').map((s: string) => s.trim()).filter(Boolean);
+      const matchedEntrepots = [...new Set(
+        selectedCodes.map(code => depts.find(d => d.code === code)?.entrepotId).filter(Boolean)
+      )] as string[];
+      // Un seul entrepôt commun → on l'assigne ; plusieurs → null (Log1 tranchera)
+      if (matchedEntrepots.length === 1) entrepotSource = matchedEntrepots[0];
     }
 
     const numero = await this.genNumeroCommande();

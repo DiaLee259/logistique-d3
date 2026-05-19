@@ -87,9 +87,10 @@ export class CommandesController {
   findAll(@Query() filters: any, @Request() req: any) {
     const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
     const userRole: string = req.user?.role ?? '';
-    // Privilège explicite — false = ne voit pas les commandes sans entrepôt assigné
     const voirSansEntrepot: boolean = req.user?.privileges?.actions?.voirCommandesSansEntrepot ?? true;
-    return this.service.findAll({ ...filters, userEntrepots, userRole, voirSansEntrepot });
+    // Filtre manager de zone : le user voit uniquement les commandes de son manager
+    const managerZone = req.user?.managerZone ?? null;
+    return this.service.findAll({ ...filters, userEntrepots, userRole, voirSansEntrepot, managerZone });
   }
 
   @UseGuards(JwtAuthGuard)

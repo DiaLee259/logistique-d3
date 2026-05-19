@@ -61,6 +61,8 @@ export interface User {
   actif: boolean;
   createdAt: string;
   privileges?: UserPrivileges;
+  managerZoneId?: string | null;
+  managerZone?: { id: string; nom: string; departements: ManagerZoneDept[] } | null;
 }
 
 export interface Entrepot {

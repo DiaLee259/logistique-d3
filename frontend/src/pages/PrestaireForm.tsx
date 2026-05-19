@@ -29,6 +29,8 @@ export default function PrestaireForm() {
     societe: '', nombreGrilles: '', typeGrille: '',
     telephoneDestinataire: '', adresseLivraison: '', commentaire: '',
   });
+  // Multi-sélection département (quand lien a departementsActifs)
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
 
   // Tracking
   const [trackingNumero, setTrackingNumero] = useState('');
@@ -54,7 +56,9 @@ export default function PrestaireForm() {
   });
 
   const handleSubmit = () => {
-    if (!formData.departement) { toast.error('Département requis'); return; }
+    const hasDepts = lien?.departementsActifs && lien.departementsActifs.length > 0;
+    const dept = hasDepts ? selectedDepts.join(',') : formData.departement;
+    if (!dept) { toast.error(hasDepts ? 'Sélectionnez au moins un département' : 'Département requis'); return; }
     if (!formData.demandeur)   { toast.error('Nom du demandeur requis'); return; }
     const lignes = Object.entries(quantities)
       .filter(([, qty]) => qty > 0)
@@ -62,6 +66,7 @@ export default function PrestaireForm() {
     if (lignes.length === 0) { toast.error('Saisissez une quantité pour au moins un article'); return; }
     submitMut.mutate({
       ...formData,
+      departement: dept,
       nombreGrilles: formData.nombreGrilles ? parseInt(formData.nombreGrilles) : undefined,
       lignes,
     });
@@ -187,18 +192,28 @@ export default function PrestaireForm() {
                   className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all" />
               </div>
             ))}
-            {/* Département : dropdown si departementsActifs, sinon texte libre */}
-            <div>
+            {/* Département : checkboxes multi-sélection si departementsActifs, sinon texte libre */}
+            <div className={lien?.departementsActifs && lien.departementsActifs.length > 0 ? 'col-span-2' : ''}>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Département *</label>
               {lien?.departementsActifs && lien.departementsActifs.length > 0 ? (
-                <select value={formData.departement}
-                  onChange={e => setFormData(prev => ({ ...prev, departement: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-gray-50 focus:bg-white transition-all">
-                  <option value="">— Choisir un département —</option>
-                  {(lien.departementsActifs as string[]).map((d: string) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  {(lien.departementsActifs as string[]).map((d: string) => {
+                    const checked = selectedDepts.includes(d);
+                    return (
+                      <label key={d} className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer text-sm transition-all select-none ${
+                        checked
+                          ? 'bg-blue-50 border-blue-400 text-blue-800 font-semibold'
+                          : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-blue-300'
+                      }`}>
+                        <input type="checkbox" checked={checked} className="accent-blue-600"
+                          onChange={e => setSelectedDepts(prev =>
+                            e.target.checked ? [...prev, d] : prev.filter(x => x !== d)
+                          )} />
+                        {d}
+                      </label>
+                    );
+                  })}
+                </div>
               ) : (
                 <input type="text" value={formData.departement}
                   onChange={e => setFormData(prev => ({ ...prev, departement: e.target.value }))}

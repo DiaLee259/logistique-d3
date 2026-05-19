@@ -18,4 +18,8 @@ export class CreateUserDto {
   @IsIn(ROLES)
   @IsOptional()
   role?: string;
+
+  @IsString()
+  @IsOptional()
+  managerZoneId?: string | null;
 }

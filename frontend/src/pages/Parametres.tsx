@@ -20,7 +20,7 @@ export default function Parametres() {
   // ── Utilisateurs ──────────────────────────────────────────────────────────
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
+  const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1', managerZoneId: '' });
   const [showUserPass, setShowUserPass] = useState(false);
   const [userFilter, setUserFilter] = useState<'all' | 'actif' | 'inactif'>('all');
 
@@ -47,13 +47,13 @@ export default function Parametres() {
 
   const openCreateUser = () => {
     setEditUser(null);
-    setUserForm({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
+    setUserForm({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1', managerZoneId: '' });
     setUserDialog(true);
   };
 
   const openEditUser = (user: User) => {
     setEditUser(user);
-    setUserForm({ prenom: user.prenom, nom: user.nom, email: user.email, password: '', role: user.role });
+    setUserForm({ prenom: user.prenom, nom: user.nom, email: user.email, password: '', role: user.role, managerZoneId: user.managerZoneId ?? '' });
     setUserDialog(true);
   };
 
@@ -84,11 +84,11 @@ export default function Parametres() {
     if (!userForm.prenom || !userForm.nom || !userForm.email) { toast.error('Champs obligatoires manquants'); return; }
     if (!editUser && !userForm.password) { toast.error('Mot de passe requis'); return; }
     if (editUser) {
-      const updateData: any = { prenom: userForm.prenom, nom: userForm.nom, email: userForm.email, role: userForm.role };
+      const updateData: any = { prenom: userForm.prenom, nom: userForm.nom, email: userForm.email, role: userForm.role, managerZoneId: userForm.managerZoneId || null };
       if (userForm.password) updateData.password = userForm.password;
       updateUserMut.mutate({ id: editUser.id, data: updateData });
     } else {
-      createUserMut.mutate(userForm);
+      createUserMut.mutate({ ...userForm, managerZoneId: userForm.managerZoneId || null } as any);
     }
   };
 
@@ -235,7 +235,7 @@ export default function Parametres() {
   const { data: managersZone = [] } = useQuery<ManagerZone[]>({
     queryKey: ['managers-zone'],
     queryFn: () => commandesApi.managers.list(),
-    enabled: tab === 'managers-zone',
+    enabled: tab === 'managers-zone' || userDialog,
   });
 
   const createManagerZoneMut = useMutation({
@@ -1838,6 +1838,17 @@ export default function Parametres() {
                   className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20">
                   {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Manager de zone <span className="text-muted-foreground/60">(optionnel)</span></label>
+                <select value={userForm.managerZoneId} onChange={e => setUserForm(prev => ({ ...prev, managerZoneId: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
+                  <option value="">— Aucun —</option>
+                  {managersZone.filter(m => m.actif).map(m => (
+                    <option key={m.id} value={m.id}>{m.nom}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground/70 mt-1">Ce compte verra uniquement les commandes et mouvements liés à ce manager de zone.</p>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={closeUserDialog} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
