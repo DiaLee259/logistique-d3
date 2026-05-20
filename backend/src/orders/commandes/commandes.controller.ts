@@ -154,6 +154,15 @@ export class CommandesController {
     return this.service.bulkSetEntrepot(body.commandeIds, body.entrepotId);
   }
 
+  // ── Backfill one-shot ────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch('backfill-lien-data')
+  backfillLienData() {
+    return this.service.backfillLienData();
+  }
+
   // ── Corbeille — toutes ces routes AVANT @Get(':id') ──────────────────────
 
   @UseGuards(JwtAuthGuard)

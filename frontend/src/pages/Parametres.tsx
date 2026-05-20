@@ -179,6 +179,15 @@ export default function Parametres() {
     onError: () => toast.error('Erreur lors de la remise à zéro'),
   });
 
+  const backfillLienMut = useMutation({
+    mutationFn: commandesApi.backfillLienData,
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      toast.success(`Backfill terminé : ${res.updated} commande(s) mise(s) à jour sur ${res.total}`);
+    },
+    onError: () => toast.error('Erreur lors du backfill'),
+  });
+
   const resetMouvementsMut = useMutation(makeResetMut(adminApi.resetMouvements, 'Mouvements supprimés'));
   const resetInventairesMut = useMutation(makeResetMut(adminApi.resetInventaires, 'Inventaires supprimés'));
   const resetCommandesMut = useMutation(makeResetMut(adminApi.resetCommandes, 'Commandes supprimées'));
@@ -1385,6 +1394,23 @@ export default function Parametres() {
             <p className="text-xs text-muted-foreground mt-1">
               Ces actions sont irréversibles. Utilisez-les uniquement pour repartir de zéro après la phase de test.
             </p>
+          </div>
+
+          {/* Enrichissement données */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-xs font-bold text-blue-800 mb-1">Enrichissement des commandes existantes</p>
+            <p className="text-xs text-blue-700 mb-3">
+              Pour chaque commande liée à un lien prestataire, récupère automatiquement le manager, le type
+              (auto-entrepreneur / société) et l'entrepôt source depuis ce lien. Les champs déjà renseignés
+              ne sont pas modifiés.
+            </p>
+            <button
+              onClick={() => { if (confirm('Lancer l\'enrichissement des commandes depuis les liens prestataires ?')) backfillLienMut.mutate(); }}
+              disabled={backfillLienMut.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium"
+            >
+              {backfillLienMut.isPending ? 'Enrichissement en cours…' : '🔄 Enrichir les commandes depuis les liens'}
+            </button>
           </div>
 
           {/* Actions granulaires */}

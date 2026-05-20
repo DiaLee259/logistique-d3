@@ -750,4 +750,67 @@ export class CommandesService {
     }
     return { created, skipped, errors, total: lignes.length + skipped };
   }
+
+  /**
+   * Backfill one-shot : pour chaque commande liée à un lien prestataire,
+   * récupère manager, typePrestataire et entrepotSource depuis ce lien.
+   * Ne modifie que les champs actuellement null/vides.
+   */
+  async backfillLienData() {
+    const commandes = await this.prisma.commande.findMany({
+      where: { lienId: { not: null }, deletedAt: null },
+      select: {
+        id: true,
+        departement: true,
+        manager: true,
+        typePrestataire: true,
+        entrepotSource: true,
+        lienId: true,
+      },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    const details: string[] = [];
+
+    for (const cmd of commandes) {
+      const lien = await this.prisma.lienPrestataire.findUnique({
+        where: { id: cmd.lienId! },
+        include: { managerZone: true },
+      });
+      if (!lien) { skipped++; continue; }
+
+      const patch: Record<string, any> = {};
+
+      // Manager ← managerZone.nom
+      if (!cmd.manager && lien.managerZone?.nom) {
+        patch.manager = lien.managerZone.nom;
+      }
+
+      // typePrestataire ← lien.typePrestataire
+      if (!cmd.typePrestataire && lien.typePrestataire) {
+        patch.typePrestataire = lien.typePrestataire;
+      }
+
+      // entrepotSource ← résolution depuis managerZone.departements + commande.departement
+      if (!cmd.entrepotSource && lien.managerZone && cmd.departement) {
+        const depts = lien.managerZone.departements as { code: string; entrepotId: string }[];
+        const selectedCodes = String(cmd.departement).split(',').map(s => s.trim()).filter(Boolean);
+        const matchedEntrepots = [...new Set(
+          selectedCodes.map(code => depts.find(d => d.code === code)?.entrepotId).filter(Boolean)
+        )] as string[];
+        if (matchedEntrepots.length === 1) {
+          patch.entrepotSource = matchedEntrepots[0];
+        }
+      }
+
+      if (Object.keys(patch).length === 0) { skipped++; continue; }
+
+      await this.prisma.commande.update({ where: { id: cmd.id }, data: patch });
+      updated++;
+      details.push(`${cmd.id}: ${Object.keys(patch).join(', ')}`);
+    }
+
+    return { total: commandes.length, updated, skipped, details };
+  }
 }

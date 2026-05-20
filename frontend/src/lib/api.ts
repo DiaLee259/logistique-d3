@@ -173,6 +173,7 @@ export const commandesApi = {
     api.patch('/commandes/bulk-entrepot', { commandeIds, entrepotId }).then(r => r.data),
   template: () => api.get('/commandes/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/commandes/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  backfillLienData: () => api.patch('/commandes/backfill-lien-data').then(r => r.data),
 };
 
 // ── Livraisons ────────────────────────────────────────────────────────────────
