@@ -752,13 +752,19 @@ export class CommandesService {
   }
 
   /**
-   * Backfill one-shot : pour chaque commande liée à un lien prestataire,
-   * récupère manager, typePrestataire et entrepotSource depuis ce lien.
-   * Ne modifie que les champs actuellement null/vides.
+   * Backfill one-shot : enrichit les commandes avec les données des liens prestataires.
+   * Stratégie de correspondance :
+   *   1. Par lienId (commandes récentes)
+   *   2. Par manager name → managerZone.nom (commandes anciennes sans lienId)
+   * Règles :
+   *   - manager       : toujours écrasé si on a l'info depuis le lien
+   *   - typePrestataire : toujours écrasé si on a l'info
+   *   - entrepotSource  : uniquement si vide (ne pas écraser la sélection Log1)
    */
   async backfillLienData() {
+    // Charger toutes les commandes non supprimées
     const commandes = await this.prisma.commande.findMany({
-      where: { lienId: { not: null }, deletedAt: null },
+      where: { deletedAt: null },
       select: {
         id: true,
         departement: true,
@@ -769,30 +775,40 @@ export class CommandesService {
       },
     });
 
+    // Charger tous les liens avec leurs managerZones (une seule requête)
+    const liens = await this.prisma.lienPrestataire.findMany({
+      include: { managerZone: true },
+    });
+
     let updated = 0;
     let skipped = 0;
-    const details: string[] = [];
 
     for (const cmd of commandes) {
-      const lien = await this.prisma.lienPrestataire.findUnique({
-        where: { id: cmd.lienId! },
-        include: { managerZone: true },
-      });
+      // 1. Correspondance par lienId
+      let lien = cmd.lienId ? liens.find(l => l.id === cmd.lienId) ?? null : null;
+
+      // 2. Fallback : correspondance par nom du manager ↔ managerZone.nom
+      if (!lien && cmd.manager) {
+        lien = liens.find(l =>
+          l.managerZone?.nom?.toLowerCase().trim() === cmd.manager?.toLowerCase().trim()
+        ) ?? null;
+      }
+
       if (!lien) { skipped++; continue; }
 
       const patch: Record<string, any> = {};
 
-      // Manager ← managerZone.nom
-      if (!cmd.manager && lien.managerZone?.nom) {
+      // Manager ← managerZone.nom (TOUJOURS écraser si on a l'info)
+      if (lien.managerZone?.nom) {
         patch.manager = lien.managerZone.nom;
       }
 
-      // typePrestataire ← lien.typePrestataire
-      if (!cmd.typePrestataire && lien.typePrestataire) {
+      // typePrestataire ← lien.typePrestataire (TOUJOURS écraser si on a l'info)
+      if (lien.typePrestataire) {
         patch.typePrestataire = lien.typePrestataire;
       }
 
-      // entrepotSource ← résolution depuis managerZone.departements + commande.departement
+      // entrepotSource ← UNIQUEMENT si vide (on ne touche pas aux choix Log1)
       if (!cmd.entrepotSource && lien.managerZone && cmd.departement) {
         const depts = lien.managerZone.departements as { code: string; entrepotId: string }[];
         const selectedCodes = String(cmd.departement).split(',').map(s => s.trim()).filter(Boolean);
@@ -808,9 +824,8 @@ export class CommandesService {
 
       await this.prisma.commande.update({ where: { id: cmd.id }, data: patch });
       updated++;
-      details.push(`${cmd.id}: ${Object.keys(patch).join(', ')}`);
     }
 
-    return { total: commandes.length, updated, skipped, details };
+    return { total: commandes.length, updated, skipped };
   }
 }
