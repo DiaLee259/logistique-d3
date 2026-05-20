@@ -158,8 +158,7 @@ export default function Mouvements() {
       m.type, m.quantiteDemandee, m.quantiteValidee ?? '', m.quantiteFournie, m.departement ?? '', m.manager ?? '',
       m.numeroOperation ?? '', m.sourceDestination ?? '',
     ]);
-    const tsv = [headers, ...rows].map(r => r.map(v => String(v ?? '')).join('	')).join('
-');
+    const tsv = [headers, ...rows].map(r => r.map(v => String(v ?? '')).join('\t')).join('\n');
     const blob = new Blob(['﻿' + tsv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `mouvements-${new Date().toISOString().split('T')[0]}.csv`; a.click();
