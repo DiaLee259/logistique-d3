@@ -68,7 +68,9 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 export default function Mouvements() {
   const { user } = useAuth();
-  const canDelete = user?.role === 'ADMIN' || user?.privileges?.actions?.supprimerRecord === true;
+  // Visible pour ADMIN, CHEF_PROJET, ou si le privilège supprimerRecord est activé
+  const roles = ['ADMIN', 'CHEF_PROJET'];
+  const canDelete = !!user && (roles.includes(user.role) || (user.privileges?.actions as any)?.supprimerRecord === true);
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -119,6 +121,7 @@ export default function Mouvements() {
   const deleteMut = useMutation({
     mutationFn: mouvementsApi.delete,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mouvements'] }); qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Mouvement supprimé'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Erreur lors de la suppression'),
   });
 
   const importMut = useMutation({
