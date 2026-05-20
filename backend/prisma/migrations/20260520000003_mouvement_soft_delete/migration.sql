@@ -1,0 +1,3 @@
+ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP;
+ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "deletedById" TEXT;
+ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "deletedByName" TEXT;

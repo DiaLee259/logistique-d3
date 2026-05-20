@@ -552,6 +552,10 @@ export class CommandesService {
     return this.prisma.lienPrestataire.update({ where: { id }, data: { actif: false } });
   }
 
+  async deleteLienPrestataire(id: string) {
+    return this.prisma.lienPrestataire.delete({ where: { id } });
+  }
+
   async bulkSetEntrepot(commandeIds: string[], entrepotId: string) {
     const result = await this.prisma.commande.updateMany({
       where: { id: { in: commandeIds }, deletedAt: null },

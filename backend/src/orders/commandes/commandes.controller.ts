@@ -117,6 +117,13 @@ export class CommandesController {
     return this.service.desactiverLien(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Delete('liens/:id')
+  deleteLien(@Param('id') id: string) {
+    return this.service.deleteLienPrestataire(id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('managers-zone')
   listManagersZone() {

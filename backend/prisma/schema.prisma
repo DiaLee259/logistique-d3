@@ -160,6 +160,9 @@ model Mouvement {
   transfertId        String?       // UUID liant les 2 mouvements d'un transfert inter-entrepôt
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+  deletedById        String?
+  deletedByName      String?
 
   article   Article    @relation(fields: [articleId], references: [id])
   entrepot  Entrepot   @relation(fields: [entrepotId], references: [id])

@@ -321,6 +321,12 @@ export default function Parametres() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); },
   });
 
+  const deleteLienMut = useMutation({
+    mutationFn: (id: string) => commandesApi.liens.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); toast.success('Lien supprimé'); },
+    onError: () => toast.error('Impossible de supprimer ce lien'),
+  });
+
   const openCreateLien = () => {
     setEditLien(null);
     setLienForm({ nom: '', managerZoneId: '', typePrestataire: 'SOCIETE', departementsActifs: [], expiresInDays: '' });
@@ -1351,6 +1357,12 @@ export default function Parametres() {
                               l.actif ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
                             {l.actif ? 'Désactiver' : 'Activer'}
                           </button>
+                          {!l.actif && (
+                            <button onClick={() => { if (confirm(`Supprimer le lien "${l.nom}" ?`)) deleteLienMut.mutate(l.id); }}
+                              className="px-2.5 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                              Supprimer
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

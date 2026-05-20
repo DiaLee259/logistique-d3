@@ -79,11 +79,29 @@ export class MouvementsController {
     return this.service.update(id, dto);
   }
 
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Patch('corbeille/:id/restaurer')
+  restaurer(@Param('id') id: string) { return this.service.restore(id); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Delete('corbeille/vider')
+  viderCorbeille() { return this.service.viderCorbeille(); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Delete('corbeille/:id')
+  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
+
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'CHEF_PROJET')
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.service.delete(id);
+  delete(@Param('id') id: string, @Request() req: any) {
+    return this.service.delete(id, req.user?.id);
   }
 
   @Patch(':id/toggle/:field')

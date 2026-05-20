@@ -277,7 +277,7 @@ export default function CommandeDetail() {
   const isRefusee = commande.statut === 'REFUSEE';
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 max-w-6xl">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -673,6 +673,14 @@ export default function CommandeDetail() {
                         value={qteVal}
                         onChange={e => setQuantitesValidees(prev => ({ ...prev, [l.id]: parseInt(e.target.value) || 0 }))}
                         className={cn('w-20 px-2 py-1 text-xs text-center border rounded-lg focus:outline-none focus:ring-2', stockInsuffisant ? 'border-red-300 focus:ring-red-200' : 'border-border focus:ring-primary/20')} />
+                      {stockDispo !== null && (() => {
+                        const restant = stockDispo - qteVal;
+                        return (
+                          <span className={cn('text-xs font-medium', restant < 0 ? 'text-red-600' : 'text-green-600')}>
+                            → {restant} restant{restant < 0 ? ' ⚠️' : ''}
+                          </span>
+                        );
+                      })()}
                     </div>
                   );
                 })}

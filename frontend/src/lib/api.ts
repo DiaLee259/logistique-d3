@@ -107,6 +107,12 @@ export const mouvementsApi = {
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/mouvements/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
   transfert: (data: { entrepotSourceId: string; entrepotDestinationId: string; lignes: { articleId: string; quantite: number }[]; commentaire?: string }) =>
     api.post('/mouvements/transfert', data).then(r => r.data),
+  listAll: (params?: Record<string, string>) =>
+    api.get('/mouvements', { params: { ...params, limit: '9999', page: '1' } }).then(r => r.data),
+  corbeille: () => api.get('/mouvements/corbeille').then(r => r.data),
+  restaurer: (id: string) => api.patch(`/mouvements/corbeille/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/mouvements/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/mouvements/corbeille/vider').then(r => r.data),
 };
 
 // ── Commandes ─────────────────────────────────────────────────────────────────
@@ -154,6 +160,7 @@ export const commandesApi = {
     create: (data: any) => api.post('/commandes/liens', data).then(r => r.data),
     update: (id: string, data: any) => api.patch(`/commandes/liens/${id}`, data).then(r => r.data),
     desactiver: (id: string) => api.patch(`/commandes/liens/${id}/desactiver`).then(r => r.data),
+    delete: (id: string) => api.delete(`/commandes/liens/${id}`).then(r => r.data),
   },
   // Public (no auth)
   getPublic: (token: string) =>

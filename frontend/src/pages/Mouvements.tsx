@@ -70,7 +70,7 @@ export default function Mouvements() {
   const { user } = useAuth();
   // Visible pour ADMIN, CHEF_PROJET, ou si le privilège supprimerRecord est activé
   const roles = ['ADMIN', 'CHEF_PROJET'];
-  const canDelete = !!user && (roles.includes(user.role) || (user.privileges?.actions as any)?.supprimerRecord === true);
+  const canDelete = !!user && (roles.includes(user.role?.toUpperCase()) || (user.privileges?.actions as any)?.supprimerRecord === true);
   const qc = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -93,6 +93,8 @@ export default function Mouvements() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({ queryKey: ['entrepots'], queryFn: () => entrepotsApi.list() });
 
   const mouvements: Mouvement[] = result?.data ?? [];
+  // Pour les transferts, n'afficher que la ligne SORTIE (la ligne ENTREE est redondante)
+  const displayMouvements = mouvements.filter(m => !(m.transfertId && m.type === 'ENTREE'));
   const totalPages = result?.totalPages ?? 1;
 
   const createMut = useMutation({
@@ -146,16 +148,19 @@ export default function Mouvements() {
     createMut.mutate(valid);
   };
 
-  const exportCSV = () => {
-    if (!mouvements.length) return;
+  const exportCSV = async () => {
+    const allData = await mouvementsApi.listAll({ ...filters, search });
+    const allMouvements: Mouvement[] = allData?.data ?? [];
+    if (!allMouvements.length) { toast.error('Aucun mouvement à exporter'); return; }
     const headers = ['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Département', 'Manager', 'N° Opération', 'Source/Destination'];
-    const rows = mouvements.map(m => [
-      formatDate(m.date), m.article?.reference, m.article?.nom, m.entrepot?.code,
-      m.type, m.quantiteDemandee, m.quantiteValidee ?? '', m.quantiteFournie, m.departement, m.manager,
-      m.numeroOperation, m.sourceDestination,
+    const rows = allMouvements.map(m => [
+      formatDate(m.date), m.article?.reference ?? '', m.article?.nom ?? '', m.entrepot?.code ?? '',
+      m.type, m.quantiteDemandee, m.quantiteValidee ?? '', m.quantiteFournie, m.departement ?? '', m.manager ?? '',
+      m.numeroOperation ?? '', m.sourceDestination ?? '',
     ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const tsv = [headers, ...rows].map(r => r.map(v => String(v ?? '')).join('	')).join('
+');
+    const blob = new Blob(['﻿' + tsv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `mouvements-${new Date().toISOString().split('T')[0]}.csv`; a.click();
     URL.revokeObjectURL(url);
@@ -170,18 +175,23 @@ export default function Mouvements() {
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Rechercher…"
             className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
-        <select value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value, transfert: '' }))}
+        <select
+          value={filters.transfert === 'true' ? 'TRANSFERT' : filters.type}
+          onChange={e => {
+            const val = e.target.value;
+            if (val === 'TRANSFERT') {
+              setFilters(p => ({ ...p, type: '', transfert: 'true' }));
+            } else {
+              setFilters(p => ({ ...p, type: val, transfert: '' }));
+            }
+            setPage(1);
+          }}
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none">
           <option value="">Tous types</option>
-          <option value="ENTREE">Entrée</option>
-          <option value="SORTIE">Sortie</option>
+          <option value="ENTREE">↑ Entrée</option>
+          <option value="SORTIE">↓ Sortie</option>
+          <option value="TRANSFERT">⇄ Transfert</option>
         </select>
-        <button
-          onClick={() => setFilters(p => ({ ...p, transfert: p.transfert === 'true' ? '' : 'true', type: '' }))}
-          className={cn('flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border transition-colors', filters.transfert === 'true' ? 'bg-violet-100 border-violet-300 text-violet-700' : 'bg-card border-border text-muted-foreground hover:border-violet-300')}
-        >
-          <ArrowLeftRight className="w-3.5 h-3.5" /> Transferts
-        </button>
         <select value={filters.entrepotId} onChange={e => setFilters(p => ({ ...p, entrepotId: e.target.value }))}
           className="px-3 py-2 text-sm bg-card border border-border rounded-lg outline-none">
           <option value="">Tous entrepôts</option>
@@ -237,9 +247,9 @@ export default function Mouvements() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={13} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
-              ) : mouvements.length === 0 ? (
+              ) : displayMouvements.length === 0 ? (
                 <tr><td colSpan={13} className="text-center py-12 text-muted-foreground">Aucun mouvement</td></tr>
-              ) : mouvements.map(m => (
+              ) : displayMouvements.map(m => (
                 <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                   <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap text-xs">{formatDate(m.date)}</td>
                   <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{m.article?.reference}</td>

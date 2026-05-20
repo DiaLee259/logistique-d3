@@ -16,6 +16,7 @@ export class MouvementsService {
 
   async findAll(filters: FilterMouvementsDto) {
     const where: any = {};
+    where.deletedAt = null;
 
     if (filters.mois) {
       const [year, month] = filters.mois.split('-');
@@ -134,25 +135,29 @@ export class MouvementsService {
     return updated;
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     const m = await this.findById(id);
-
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
     if (m.transfertId) {
-      // Supprimer les deux legs du transfert atomiquement
+      // Soft delete les deux legs du transfert
       const legs = await this.prisma.mouvement.findMany({
         where: { transfertId: m.transfertId },
-        select: { id: true, articleId: true, entrepotId: true },
+        select: { id: true },
       });
-      await this.prisma.mouvement.deleteMany({ where: { transfertId: m.transfertId } });
-      for (const leg of legs) {
-        await this.calculator.sync(leg.articleId, leg.entrepotId);
-      }
+      await this.prisma.mouvement.updateMany({
+        where: { transfertId: m.transfertId },
+        data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+      });
       return m;
     }
-
-    await this.prisma.mouvement.delete({ where: { id } });
-    await this.calculator.sync(m.articleId, m.entrepotId);
-    return m;
+    return this.prisma.mouvement.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+    });
   }
 
   /** Génère un numéro de transfert unique : TRF-YYYY-XXXX */
@@ -314,5 +319,62 @@ export class MouvementsService {
     if (stockActuel < quantite) {
       throw new BadRequestException(`Stock insuffisant : disponible ${stockActuel}, demandé ${quantite}`);
     }
+  }
+
+  async findCorbeille() {
+    return this.prisma.mouvement.findMany({
+      where: { NOT: { deletedAt: null } },
+      include: {
+        article: { select: { id: true, nom: true, reference: true, unite: true } },
+        entrepot: { select: { id: true, code: true, nom: true } },
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
+  }
+
+  async restore(id: string) {
+    const m = await this.prisma.mouvement.findUnique({ where: { id } });
+    if (!m) throw new Error('Mouvement introuvable');
+    if (m.transfertId) {
+      await this.prisma.mouvement.updateMany({
+        where: { transfertId: m.transfertId },
+        data: { deletedAt: null, deletedById: null, deletedByName: null },
+      });
+      return m;
+    }
+    return this.prisma.mouvement.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+  }
+
+  async supprimerDefinitivement(id: string) {
+    const m = await this.prisma.mouvement.findUnique({ where: { id }, select: { articleId: true, entrepotId: true, transfertId: true } });
+    if (!m) throw new Error('Mouvement introuvable');
+    if (m.transfertId) {
+      const legs = await this.prisma.mouvement.findMany({
+        where: { transfertId: m.transfertId },
+        select: { articleId: true, entrepotId: true },
+      });
+      await this.prisma.mouvement.deleteMany({ where: { transfertId: m.transfertId } });
+      for (const leg of legs) await this.calculator.sync(leg.articleId, leg.entrepotId);
+      return { deleted: true };
+    }
+    await this.prisma.mouvement.delete({ where: { id } });
+    await this.calculator.sync(m.articleId, m.entrepotId);
+    return { deleted: true };
+  }
+
+  async viderCorbeille() {
+    const items = await this.prisma.mouvement.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: { id: true, articleId: true, entrepotId: true },
+    });
+    if (!items.length) return { count: 0 };
+    await this.prisma.mouvement.deleteMany({ where: { id: { in: items.map(i => i.id) } } });
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of items) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+    return { count: items.length };
   }
 }
