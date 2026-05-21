@@ -40,14 +40,14 @@ export class InventairesService {
     });
 
     const result = await Promise.all(articles.map(async (article) => {
-      // Stock théorique = toujours calculé depuis les mouvements
+      // Stock théorique = toujours calculé depuis les mouvements (hors supprimés)
       const [entrees, sorties, dernierInventaire] = await Promise.all([
         this.prisma.mouvement.aggregate({
-          where: { entrepotId, articleId: article.id, type: 'ENTREE' as any },
+          where: { entrepotId, articleId: article.id, type: 'ENTREE' as any, deletedAt: null },
           _sum: { quantiteFournie: true },
         }),
         this.prisma.mouvement.aggregate({
-          where: { entrepotId, articleId: article.id, type: 'SORTIE' as any },
+          where: { entrepotId, articleId: article.id, type: 'SORTIE' as any, deletedAt: null },
           _sum: { quantiteFournie: true },
         }),
         this.prisma.inventairePhysique.findFirst({
@@ -82,7 +82,7 @@ export class InventairesService {
 
     const alertes = await Promise.all(entrepots.map(async (e) => {
       const dernierInventaire = await this.prisma.inventairePhysique.findFirst({
-        where: { entrepotId: e.id },
+        where: { entrepotId: e.id, deletedAt: null },
         orderBy: { date: 'desc' },
       });
 

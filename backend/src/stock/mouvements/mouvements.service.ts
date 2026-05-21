@@ -92,7 +92,7 @@ export class MouvementsService {
       where: { id },
       include: { article: true, entrepot: true, user: true },
     });
-    if (!m) throw new NotFoundException('Mouvement introuvable');
+    if (!m || m.deletedAt !== null) throw new NotFoundException('Mouvement introuvable');
     return m;
   }
 

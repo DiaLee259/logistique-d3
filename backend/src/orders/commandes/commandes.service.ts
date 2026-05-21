@@ -413,69 +413,74 @@ export class CommandesService {
     }
     if (!entrepotId) throw new BadRequestException('Aucun entrepôt disponible pour l\'expédition');
 
-    // Traiter les lignes existantes
-    for (const ligne of commande.lignes) {
-      const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
-      const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
-      if (!quantiteLivree || quantiteLivree <= 0) continue;
+    // ── Commandes STANDARD : SORTIE par ligne + nouvelles lignes Log2 ──────────
+    // Pour les TRANSFERT, on ne passe pas ici — leur propre bloc ci-dessous
+    // crée simultanément SORTIE (source) + ENTREE (destination) liées par transfertId.
+    if ((commande as any).typeCommande !== 'TRANSFERT') {
+      // Traiter les lignes existantes
+      for (const ligne of commande.lignes) {
+        const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
+        const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
+        if (!quantiteLivree || quantiteLivree <= 0) continue;
 
-      await this.prisma.ligneCommande.update({
-        where: { id: ligne.id },
-        data: { quantiteFournie: quantiteLivree },
-      });
+        await this.prisma.ligneCommande.update({
+          where: { id: ligne.id },
+          data: { quantiteFournie: quantiteLivree },
+        });
 
-      await this.prisma.mouvement.create({
-        data: {
-          articleId: ligne.articleId,
-          entrepotId,
-          type: 'SORTIE' as any,
-          quantiteDemandee: (ligne as any).quantiteDemandee,
-          quantiteValidee: (ligne as any).quantiteValidee ?? null,
-          quantiteFournie: quantiteLivree,
-          departement: commande.departement,
-          manager: (commande as any).manager ?? null,
-          numeroCommande: commande.numero,
-          numeroOperation: commande.numero,
-          sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
-          commandeId: id,
-        } as any,
-      });
+        await this.prisma.mouvement.create({
+          data: {
+            articleId: ligne.articleId,
+            entrepotId,
+            type: 'SORTIE' as any,
+            quantiteDemandee: (ligne as any).quantiteDemandee,
+            quantiteValidee: (ligne as any).quantiteValidee ?? null,
+            quantiteFournie: quantiteLivree,
+            departement: commande.departement,
+            manager: (commande as any).manager ?? null,
+            numeroCommande: commande.numero,
+            numeroOperation: commande.numero,
+            sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
+            commandeId: id,
+          } as any,
+        });
 
-      await this.calculator.sync(ligne.articleId, entrepotId);
-    }
+        await this.calculator.sync(ligne.articleId, entrepotId);
+      }
 
-    // Créer et expédier les nouvelles lignes ajoutées par Log2 (article substitué)
-    for (const nl of data.nouvelleLignes || []) {
-      if (!nl.articleId || nl.quantite <= 0) continue;
-      const nouvelleLigne = await this.prisma.ligneCommande.create({
-        data: {
-          commandeId: id,
-          articleId: nl.articleId,
-          quantiteDemandee: nl.quantite,
-          quantiteValidee: nl.quantite,
-          quantiteFournie: nl.quantite,
-          commentaire: nl.commentaire ?? null,
-        },
-      });
+      // Créer et expédier les nouvelles lignes ajoutées par Log2 (article substitué)
+      for (const nl of data.nouvelleLignes || []) {
+        if (!nl.articleId || nl.quantite <= 0) continue;
+        await this.prisma.ligneCommande.create({
+          data: {
+            commandeId: id,
+            articleId: nl.articleId,
+            quantiteDemandee: nl.quantite,
+            quantiteValidee: nl.quantite,
+            quantiteFournie: nl.quantite,
+            commentaire: nl.commentaire ?? null,
+          },
+        });
 
-      await this.prisma.mouvement.create({
-        data: {
-          articleId: nl.articleId,
-          entrepotId,
-          type: 'SORTIE' as any,
-          quantiteDemandee: nl.quantite,
-          quantiteValidee: nl.quantite,
-          quantiteFournie: nl.quantite,
-          departement: commande.departement,
-          manager: (commande as any).manager ?? null,
-          numeroCommande: commande.numero,
-          numeroOperation: commande.numero,
-          sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
-          commandeId: id,
-        } as any,
-      });
+        await this.prisma.mouvement.create({
+          data: {
+            articleId: nl.articleId,
+            entrepotId,
+            type: 'SORTIE' as any,
+            quantiteDemandee: nl.quantite,
+            quantiteValidee: nl.quantite,
+            quantiteFournie: nl.quantite,
+            departement: commande.departement,
+            manager: (commande as any).manager ?? null,
+            numeroCommande: commande.numero,
+            numeroOperation: commande.numero,
+            sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
+            commandeId: id,
+          } as any,
+        });
 
-      await this.calculator.sync(nl.articleId, entrepotId);
+        await this.calculator.sync(nl.articleId, entrepotId);
+      }
     }
 
     // ── Cas TRANSFERT : créer SORTIE + ENTREE liées ──────────────────────────
