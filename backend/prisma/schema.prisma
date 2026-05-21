@@ -214,6 +214,8 @@ model Commande {
   intervenantId            String?
 
   entrepotSource           String?        // entrepôt choisi par Log1 à la validation
+  entrepotDestinationId    String?        // entrepôt destination (commandes de type TRANSFERT)
+  typeCommande             String?        @default("STANDARD") // STANDARD | TRANSFERT
 
   lienId           String?
   typePrestataire  String?
@@ -349,13 +351,16 @@ model Consommation {
 // ─── INVENTAIRE PHYSIQUE ──────────────────────────────────────────────────────
 
 model InventairePhysique {
-  id          String   @id @default(uuid())
-  articleId   String
-  entrepotId  String
-  quantite    Int
-  date        DateTime @default(now())
-  userId      String?
-  commentaire String?
+  id            String    @id @default(uuid())
+  articleId     String
+  entrepotId    String
+  quantite      Int
+  date          DateTime  @default(now())
+  userId        String?
+  commentaire   String?
+  deletedAt     DateTime?
+  deletedById   String?
+  deletedByName String?
 
   article Article @relation(fields: [articleId], references: [id])
 

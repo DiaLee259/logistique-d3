@@ -152,7 +152,7 @@ export default function Mouvements() {
     const allData = await mouvementsApi.listAll({ ...filters, search });
     const allMouvements: Mouvement[] = allData?.data ?? [];
     if (!allMouvements.length) { toast.error('Aucun mouvement à exporter'); return; }
-    const headers = ['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Département', 'Manager', 'N° Opération', 'Source/Destination'];
+    const headers = ['Date opération', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Département', 'Manager', 'N° Opération', 'Source/Destination'];
     const rows = allMouvements.map(m => [
       formatDate(m.date), m.article?.reference ?? '', m.article?.nom ?? '', m.entrepot?.code ?? '',
       m.type, m.quantiteDemandee, m.quantiteValidee ?? '', m.quantiteFournie, m.departement ?? '', m.manager ?? '',
@@ -238,7 +238,7 @@ export default function Mouvements() {
           <table className="min-w-max w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['Date', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Dép.', 'Manager', 'N° Op.', 'Source', ''].map(h => (
+                {['Date op.', 'Référence', 'Désignation', 'Entrepôt', 'Type', 'Demandé', 'Validé', 'Fourni', 'Dép.', 'Manager', 'N° Op.', 'Source', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>

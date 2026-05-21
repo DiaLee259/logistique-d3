@@ -191,6 +191,14 @@ export class CommandesController {
     return this.service.create(dto);
   }
 
+  /** Commande de type transfert interne — réservée aux rôles internes */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
+  @Post('transfert-interne')
+  createTransfertInterne(@Body() body: any) {
+    return this.service.createTransfertInterne(body);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1')
   @Patch(':id/refuser')

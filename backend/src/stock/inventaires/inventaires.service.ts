@@ -11,7 +11,7 @@ export class InventairesService {
   ) {}
 
   async findAll(filters: { entrepotId?: string; articleId?: string; mois?: string }) {
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (filters.entrepotId) where.entrepotId = filters.entrepotId;
     if (filters.articleId) where.articleId = filters.articleId;
     if ((filters as any).userEntrepots?.length) {
@@ -51,7 +51,7 @@ export class InventairesService {
           _sum: { quantiteFournie: true },
         }),
         this.prisma.inventairePhysique.findFirst({
-          where: { entrepotId, articleId: article.id },
+          where: { entrepotId, articleId: article.id, deletedAt: null },
           orderBy: { date: 'desc' },
         }),
       ]);
@@ -150,30 +150,97 @@ export class InventairesService {
     return articles;
   }
 
-  async deleteOne(id: string) {
+  /** Mise à jour d'un seul article dans l'inventaire — sans toucher les autres */
+  async updateArticle(data: { entrepotId: string; articleId: string; quantite: number; commentaire?: string }, userId?: string) {
+    const created = await this.prisma.inventairePhysique.create({
+      data: {
+        entrepotId: data.entrepotId,
+        articleId: data.articleId,
+        quantite: data.quantite,
+        commentaire: data.commentaire,
+        userId: userId ?? null,
+        date: new Date(),
+      },
+      include: { article: { select: { id: true, nom: true, reference: true } } },
+    });
+    await this.calculator.sync(data.articleId, data.entrepotId);
+    return created;
+  }
+
+  async deleteOne(id: string, userId?: string) {
     const inv = await this.prisma.inventairePhysique.findUnique({ where: { id } });
     if (!inv) return { deleted: 0 };
-    await this.prisma.inventairePhysique.delete({ where: { id } });
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    await this.prisma.inventairePhysique.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+    });
     await this.calculator.sync(inv.articleId, inv.entrepotId);
     return { deleted: 1 };
   }
 
-  async deleteBulk(ids: string[]) {
+  async deleteBulk(ids: string[], userId?: string) {
     const records = await this.prisma.inventairePhysique.findMany({
       where: { id: { in: ids } },
-      select: { articleId: true, entrepotId: true },
+      select: { id: true, articleId: true, entrepotId: true },
     });
-
-    const result = await this.prisma.inventairePhysique.deleteMany({ where: { id: { in: ids } } });
-
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    await this.prisma.inventairePhysique.updateMany({
+      where: { id: { in: ids } },
+      data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+    });
     const pairs = new Map<string, { articleId: string; entrepotId: string }>();
-    for (const r of records) {
-      pairs.set(`${r.articleId}:${r.entrepotId}`, r);
-    }
-    for (const pair of pairs.values()) {
-      await this.calculator.sync(pair.articleId, pair.entrepotId);
-    }
-    return { deleted: result.count };
+    for (const r of records) pairs.set(`${r.articleId}:${r.entrepotId}`, r);
+    for (const pair of pairs.values()) await this.calculator.sync(pair.articleId, pair.entrepotId);
+    return { deleted: records.length };
+  }
+
+  async findCorbeille() {
+    return this.prisma.inventairePhysique.findMany({
+      where: { NOT: { deletedAt: null } },
+      include: { article: { select: { id: true, nom: true, reference: true, unite: true } } },
+      orderBy: { deletedAt: 'desc' },
+    });
+  }
+
+  async restore(id: string) {
+    const inv = await this.prisma.inventairePhysique.findUnique({ where: { id } });
+    if (!inv) throw new Error('Introuvable');
+    const updated = await this.prisma.inventairePhysique.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+    await this.calculator.sync(inv.articleId, inv.entrepotId);
+    return updated;
+  }
+
+  async supprimerDefinitivement(id: string) {
+    const inv = await this.prisma.inventairePhysique.findUnique({ where: { id } });
+    if (!inv) throw new Error('Introuvable');
+    await this.prisma.inventairePhysique.delete({ where: { id } });
+    await this.calculator.sync(inv.articleId, inv.entrepotId);
+    return { deleted: true };
+  }
+
+  async viderCorbeille() {
+    const items = await this.prisma.inventairePhysique.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: { id: true, articleId: true, entrepotId: true },
+    });
+    if (!items.length) return { count: 0 };
+    await this.prisma.inventairePhysique.deleteMany({ where: { id: { in: items.map(i => i.id) } } });
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of items) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+    return { count: items.length };
   }
 
   async importInventaire(buffer: Buffer, userId?: string) {

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Eye, X,
-  Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare,
+  Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare, ArrowLeftRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/api';
@@ -208,6 +208,24 @@ export default function Commandes() {
     },
   });
 
+  // ── Transfert interne ─────────────────────────────────────────────────────
+  const [transfertDialog, setTransfertDialog] = useState(false);
+  const [tSrc, setTSrc] = useState('');
+  const [tDst, setTDst] = useState('');
+  const [tCommentaire, setTCommentaire] = useState('');
+  const [tLignes, setTLignes] = useState<{ articleId: string; quantiteDemandee: number }[]>([{ articleId: '', quantiteDemandee: 1 }]);
+
+  const createTransfertMut = useMutation({
+    mutationFn: commandesApi.createTransfertInterne,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['commandes'] });
+      toast.success('Commande transfert créée');
+      setTransfertDialog(false);
+      setTSrc(''); setTDst(''); setTCommentaire('');
+      setTLignes([{ articleId: '', quantiteDemandee: 1 }]);
+    },
+  });
+
   const genererLienMut = useMutation({
     mutationFn: () => commandesApi.genererLien(nomLien, parseInt(expireDays) || 30),
     onSuccess: () => {
@@ -350,6 +368,12 @@ export default function Commandes() {
           </button>
         )}
 
+        {hasRole('ADMIN', 'CHEF_PROJET', 'LOGISTICIEN_1', 'LOGISTICIEN_2') && (
+          <button onClick={() => setTransfertDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs bg-card border border-border rounded-lg hover:border-primary hover:text-primary transition-colors">
+            <ArrowLeftRight className="w-3.5 h-3.5" /> Transfert interne
+          </button>
+        )}
         <button onClick={() => setNewDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
           <Plus className="w-3.5 h-3.5" /> Nouvelle commande
@@ -591,6 +615,91 @@ export default function Commandes() {
               <button onClick={() => deleteMut.mutate(confirmDeleteId)} disabled={deleteMut.isPending}
                 className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
                 {deleteMut.isPending ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog transfert interne ──────────────────────────────────────── */}
+      {transfertDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold">Nouveau transfert interne</h2>
+              </div>
+              <button onClick={() => setTransfertDialog(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt source *</label>
+                  <select value={tSrc} onChange={e => setTSrc(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
+                    <option value="">— Source —</option>
+                    {entrepots.map((e: Entrepot) => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt destination *</label>
+                  <select value={tDst} onChange={e => setTDst(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
+                    <option value="">— Destination —</option>
+                    {entrepots.filter((e: Entrepot) => e.id !== tSrc).map((e: Entrepot) => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted-foreground">Articles à transférer *</label>
+                  <button onClick={() => setTLignes(l => [...l, { articleId: '', quantiteDemandee: 1 }])}
+                    className="text-xs text-primary hover:underline">+ Ajouter un article</button>
+                </div>
+                <div className="space-y-2">
+                  {tLignes.map((l, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <select value={l.articleId} onChange={e => setTLignes(ls => ls.map((x, j) => j === i ? { ...x, articleId: e.target.value } : x))}
+                        className="flex-1 px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
+                        <option value="">— Choisir un article —</option>
+                        {articles.map((a: Article) => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
+                      </select>
+                      <input type="number" min={1} value={l.quantiteDemandee}
+                        onChange={e => setTLignes(ls => ls.map((x, j) => j === i ? { ...x, quantiteDemandee: parseInt(e.target.value) || 1 } : x))}
+                        className="w-20 px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none text-center" />
+                      {tLignes.length > 1 && (
+                        <button onClick={() => setTLignes(ls => ls.filter((_, j) => j !== i))}
+                          className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Commentaire (optionnel)</label>
+                <input type="text" value={tCommentaire} onChange={e => setTCommentaire(e.target.value)}
+                  placeholder="Raison du transfert…"
+                  className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none" />
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+                ℹ️ La commande sera traitée comme une commande normale. Le mouvement transfert sera créé automatiquement lors de l'expédition.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 pb-5">
+              <button onClick={() => setTransfertDialog(false)} className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+              <button
+                onClick={() => {
+                  const validLignes = tLignes.filter(l => l.articleId && l.quantiteDemandee > 0);
+                  if (!tSrc || !tDst) { toast.error('Entrepôts requis'); return; }
+                  if (validLignes.length === 0) { toast.error('Au moins un article requis'); return; }
+                  createTransfertMut.mutate({ entrepotSourceId: tSrc, entrepotDestinationId: tDst, lignes: validLignes, commentaire: tCommentaire || undefined });
+                }}
+                disabled={createTransfertMut.isPending}
+                className="px-4 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                {createTransfertMut.isPending ? 'Création…' : `Créer (${tLignes.filter(l => l.articleId).length} article(s))`}
               </button>
             </div>
           </div>

@@ -40,7 +40,7 @@ export default function Livraisons() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [vue, setVue] = useState<'liste' | 'matrice'>('liste');
+  const [vue, setVue] = useState<'liste' | 'matrice' | 'matrice-dates'>('liste');
   const [filterStatut, setFilterStatut] = useState('');
 
   // Filters
@@ -185,6 +185,11 @@ export default function Livraisons() {
               vue === 'matrice' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             <LayoutGrid className="w-3.5 h-3.5" /> Matrice
           </button>
+          <button onClick={() => setVue('matrice-dates')}
+            className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition-colors',
+              vue === 'matrice-dates' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <LayoutGrid className="w-3.5 h-3.5" /> Par dates
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => livraisonsApi.template().then(b => downloadBlob(b, 'template-livraisons.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
@@ -253,6 +258,82 @@ export default function Livraisons() {
                             );
                           })}
                           <td className="px-2 py-2 text-center font-bold text-primary">{total > 0 ? total : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Vue Matrice Par Dates (tous entrepôts confondus) ── */}
+      {vue === 'matrice-dates' && (() => {
+        // Grouper par date (YYYY-MM-DD)
+        const dateMap = new Map<string, typeof filtered>();
+        filtered.forEach(l => {
+          const key = new Date(l.dateLivraison).toISOString().split('T')[0];
+          if (!dateMap.has(key)) dateMap.set(key, []);
+          dateMap.get(key)!.push(l);
+        });
+        const dates = [...dateMap.keys()].sort();
+
+        // Tous les articles présents
+        const artMap = new Map<string, string>();
+        filtered.forEach(l => l.lignes?.forEach((li: any) => {
+          if (li.article && !artMap.has(li.articleId)) artMap.set(li.articleId, li.article.nom ?? li.articleId);
+        }));
+        const arts = [...artMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
+        // lookup: articleId_date → sum quantiteRecue
+        const lookup = new Map<string, number>();
+        filtered.forEach(l => {
+          const key = new Date(l.dateLivraison).toISOString().split('T')[0];
+          l.lignes?.forEach((li: any) => {
+            const k = `${li.articleId}_${key}`;
+            lookup.set(k, (lookup.get(k) ?? 0) + li.quantiteRecue);
+          });
+        });
+
+        return (
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            {arts.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground">Aucune donnée pour ce filtre.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/30 min-w-[200px]">Article</th>
+                      {dates.map(d => (
+                        <th key={d} className="text-center px-2 py-2.5 font-semibold text-muted-foreground min-w-[100px]">
+                          <div className="text-primary font-bold">{formatDate(d)}</div>
+                        </th>
+                      ))}
+                      <th className="text-center px-2 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide min-w-[80px]">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {arts.map(([artId, nom]) => {
+                      const total = dates.reduce((s, d) => s + (lookup.get(`${artId}_${d}`) ?? 0), 0);
+                      if (total === 0) return null;
+                      return (
+                        <tr key={artId} className="border-t border-border/30 hover:bg-muted/10">
+                          <td className="px-3 py-2 sticky left-0 bg-card border-r border-border/30">
+                            <p className="font-medium">{nom}</p>
+                            <p className="font-mono text-muted-foreground">{articles.find((a: any) => a.id === artId)?.reference ?? ''}</p>
+                          </td>
+                          {dates.map(d => {
+                            const qte = lookup.get(`${artId}_${d}`);
+                            return (
+                              <td key={d} className="px-2 py-2 text-center">
+                                {qte ? <span className="font-bold text-green-700">{qte}</span> : <span className="text-muted-foreground/30">—</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="px-2 py-2 text-center font-bold text-primary">{total}</td>
                         </tr>
                       );
                     })}

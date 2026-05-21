@@ -152,6 +152,57 @@ export class CommandesService {
     return commande;
   }
 
+  /** Crée une commande de type TRANSFERT interne (Log1 / Log2 / Chef / Admin) */
+  async createTransfertInterne(dto: {
+    entrepotSourceId: string;
+    entrepotDestinationId: string;
+    lignes: { articleId: string; quantiteDemandee: number; commentaire?: string }[];
+    commentaire?: string;
+  }) {
+    if (dto.entrepotSourceId === dto.entrepotDestinationId) {
+      throw new BadRequestException('Source et destination doivent être différentes');
+    }
+    if (!dto.lignes?.length) throw new BadRequestException('Au moins un article requis');
+
+    const [src, dst] = await Promise.all([
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotSourceId } }),
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotDestinationId } }),
+    ]);
+    if (!src || !dst) throw new BadRequestException('Entrepôt introuvable');
+
+    const numero = await this.genNumeroCommande();
+
+    const commande = await this.prisma.commande.create({
+      data: {
+        numero,
+        departement: 'TRANSFERT_INTERNE',
+        typeCommande: 'TRANSFERT',
+        entrepotSource: dto.entrepotSourceId,
+        entrepotDestinationId: dto.entrepotDestinationId,
+        commentaire: dto.commentaire ?? null,
+        lignes: {
+          create: dto.lignes.map(l => ({
+            articleId: l.articleId,
+            quantiteDemandee: l.quantiteDemandee,
+            commentaire: l.commentaire ?? null,
+          })),
+        },
+      },
+      include: { lignes: { include: { article: true } } },
+    } as any);
+
+    await this.prisma.notification.create({
+      data: {
+        type: 'NOUVELLE_COMMANDE',
+        titre: '⇄ Transfert interne créé',
+        message: `${numero} — ${src.code} → ${dst.code}`,
+        lien: `/commandes/${commande.id}`,
+      },
+    });
+
+    return commande;
+  }
+
   // Refuser une commande (Log1) avec motif obligatoire
   async refuser(id: string, motif: string) {
     const commande = await this.findById(id);
@@ -425,6 +476,63 @@ export class CommandesService {
       });
 
       await this.calculator.sync(nl.articleId, entrepotId);
+    }
+
+    // ── Cas TRANSFERT : créer SORTIE + ENTREE liées ──────────────────────────
+    if ((commande as any).typeCommande === 'TRANSFERT') {
+      const entrepotDestId = (commande as any).entrepotDestinationId;
+      if (!entrepotDestId) throw new BadRequestException('Entrepôt destination manquant sur la commande transfert');
+      const entrepotDst = await this.prisma.entrepot.findUnique({ where: { id: entrepotDestId } });
+      const entrepotSrc = await this.prisma.entrepot.findUnique({ where: { id: entrepotId! } });
+      if (!entrepotDst || !entrepotSrc) throw new BadRequestException('Entrepôt introuvable');
+
+      const { v4: uuidv4 } = await import('uuid');
+      const transfertId = uuidv4();
+
+      for (const ligne of commande.lignes) {
+        const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
+        const qte = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
+        if (!qte || qte <= 0) continue;
+
+        await this.prisma.ligneCommande.update({ where: { id: ligne.id }, data: { quantiteFournie: qte } });
+
+        // SORTIE depuis source
+        await this.prisma.mouvement.create({
+          data: {
+            articleId: ligne.articleId,
+            entrepotId: entrepotId!,
+            type: 'SORTIE' as any,
+            quantiteDemandee: (ligne as any).quantiteDemandee,
+            quantiteValidee: (ligne as any).quantiteValidee ?? null,
+            quantiteFournie: qte,
+            sourceDestination: `→ ${entrepotDst.code}`,
+            numeroCommande: commande.numero,
+            numeroOperation: commande.numero,
+            commandeId: id,
+            transfertId,
+          } as any,
+        });
+
+        // ENTREE dans destination
+        await this.prisma.mouvement.create({
+          data: {
+            articleId: ligne.articleId,
+            entrepotId: entrepotDestId,
+            type: 'ENTREE' as any,
+            quantiteDemandee: (ligne as any).quantiteDemandee,
+            quantiteValidee: (ligne as any).quantiteValidee ?? null,
+            quantiteFournie: qte,
+            sourceDestination: `← ${entrepotSrc.code}`,
+            numeroCommande: commande.numero,
+            numeroOperation: commande.numero,
+            commandeId: id,
+            transfertId,
+          } as any,
+        });
+
+        await this.calculator.sync(ligne.articleId, entrepotId!);
+        await this.calculator.sync(ligne.articleId, entrepotDestId);
+      }
     }
 
     return this.prisma.commande.update({

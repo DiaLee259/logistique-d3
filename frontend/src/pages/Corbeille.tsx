@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, RotateCcw, Package, Truck, CalendarRange, AlertTriangle, X, ArrowLeftRight } from 'lucide-react';
+import { Trash2, RotateCcw, Package, Truck, CalendarRange, AlertTriangle, X, ArrowLeftRight, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { commandesApi, livraisonsApi, commandesTSApi, mouvementsApi } from '@/lib/api';
+import { commandesApi, livraisonsApi, commandesTSApi, mouvementsApi, inventairesApi } from '@/lib/api';
 import { cn, formatDate, formatDateTime } from '@/lib/utils';
 
 type CorbeilleItem = {
   id: string;
-  type: 'COMMANDE' | 'LIVRAISON' | 'COMMANDE_TS' | 'MOUVEMENT';
+  type: 'COMMANDE' | 'LIVRAISON' | 'COMMANDE_TS' | 'MOUVEMENT' | 'INVENTAIRE';
   numero: string;
   label: string;
   sublabel: string;
@@ -26,6 +26,7 @@ const typeConfig = {
   LIVRAISON: { icon: Truck, label: 'Livraison', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
   COMMANDE_TS: { icon: CalendarRange, label: 'Commande TS', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
   MOUVEMENT: { icon: ArrowLeftRight, label: 'Mouvement', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  INVENTAIRE: { icon: ClipboardCheck, label: 'Inventaire', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
 };
 
 export default function Corbeille() {
@@ -38,6 +39,7 @@ export default function Corbeille() {
     qc.invalidateQueries({ queryKey: ['corbeille-livraisons'] });
     qc.invalidateQueries({ queryKey: ['corbeille-commandes-ts'] });
     qc.invalidateQueries({ queryKey: ['corbeille-mouvements'] });
+    qc.invalidateQueries({ queryKey: ['corbeille-inventaires'] });
   };
 
   const { data: commandes = [], isLoading: l1 } = useQuery({
@@ -58,6 +60,11 @@ export default function Corbeille() {
   const { data: mouvements = [], isLoading: l4 } = useQuery({
     queryKey: ['corbeille-mouvements'],
     queryFn: mouvementsApi.corbeille,
+  });
+
+  const { data: inventaires = [], isLoading: l5 } = useQuery({
+    queryKey: ['corbeille-inventaires'],
+    queryFn: inventairesApi.corbeille,
   });
 
   // ── Restauration ──────────────────────────────────────────────────────────
@@ -98,6 +105,15 @@ export default function Corbeille() {
     },
   });
 
+  const restaurerInvMut = useMutation({
+    mutationFn: (id: string) => inventairesApi.restaurer(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['corbeille-inventaires'] });
+      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
+      toast.success('Inventaire restauré');
+    },
+  });
+
   // ── Suppression définitive ────────────────────────────────────────────────
 
   const supprimerItemMut = useMutation({
@@ -105,6 +121,7 @@ export default function Corbeille() {
       if (type === 'COMMANDE') return commandesApi.supprimerDefinitivement(id);
       if (type === 'LIVRAISON') return livraisonsApi.supprimerDefinitivement(id);
       if (type === 'MOUVEMENT') return mouvementsApi.supprimerDefinitivement(id);
+      if (type === 'INVENTAIRE') return inventairesApi.supprimerDefinitivement(id);
       return commandesTSApi.supprimerDefinitivement(id);
     },
     onSuccess: () => {
@@ -119,6 +136,7 @@ export default function Corbeille() {
       livraisonsApi.viderCorbeille(),
       commandesTSApi.viderCorbeille(),
       mouvementsApi.viderCorbeille(),
+      inventairesApi.viderCorbeille(),
     ]),
     onSuccess: () => {
       invalidateAll();
@@ -127,9 +145,9 @@ export default function Corbeille() {
     },
   });
 
-  const isLoading = l1 || l2 || l3 || l4;
+  const isLoading = l1 || l2 || l3 || l4 || l5;
   const isBusy = restaurerCmdMut.isPending || restaurerLivMut.isPending || restaurerTSMut.isPending || restaurerMouvMut.isPending
-    || supprimerItemMut.isPending || viderMut.isPending;
+    || restaurerInvMut.isPending || supprimerItemMut.isPending || viderMut.isPending;
 
   // ── Fusion et tri ─────────────────────────────────────────────────────────
 
@@ -170,6 +188,15 @@ export default function Corbeille() {
       deletedAt: m.deletedAt,
       deletedByName: m.deletedByName ?? 'Inconnu',
     })),
+    ...(inventaires as any[]).map(i => ({
+      id: i.id,
+      type: 'INVENTAIRE' as const,
+      numero: i.id.substring(0, 8).toUpperCase(),
+      label: `${i.article?.nom ?? '—'} — ${i.quantite} ${i.article?.unite ?? 'u'}`,
+      sublabel: `Inventaire physique · ${formatDate(i.date)}`,
+      deletedAt: i.deletedAt,
+      deletedByName: i.deletedByName ?? 'Inconnu',
+    })),
   ].sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
 
   // ── Helpers sélection ─────────────────────────────────────────────────────
@@ -200,6 +227,7 @@ export default function Corbeille() {
     if (item.type === 'COMMANDE') restaurerCmdMut.mutate(item.id);
     else if (item.type === 'LIVRAISON') restaurerLivMut.mutate(item.id);
     else if (item.type === 'MOUVEMENT') restaurerMouvMut.mutate(item.id);
+    else if (item.type === 'INVENTAIRE') restaurerInvMut.mutate(item.id);
     else restaurerTSMut.mutate(item.id);
   };
 

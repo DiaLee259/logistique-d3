@@ -125,6 +125,8 @@ export const commandesApi = {
   viderCorbeille: () => api.delete('/commandes/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/commandes/${id}`).then(r => r.data),
   create: (data: any) => api.post('/commandes', data).then(r => r.data),
+  createTransfertInterne: (data: { entrepotSourceId: string; entrepotDestinationId: string; lignes: { articleId: string; quantiteDemandee: number }[]; commentaire?: string }) =>
+    api.post('/commandes/transfert-interne', data).then(r => r.data),
   refuser: (id: string, motif: string) =>
     api.patch(`/commandes/${id}/refuser`, { motif }).then(r => r.data),
   valider: (id: string, data: any) =>
@@ -231,6 +233,12 @@ export const inventairesApi = {
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/inventaires/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
   deleteOne: (id: string) => api.delete(`/inventaires/${id}`).then(r => r.data),
   deleteBulk: (ids: string[]) => api.delete('/inventaires/bulk', { data: { ids } }).then(r => r.data),
+  updateArticle: (data: { entrepotId: string; articleId: string; quantite: number; commentaire?: string }) =>
+    api.post('/inventaires/update-article', data).then(r => r.data),
+  corbeille: () => api.get('/inventaires/corbeille').then(r => r.data),
+  restaurer: (id: string) => api.patch(`/inventaires/corbeille/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/inventaires/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/inventaires/corbeille/vider').then(r => r.data),
 };
 
 // ── Commandes TS ──────────────────────────────────────────────────────────────
