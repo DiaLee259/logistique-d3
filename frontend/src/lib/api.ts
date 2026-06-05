@@ -16,13 +16,17 @@ api.interceptors.response.use(
   res => res,
   err => {
     const msg = err.response?.data?.message;
-    if (err.response?.status === 401) {
+    const isLoginRoute = err.config?.url?.includes('/auth/login');
+
+    if (err.response?.status === 401 && !isLoginRoute) {
+      // Token expiré ou révoqué sur une route protégée → on déconnecte
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     } else if (err.response?.status === 403) {
       toast.error('Accès non autorisé pour votre rôle');
     } else if (msg) {
+      // Sur la route login, affiche l'erreur normalement sans recharger la page
       toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
     }
     return Promise.reject(err);
