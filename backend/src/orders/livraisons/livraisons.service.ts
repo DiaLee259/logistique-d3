@@ -55,8 +55,18 @@ export class LivraisonsService {
     commentaire?: string;
     commandeId?: string;
   }, userId?: string) {
-    const count = await this.prisma.livraison.count();
-    const numero = `LIV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    // On base le numéro sur le MAX existant (et non sur count) pour éviter
+    // les conflits quand des livraisons sont supprimées définitivement via la corbeille.
+    const year = new Date().getFullYear();
+    const lastLivraison = await this.prisma.livraison.findFirst({
+      where: { numero: { startsWith: `LIV-${year}-` } },
+      orderBy: { numero: 'desc' },
+      select: { numero: true },
+    });
+    const lastNum = lastLivraison
+      ? parseInt(lastLivraison.numero.split('-')[2] ?? '0', 10)
+      : 0;
+    const numero = `LIV-${year}-${String(lastNum + 1).padStart(4, '0')}`;
 
     const livraison = await this.prisma.livraison.create({
       data: {
