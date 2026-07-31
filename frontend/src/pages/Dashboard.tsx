@@ -29,11 +29,12 @@ const SECTIONS = [
 type SectionId = typeof SECTIONS[number]['id'];
 
 function loadVisible(): Record<SectionId, boolean> {
+  const defaults: Record<SectionId, boolean> = { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, bilanArticles: true, topArticles: true };
   try {
     const raw = localStorage.getItem('dashboard-sections');
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
   } catch {}
-  return { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, bilanArticles: true, topArticles: true };
+  return defaults;
 }
 
 export default function Dashboard() {
