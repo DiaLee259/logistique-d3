@@ -125,11 +125,12 @@ export class DashboardService {
     return Object.entries(byDay).map(([date, v]) => ({ date, ...v }));
   }
 
-  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = []) {
+  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = [], articleId?: string) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { type: TypeMouvement.SORTIE };
     if (entrepotId) where.entrepotId = entrepotId;
     else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
+    if (articleId) where.articleId = articleId;
     if (parsed.dateDebut || parsed.dateFin) {
       where.date = {};
       if (parsed.dateDebut) where.date.gte = new Date(parsed.dateDebut);
@@ -149,7 +150,7 @@ export class DashboardService {
     }));
   }
 
-  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = [], entrepotId?: string) {
+  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = [], entrepotId?: string, articleId?: string) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { statut: { not: 'ANNULEE' }, deletedAt: null };
     if (entrepotId) where.entrepotSource = entrepotId;
@@ -158,6 +159,14 @@ export class DashboardService {
       where.dateReception = {};
       if (parsed.dateDebut) where.dateReception.gte = new Date(parsed.dateDebut);
       if (parsed.dateFin) where.dateReception.lte = new Date(parsed.dateFin + 'T23:59:59');
+    }
+    if (articleId) {
+      const lignes = await this.prisma.ligneCommande.findMany({
+        where: { articleId },
+        select: { commandeId: true },
+        distinct: ['commandeId'],
+      });
+      where.id = { in: lignes.map(l => l.commandeId) };
     }
 
     const data = await this.prisma.commande.groupBy({
@@ -248,10 +257,18 @@ export class DashboardService {
     }));
   }
 
-  async getResumeCommandes(userEntrepots: string[] = [], entrepotId?: string) {
+  async getResumeCommandes(userEntrepots: string[] = [], entrepotId?: string, articleId?: string) {
     const where: any = { deletedAt: null };
     if (entrepotId) where.entrepotSource = entrepotId;
     else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
+    if (articleId) {
+      const lignes = await this.prisma.ligneCommande.findMany({
+        where: { articleId },
+        select: { commandeId: true },
+        distinct: ['commandeId'],
+      });
+      where.id = { in: lignes.map(l => l.commandeId) };
+    }
 
     const par_statut = await this.prisma.commande.groupBy({
       by: ['statut'],

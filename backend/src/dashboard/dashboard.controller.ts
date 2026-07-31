@@ -37,20 +37,22 @@ export class DashboardController {
   getVolumeParDepartement(
     @Query('entrepotId') entrepotId?: string,
     @Query('mois') mois?: string,
+    @Query('articleId') articleId?: string,
     @Request() req?: any,
   ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getVolumeParDepartement(entrepotId, mois, ue);
+    return this.service.getVolumeParDepartement(entrepotId, mois, ue, articleId);
   }
 
   @Get('demandeurs')
   getVolumeParDemandeur(
     @Query('mois') mois?: string,
     @Query('entrepotId') entrepotId?: string,
+    @Query('articleId') articleId?: string,
     @Request() req?: any,
   ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getVolumeParDemandeur(mois, ue, entrepotId);
+    return this.service.getVolumeParDemandeur(mois, ue, entrepotId, articleId);
   }
 
   @Get('delais')
@@ -75,9 +77,10 @@ export class DashboardController {
   @Get('commandes')
   getResumeCommandes(
     @Query('entrepotId') entrepotId?: string,
+    @Query('articleId') articleId?: string,
     @Request() req?: any,
   ) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getResumeCommandes(ue, entrepotId);
+    return this.service.getResumeCommandes(ue, entrepotId, articleId);
   }
 }

@@ -77,14 +77,14 @@ export default function Dashboard() {
   });
 
   const { data: departements = [] } = useQuery<{ departement: string; volume: number }[]>({
-    queryKey: ['dashboard-departements', filterMois, filterEntrepot],
+    queryKey: ['dashboard-departements', filterMois, filterEntrepot, filterArticle],
     queryFn: () => dashboardApi.departements(params),
     enabled: visible.departements,
   });
 
   const { data: demandeurs = [] } = useQuery<{ demandeur: string; commandes: number }[]>({
-    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot],
-    queryFn: () => dashboardApi.demandeurs({ ...(filterMois ? { mois: filterMois } : {}), ...(filterEntrepot ? { entrepotId: filterEntrepot } : {}) }),
+    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot, filterArticle],
+    queryFn: () => dashboardApi.demandeurs(params),
     enabled: visible.demandeurs,
   });
 
@@ -107,8 +107,8 @@ export default function Dashboard() {
   });
 
   const { data: commandesStats = [] } = useQuery<{ statut: string; count: number }[]>({
-    queryKey: ['dashboard-commandes', filterEntrepot],
-    queryFn: () => dashboardApi.commandes(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
+    queryKey: ['dashboard-commandes', filterEntrepot, filterArticle],
+    queryFn: () => dashboardApi.commandes(params),
     refetchInterval: 15_000,
     enabled: visible.statuts,
   });
