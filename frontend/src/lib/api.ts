@@ -58,6 +58,8 @@ export const dashboardApi = {
     api.get('/dashboard/top-articles', { params: { limit: 5, ...params } }).then(r => r.data),
   commandes: (params?: Record<string, string>) =>
     api.get('/dashboard/commandes', { params }).then(r => r.data),
+  bilanArticles: (params?: Record<string, string>) =>
+    api.get('/dashboard/bilan-articles', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────

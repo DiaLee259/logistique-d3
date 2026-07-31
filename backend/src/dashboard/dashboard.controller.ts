@@ -74,6 +74,19 @@ export class DashboardController {
     return this.service.getTopArticles(limit ? parseInt(limit) : 5, ue, entrepotId);
   }
 
+  @Get('bilan-articles')
+  getBilanArticles(
+    @Query('entrepotId') entrepotId?: string,
+    @Query('dateDebut') dateDebut?: string,
+    @Query('dateFin') dateFin?: string,
+    @Query('mois') mois?: string,
+    @Query('articleId') articleId?: string,
+    @Request() req?: any,
+  ) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getBilanArticles(entrepotId, dateDebut, dateFin, mois, articleId, ue);
+  }
+
   @Get('commandes')
   getResumeCommandes(
     @Query('entrepotId') entrepotId?: string,

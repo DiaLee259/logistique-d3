@@ -22,6 +22,7 @@ const SECTIONS = [
   { id: 'statuts', label: 'Statuts commandes' },
   { id: 'departements', label: 'Volume par département' },
   { id: 'demandeurs', label: 'Commandes par demandeur' },
+  { id: 'bilanArticles', label: 'Bilan flux par article' },
   { id: 'topArticles', label: 'Top articles' },
 ] as const;
 
@@ -32,7 +33,7 @@ function loadVisible(): Record<SectionId, boolean> {
     const raw = localStorage.getItem('dashboard-sections');
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, topArticles: true };
+  return { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, bilanArticles: true, topArticles: true };
 }
 
 export default function Dashboard() {
@@ -111,6 +112,15 @@ export default function Dashboard() {
     queryFn: () => dashboardApi.commandes(params),
     refetchInterval: 15_000,
     enabled: visible.statuts,
+  });
+
+  const { data: bilanArticles = [] } = useQuery<{
+    articleId: string; nom: string; reference: string; unite: string;
+    stockInitial: number; entrees: number; sorties: number; stockFinal: number;
+  }[]>({
+    queryKey: ['dashboard-bilan-articles', filterMois, filterEntrepot, filterArticle],
+    queryFn: () => dashboardApi.bilanArticles(params),
+    enabled: visible.bilanArticles,
   });
 
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
@@ -390,7 +400,7 @@ export default function Dashboard() {
             <div className="bg-card rounded-xl border border-border p-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Volume sorties par département
-                {(filterEntrepot || filterMois) && (
+                {anyFilter && (
                   <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>
@@ -414,8 +424,8 @@ export default function Dashboard() {
             <div className="bg-card rounded-xl border border-border p-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Commandes par demandeur
-                {filterMois && (
-                  <span className="ml-2 text-primary normal-case font-normal">— filtré par mois</span>
+                {anyFilter && (
+                  <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>
               {demandeurs.length === 0 ? (
@@ -432,6 +442,63 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Bilan flux par article */}
+      {visible.bilanArticles && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Bilan flux par article
+                {anyFilter && <span className="ml-2 text-primary normal-case font-normal">— filtré</span>}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {filterArticle
+                  ? `Flux pour ${articles.find(a => a.id === filterArticle)?.nom ?? 'l\'article sélectionné'}`
+                  : 'Stock initial · Entrées · Sorties · Stock final par article'
+                }
+              </p>
+            </div>
+          </div>
+          {bilanArticles.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">Aucune donnée pour cette sélection</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={bilanArticles.length === 1 ? 180 : Math.min(320, 80 + bilanArticles.length * 28)}>
+              <BarChart
+                data={bilanArticles}
+                margin={{ top: 5, right: 10, left: -10, bottom: bilanArticles.length > 4 ? 40 : 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="reference"
+                  tick={{ fontSize: 9 }}
+                  interval={0}
+                  angle={bilanArticles.length > 4 ? -35 : 0}
+                  textAnchor={bilanArticles.length > 4 ? 'end' : 'middle'}
+                />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip
+                  formatter={(v: number, name: string) => [formatNumber(v), name]}
+                  labelFormatter={(label) => {
+                    const a = bilanArticles.find(x => x.reference === label);
+                    return a ? `${a.nom} (${a.reference})` : label;
+                  }}
+                />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="stockInitial" name="Stock initial" fill="#9ca3af" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="entrees" name="Entrées" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="sorties" name="Sorties" fill="#f97316" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="stockFinal" name="Stock final" fill="#1a56db" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          {bilanArticles.length > 0 && bilanArticles[0].unite && (
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              Unité : {bilanArticles.length === 1 ? bilanArticles[0].unite : 'voir tooltip'}
+            </p>
           )}
         </div>
       )}
