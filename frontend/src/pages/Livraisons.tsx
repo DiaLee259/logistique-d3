@@ -526,9 +526,11 @@ export default function Livraisons() {
       )}
       {/* ─── Dialog rapport livraisons ──────────────────────────────────────── */}
       {rapportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className={`bg-card rounded-xl shadow-2xl w-full border border-border p-6 space-y-4 ${rapportView === 'table' ? 'max-w-6xl' : 'max-w-sm'}`}>
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+          <div className="bg-card rounded-xl shadow-2xl border border-border flex flex-col w-[96vw] h-[92vh]">
+
+            {/* Header fixe */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-border">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de livraisons</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -543,13 +545,15 @@ export default function Livraisons() {
                     ← Filtres
                   </button>
                 )}
-                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); setRapportCollapsed(new Set()); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
+            {/* Contenu scrollable */}
+            <div className="flex-1 overflow-auto p-6">
+
             {rapportView === 'form' && (
-              <>
-                <div className="space-y-3">
+              <div className="max-w-sm space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
@@ -582,7 +586,6 @@ export default function Livraisons() {
                       {articles.map(a => <option key={a.id} value={a.id}>{a.reference} — {a.nom}</option>)}
                     </select>
                   </div>
-                </div>
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }}
                     className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
@@ -601,7 +604,7 @@ export default function Livraisons() {
                     {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : <><FileDown className="w-3.5 h-3.5" /> Télécharger Excel</>}
                   </button>
                 </div>
-              </>
+              </div>
             )}
 
             {rapportView === 'table' && rapportData && (() => {
@@ -723,8 +726,9 @@ export default function Livraisons() {
                 </div>
               );
             })()}
-          </div>
-        </div>
+            </div>{/* flex-1 overflow-auto */}
+          </div>{/* bg-card flex flex-col */}
+        </div>{/* fixed overlay */}
       )}
     </div>
   );

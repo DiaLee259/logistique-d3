@@ -85,6 +85,8 @@ export default function Inventaire() {
   const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '', articleId: '' });
   const [rapportData, setRapportData] = useState<any[] | null>(null);
   const [rapportView, setRapportView] = useState<'form' | 'table'>('form');
+  const [rapportGroupBy, setRapportGroupBy] = useState<'entrepot' | 'article'>('entrepot');
+  const [rapportCollapsed, setRapportCollapsed] = useState<Set<string>>(new Set());
 
   const corrigerMut = useMutation({
     mutationFn: ({ inventaireId, quantiteNouvelle, commentaire }: { inventaireId: string; quantiteNouvelle: number; commentaire: string }) =>
@@ -689,14 +691,16 @@ export default function Inventaire() {
 
       {/* ─── Dialog rapport de stock ────────────────────────────────────────── */}
       {rapportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className={`bg-card rounded-xl shadow-2xl w-full border border-border p-6 space-y-4 ${rapportView === 'table' ? 'max-w-5xl' : 'max-w-sm'}`}>
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+          <div className="bg-card rounded-xl shadow-2xl border border-border flex flex-col w-[96vw] h-[92vh]">
+
+            {/* Header fixe */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-border">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de stock</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {rapportView === 'table'
-                    ? `${rapportData?.length ?? 0} article(s) — ${rapportParams.dateDebut} → ${rapportParams.dateFin}`
+                    ? `${rapportData?.length ?? 0} ligne(s) — ${rapportParams.dateDebut} → ${rapportParams.dateFin}`
                     : 'Export de l\'état du stock sur une période'}
                 </p>
               </div>
@@ -706,110 +710,162 @@ export default function Inventaire() {
                     ← Filtres
                   </button>
                 )}
-                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); setRapportCollapsed(new Set()); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
-            {rapportView === 'form' && (
-              <>
-                <div className="text-xs text-muted-foreground bg-muted/20 rounded-lg px-3 py-2 space-y-0.5">
-                  <p>• Stock réel à la date de début</p>
-                  <p>• Entrées et sorties sur la période</p>
-                  <p>• Stock final à la date de fin</p>
-                </div>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
-                      <input type="date" value={rapportParams.dateDebut}
-                        onChange={e => setRapportParams(p => ({ ...p, dateDebut: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de fin</label>
-                      <input type="date" value={rapportParams.dateFin}
-                        onChange={e => setRapportParams(p => ({ ...p, dateFin: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt (optionnel)</label>
-                    <select value={rapportParams.entrepotId}
-                      onChange={e => setRapportParams(p => ({ ...p, entrepotId: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
-                      <option value="">Tous les entrepôts</option>
-                      {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Article (optionnel)</label>
-                    <select value={rapportParams.articleId}
-                      onChange={e => setRapportParams(p => ({ ...p, articleId: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
-                      <option value="">Tous les articles</option>
-                      {articles.map((a: any) => <option key={a.id} value={a.id}>{a.reference} — {a.nom}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }}
-                    className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
-                    Annuler
-                  </button>
-                  <button
-                    onClick={() => rapportJsonMut.mutate()}
-                    disabled={rapportJsonMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg border border-primary text-primary font-medium hover:bg-primary/10 disabled:opacity-50">
-                    {rapportJsonMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement…</> : <><Eye className="w-3.5 h-3.5" /> Visualiser</>}
-                  </button>
-                  <button
-                    onClick={() => rapportMut.mutate()}
-                    disabled={rapportMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                    {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : <><FileDown className="w-3.5 h-3.5" /> Télécharger Excel</>}
-                  </button>
-                </div>
-              </>
-            )}
+            {/* Contenu scrollable */}
+            <div className="flex-1 overflow-auto p-6">
 
-            {rapportView === 'table' && rapportData && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-muted-foreground">{rapportData.length} ligne(s)</span>
-                  <button
-                    onClick={() => rapportMut.mutate()}
-                    disabled={rapportMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                    {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
-                  </button>
+              {rapportView === 'form' && (
+                <div className="max-w-sm space-y-4">
+                  <div className="text-xs text-muted-foreground bg-muted/20 rounded-lg px-3 py-2 space-y-0.5">
+                    <p>• Stock réel à la date de début</p>
+                    <p>• Entrées et sorties sur la période</p>
+                    <p>• Stock final à la date de fin</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
+                        <input type="date" value={rapportParams.dateDebut}
+                          onChange={e => setRapportParams(p => ({ ...p, dateDebut: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de fin</label>
+                        <input type="date" value={rapportParams.dateFin}
+                          onChange={e => setRapportParams(p => ({ ...p, dateFin: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt (optionnel)</label>
+                      <select value={rapportParams.entrepotId}
+                        onChange={e => setRapportParams(p => ({ ...p, entrepotId: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">Tous les entrepôts</option>
+                        {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Article (optionnel)</label>
+                      <select value={rapportParams.articleId}
+                        onChange={e => setRapportParams(p => ({ ...p, articleId: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">Tous les articles</option>
+                        {articles.map((a: any) => <option key={a.id} value={a.id}>{a.reference} — {a.nom}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); setRapportCollapsed(new Set()); }}
+                      className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                      Annuler
+                    </button>
+                    <button onClick={() => rapportJsonMut.mutate()}
+                      disabled={rapportJsonMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg border border-primary text-primary font-medium hover:bg-primary/10 disabled:opacity-50">
+                      {rapportJsonMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement…</> : <><Eye className="w-3.5 h-3.5" /> Visualiser</>}
+                    </button>
+                    <button onClick={() => rapportMut.mutate()}
+                      disabled={rapportMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                      {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : <><FileDown className="w-3.5 h-3.5" /> Télécharger Excel</>}
+                    </button>
+                  </div>
                 </div>
-                <div className="overflow-auto max-h-[60vh] rounded-lg border border-border">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-muted">
-                      <tr>
-                        {['Entrepôt', 'Référence', 'Article', 'Unité', 'Stock début', 'Entrées', 'Sorties', 'Stock fin'].map(h => (
-                          <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+              )}
+
+              {rapportView === 'table' && rapportData && (() => {
+                const totalEntrees = rapportData.reduce((s, r) => s + r.entrees, 0);
+                const totalSorties = rapportData.reduce((s, r) => s + r.sorties, 0);
+
+                const groupKey = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : r.reference;
+                const groupLabel = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : `${r.reference} — ${r.article}`;
+                const groups = new Map<string, any[]>();
+                for (const r of rapportData) {
+                  const k = groupKey(r);
+                  if (!groups.has(k)) groups.set(k, []);
+                  groups.get(k)!.push(r);
+                }
+                const toggleCollapse = (key: string) => setRapportCollapsed(prev => {
+                  const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
+                });
+
+                return (
+                  <div className="flex flex-col h-full gap-3">
+                    <div className="flex items-center justify-between flex-shrink-0">
+                      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                        {(['entrepot', 'article'] as const).map(g => (
+                          <button key={g} onClick={() => { setRapportGroupBy(g); setRapportCollapsed(new Set()); }}
+                            className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === g ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                            {g === 'entrepot' ? 'Par entrepôt' : 'Par article'}
+                          </button>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rapportData.map((row: any, i: number) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                          <td className="px-3 py-1.5 font-mono text-xs">{row.entrepot}</td>
-                          <td className="px-3 py-1.5 font-mono text-xs">{row.reference}</td>
-                          <td className="px-3 py-1.5 max-w-[200px] truncate">{row.article}</td>
-                          <td className="px-3 py-1.5 text-center">{row.unite}</td>
-                          <td className={`px-3 py-1.5 text-right font-medium ${row.stockDebut < 0 ? 'text-red-500' : ''}`}>{formatNumber(row.stockDebut)}</td>
-                          <td className="px-3 py-1.5 text-right text-emerald-600">{row.entrees > 0 ? `+${formatNumber(row.entrees)}` : '—'}</td>
-                          <td className="px-3 py-1.5 text-right text-red-500">{row.sorties > 0 ? `-${formatNumber(row.sorties)}` : '—'}</td>
-                          <td className={`px-3 py-1.5 text-right font-semibold ${row.stockFin < 0 ? 'text-red-500' : 'text-primary'}`}>{formatNumber(row.stockFin)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                      </div>
+                      <button onClick={() => rapportMut.mutate()} disabled={rapportMut.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                        {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
+                      </button>
+                    </div>
+                    <div className="overflow-auto flex-1 rounded-lg border border-border">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-muted z-10">
+                          <tr>
+                            {['Entrepôt', 'Référence', 'Article', 'Unité', 'Stock début', 'Entrées', 'Sorties', 'Stock fin'].map(h => (
+                              <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...groups.entries()].map(([key, rows]) => {
+                            const collapsed = rapportCollapsed.has(key);
+                            const subEntrees = rows.reduce((s, r) => s + r.entrees, 0);
+                            const subSorties = rows.reduce((s, r) => s + r.sorties, 0);
+                            return (
+                              <>
+                                <tr key={`g-${key}`} className="bg-primary/5 border-t border-border cursor-pointer hover:bg-primary/10 select-none"
+                                  onClick={() => toggleCollapse(key)}>
+                                  <td className="px-3 py-1.5 font-semibold text-primary" colSpan={4}>
+                                    <span className="text-muted-foreground w-3 inline-block mr-1">{collapsed ? '▶' : '▼'}</span>
+                                    {groupLabel(rows[0])}
+                                    <span className="text-muted-foreground font-normal ml-2 text-xs">({rows.length} ligne{rows.length > 1 ? 's' : ''})</span>
+                                  </td>
+                                  <td className="px-3 py-1.5" />
+                                  <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{subEntrees > 0 ? `+${formatNumber(subEntrees)}` : '—'}</td>
+                                  <td className="px-3 py-1.5 text-right font-bold text-red-500">{subSorties > 0 ? `-${formatNumber(subSorties)}` : '—'}</td>
+                                  <td className="px-3 py-1.5" />
+                                </tr>
+                                {!collapsed && rows.map((row: any, i: number) => (
+                                  <tr key={`${key}-${i}`} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                                    <td className="px-3 py-1.5 pl-7 font-mono">{row.entrepot}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                                    <td className="px-3 py-1.5 max-w-[200px] truncate">{row.article}</td>
+                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                                    <td className={`px-3 py-1.5 text-right font-medium ${row.stockDebut < 0 ? 'text-red-500' : ''}`}>{formatNumber(row.stockDebut)}</td>
+                                    <td className="px-3 py-1.5 text-right text-emerald-600">{row.entrees > 0 ? `+${formatNumber(row.entrees)}` : '—'}</td>
+                                    <td className="px-3 py-1.5 text-right text-red-500">{row.sorties > 0 ? `-${formatNumber(row.sorties)}` : '—'}</td>
+                                    <td className={`px-3 py-1.5 text-right font-semibold ${row.stockFin < 0 ? 'text-red-500' : 'text-primary'}`}>{formatNumber(row.stockFin)}</td>
+                                  </tr>
+                                ))}
+                              </>
+                            );
+                          })}
+                          <tr className="border-t-2 border-primary/40 bg-primary/5">
+                            <td colSpan={4} className="px-3 py-2 font-bold text-xs text-foreground">TOTAL</td>
+                            <td />
+                            <td className="px-3 py-2 text-right font-bold text-emerald-600">{totalEntrees > 0 ? `+${formatNumber(totalEntrees)}` : '—'}</td>
+                            <td className="px-3 py-2 text-right font-bold text-red-500">{totalSorties > 0 ? `-${formatNumber(totalSorties)}` : '—'}</td>
+                            <td />
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
