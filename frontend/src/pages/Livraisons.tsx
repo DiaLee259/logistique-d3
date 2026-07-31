@@ -670,8 +670,8 @@ export default function Livraisons() {
               };
 
               return (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col h-full gap-3">
+                  <div className="flex items-center justify-between flex-shrink-0">
                     <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
                       {(['date', 'article', 'entrepot'] as const).map(g => (
                         <button key={g} onClick={() => { setRapportGroupBy(g); setRapportCollapsed(new Set()); }}
@@ -685,7 +685,7 @@ export default function Livraisons() {
                       {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
                     </button>
                   </div>
-                  <div className="overflow-auto max-h-[65vh] rounded-lg border border-border">
+                  <div className="overflow-auto flex-1 rounded-lg border border-border">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-muted z-10">
                         <tr>
