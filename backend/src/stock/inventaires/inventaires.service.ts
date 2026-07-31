@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StockCalculatorService } from '../stock-calculator.service';
 import * as ExcelJS from 'exceljs';
@@ -63,7 +63,7 @@ export class InventairesService {
         article,
         stockTheorique,
         dernierInventaire: dernierInventaire
-          ? { quantite: dernierInventaire.quantite, date: dernierInventaire.date, commentaire: dernierInventaire.commentaire }
+          ? { id: dernierInventaire.id, quantite: dernierInventaire.quantite, date: dernierInventaire.date, commentaire: dernierInventaire.commentaire }
           : null,
         ecart: dernierInventaire ? dernierInventaire.quantite - stockTheorique : null,
       };
@@ -165,6 +165,197 @@ export class InventairesService {
     });
     await this.calculator.sync(data.articleId, data.entrepotId);
     return created;
+  }
+
+  /** Corriger la quantité d'un inventaire existant (délai 3 jours, commentaire obligatoire) */
+  async corrigerInventaire(
+    inventaireId: string,
+    data: { quantiteNouvelle: number; commentaire: string },
+    userId?: string,
+  ) {
+    if (!data.commentaire?.trim()) {
+      throw new BadRequestException('Le commentaire est obligatoire pour une correction');
+    }
+
+    const inv = await this.prisma.inventairePhysique.findUnique({ where: { id: inventaireId } });
+    if (!inv || inv.deletedAt) throw new NotFoundException('Inventaire introuvable');
+
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    if (Date.now() - inv.date.getTime() > threeDaysMs) {
+      throw new BadRequestException('Délai de correction dépassé (3 jours) — créez un nouvel inventaire');
+    }
+
+    let correctedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) correctedByName = `${user.prenom} ${user.nom}`;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.inventairePhysique.update({
+        where: { id: inventaireId },
+        data: { quantite: data.quantiteNouvelle },
+      }),
+      this.prisma.correctionInventaire.create({
+        data: {
+          inventaireId,
+          quantiteAvant: inv.quantite,
+          quantiteApres: data.quantiteNouvelle,
+          commentaire: data.commentaire.trim(),
+          correctedById: userId ?? null,
+          correctedByName,
+        },
+      }),
+    ]);
+
+    await this.calculator.sync(inv.articleId, inv.entrepotId);
+    return { success: true };
+  }
+
+  async getCorrections(inventaireId: string) {
+    return this.prisma.correctionInventaire.findMany({
+      where: { inventaireId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  private async stockAtDate(articleId: string, entrepotId: string, targetDate: Date): Promise<number> {
+    const dernierInventaire = await this.prisma.inventairePhysique.findFirst({
+      where: { articleId, entrepotId, date: { lte: targetDate }, deletedAt: null },
+      orderBy: { date: 'desc' },
+    });
+    const baseQte = dernierInventaire?.quantite ?? 0;
+    const fromDate = dernierInventaire?.date ?? new Date(0);
+    const [entrees, sorties] = await Promise.all([
+      this.prisma.mouvement.aggregate({
+        where: { articleId, entrepotId, type: 'ENTREE' as any, date: { gt: fromDate, lte: targetDate }, deletedAt: null },
+        _sum: { quantiteFournie: true },
+      }),
+      this.prisma.mouvement.aggregate({
+        where: { articleId, entrepotId, type: 'SORTIE' as any, date: { gt: fromDate, lte: targetDate }, deletedAt: null },
+        _sum: { quantiteFournie: true },
+      }),
+    ]);
+    return baseQte + (entrees._sum.quantiteFournie ?? 0) - (sorties._sum.quantiteFournie ?? 0);
+  }
+
+  async getRapportStock(params: { dateDebut: string; dateFin: string; entrepotId?: string }): Promise<Buffer> {
+    const dateDebutEOD = new Date(params.dateDebut);
+    dateDebutEOD.setHours(23, 59, 59, 999);
+    const dateFinEOD = new Date(params.dateFin);
+    dateFinEOD.setHours(23, 59, 59, 999);
+
+    const whereEntrepot: any = { actif: true };
+    if (params.entrepotId) whereEntrepot.id = params.entrepotId;
+
+    const [entrepots, articles] = await Promise.all([
+      this.prisma.entrepot.findMany({ where: whereEntrepot, orderBy: { code: 'asc' } }),
+      this.prisma.article.findMany({ where: { actif: true }, orderBy: { nom: 'asc' } }),
+    ]);
+
+    const entrepotIds = entrepots.map(e => e.id);
+    const articleIds = articles.map(a => a.id);
+
+    // Dernier inventaire par (article, entrepôt) avant ou à dateDebutEOD
+    const inventairesAvant = await this.prisma.inventairePhysique.findMany({
+      where: { articleId: { in: articleIds }, entrepotId: { in: entrepotIds }, date: { lte: dateDebutEOD }, deletedAt: null },
+      orderBy: { date: 'desc' },
+      select: { articleId: true, entrepotId: true, quantite: true, date: true },
+    });
+    const lastInvMap = new Map<string, { quantite: number; date: Date }>();
+    for (const inv of inventairesAvant) {
+      const key = `${inv.articleId}:${inv.entrepotId}`;
+      if (!lastInvMap.has(key)) lastInvMap.set(key, { quantite: inv.quantite, date: inv.date });
+    }
+
+    // Tous les mouvements jusqu'à dateFinEOD
+    const allMouvements = await this.prisma.mouvement.findMany({
+      where: { articleId: { in: articleIds }, entrepotId: { in: entrepotIds }, date: { lte: dateFinEOD }, deletedAt: null },
+      select: { articleId: true, entrepotId: true, type: true, quantiteFournie: true, date: true },
+    });
+
+    // Index des mouvements par clé article:entrepôt
+    const mouvByKey = new Map<string, typeof allMouvements>();
+    for (const m of allMouvements) {
+      const key = `${m.articleId}:${m.entrepotId}`;
+      if (!mouvByKey.has(key)) mouvByKey.set(key, []);
+      mouvByKey.get(key)!.push(m);
+    }
+
+    const rows: { entrepot: string; article: string; reference: string; unite: string; stockDebut: number; entrees: number; sorties: number; stockFin: number }[] = [];
+
+    for (const entrepot of entrepots) {
+      for (const article of articles) {
+        const key = `${article.id}:${entrepot.id}`;
+        const lastInv = lastInvMap.get(key);
+        const fromDate = lastInv?.date ?? new Date(0);
+        let stockDebut = lastInv?.quantite ?? 0;
+        let entrees = 0;
+        let sorties = 0;
+
+        for (const m of mouvByKey.get(key) ?? []) {
+          const qty = m.quantiteFournie ?? 0;
+          const isEntree = (m.type as string) === 'ENTREE';
+          if (m.date > fromDate && m.date <= dateDebutEOD) {
+            stockDebut += isEntree ? qty : -qty;
+          } else if (m.date > dateDebutEOD && m.date <= dateFinEOD) {
+            if (isEntree) entrees += qty; else sorties += qty;
+          }
+        }
+
+        const stockFin = stockDebut + entrees - sorties;
+        if (stockDebut === 0 && entrees === 0 && sorties === 0) continue;
+
+        rows.push({ entrepot: entrepot.code, article: article.nom, reference: article.reference, unite: article.unite, stockDebut, entrees, sorties, stockFin });
+      }
+    }
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Rapport de stock');
+
+    ws.columns = [
+      { header: 'Entrepôt', key: 'entrepot', width: 12 },
+      { header: 'Article', key: 'article', width: 40 },
+      { header: 'Référence', key: 'reference', width: 18 },
+      { header: 'Unité', key: 'unite', width: 8 },
+      { header: `Stock au ${params.dateDebut}`, key: 'stockDebut', width: 20 },
+      { header: `Entrées (${params.dateDebut} → ${params.dateFin})`, key: 'entrees', width: 26 },
+      { header: `Sorties (${params.dateDebut} → ${params.dateFin})`, key: 'sorties', width: 26 },
+      { header: `Stock au ${params.dateFin}`, key: 'stockFin', width: 20 },
+    ];
+
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 45;
+
+    let rowNum = 1;
+    for (const row of rows) {
+      rowNum++;
+      const r = ws.addRow(row);
+      r.alignment = { vertical: 'middle' };
+      if (rowNum % 2 === 0) {
+        r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+      }
+      const cellFin = r.getCell('stockFin');
+      if (row.stockFin < row.stockDebut) cellFin.font = { color: { argb: 'FFCC0000' }, bold: true };
+      else if (row.stockFin > row.stockDebut) cellFin.font = { color: { argb: 'FF007700' }, bold: true };
+      else cellFin.font = { bold: true };
+    }
+
+    ws.eachRow(r => {
+      r.eachCell(cell => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+          bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+          left: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+          right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        };
+      });
+    });
+
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 
   async deleteOne(id: string, userId?: string) {

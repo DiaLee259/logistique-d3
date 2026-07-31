@@ -239,6 +239,12 @@ export const inventairesApi = {
   deleteBulk: (ids: string[]) => api.delete('/inventaires/bulk', { data: { ids } }).then(r => r.data),
   updateArticle: (data: { entrepotId: string; articleId: string; quantite: number; commentaire?: string }) =>
     api.post('/inventaires/update-article', data).then(r => r.data),
+  corriger: (inventaireId: string, data: { quantiteNouvelle: number; commentaire: string }) =>
+    api.post(`/inventaires/${inventaireId}/corriger`, data).then(r => r.data),
+  getCorrections: (inventaireId: string) =>
+    api.get(`/inventaires/${inventaireId}/corrections`).then(r => r.data),
+  rapportStock: (params: { dateDebut: string; dateFin: string; entrepotId?: string }) =>
+    api.get('/inventaires/rapport-stock', { params, responseType: 'blob' }).then(r => r.data as Blob),
   corbeille: () => api.get('/inventaires/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/inventaires/corbeille/${id}/restaurer`).then(r => r.data),
   supprimerDefinitivement: (id: string) => api.delete(`/inventaires/corbeille/${id}`).then(r => r.data),

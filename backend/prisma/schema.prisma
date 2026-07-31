@@ -362,9 +362,25 @@ model InventairePhysique {
   deletedById   String?
   deletedByName String?
 
-  article Article @relation(fields: [articleId], references: [id])
+  article      Article                @relation(fields: [articleId], references: [id])
+  corrections  CorrectionInventaire[]
 
   @@map("inventaires_physiques")
+}
+
+model CorrectionInventaire {
+  id              String   @id @default(uuid())
+  inventaireId    String
+  quantiteAvant   Int
+  quantiteApres   Int
+  commentaire     String
+  correctedById   String?
+  correctedByName String
+  createdAt       DateTime @default(now())
+
+  inventaire InventairePhysique @relation(fields: [inventaireId], references: [id], onDelete: Cascade)
+
+  @@map("corrections_inventaire")
 }
 
 // ─── COMMANDES TS (APPROVISIONNEMENT PÉRIODIQUE) ──────────────────────────────

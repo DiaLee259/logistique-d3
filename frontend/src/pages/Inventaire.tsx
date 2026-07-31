@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2, Loader2, Pencil } from 'lucide-react';
+import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2, Loader2, Pencil, BarChart2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventairesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -61,7 +61,49 @@ export default function Inventaire() {
   });
 
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<{ key: string; ids: string[] } | null>(null);
-  const [correctionDialog, setCorrectionDialog] = useState<{ articleId: string; entrepotId: string; nom: string; reference: string; stockActuel: number; newQte: number; commentaire: string } | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+
+  const [correctionDialog, setCorrectionDialog] = useState<{
+    inventaireId: string | null;
+    inventaireDate: string | null;
+    articleId: string;
+    entrepotId: string;
+    nom: string;
+    reference: string;
+    stockActuel: number;
+    newQte: number;
+    commentaire: string;
+  } | null>(null);
+
+  const [rapportDialog, setRapportDialog] = useState(false);
+  const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '' });
+
+  const corrigerMut = useMutation({
+    mutationFn: ({ inventaireId, quantiteNouvelle, commentaire }: { inventaireId: string; quantiteNouvelle: number; commentaire: string }) =>
+      inventairesApi.corriger(inventaireId, { quantiteNouvelle, commentaire }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventaire-etat'] });
+      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
+      toast.success('Correction enregistrée');
+      setCorrectionDialog(null);
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Erreur lors de la correction'),
+  });
+
+  const rapportMut = useMutation({
+    mutationFn: () => inventairesApi.rapportStock({
+      dateDebut: rapportParams.dateDebut,
+      dateFin: rapportParams.dateFin,
+      entrepotId: rapportParams.entrepotId || undefined,
+    }),
+    onSuccess: (blob) => {
+      downloadBlob(blob as Blob, `rapport-stock-${rapportParams.dateDebut}-au-${rapportParams.dateFin}.xlsx`);
+      setRapportDialog(false);
+      toast.success('Rapport généré');
+    },
+    onError: () => toast.error('Erreur lors de la génération du rapport'),
+  });
 
   const updateArticleMut = useMutation({
     mutationFn: inventairesApi.updateArticle,
@@ -196,6 +238,11 @@ export default function Inventaire() {
           </button>
         </div>
         <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => setRapportDialog(true)}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            <BarChart2 className="w-3.5 h-3.5" /> Rapport de stock
+          </button>
           <button onClick={() => inventairesApi.template().then(b => downloadBlob(b, 'template-inventaire.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
             Modèle Excel
           </button>
@@ -486,6 +533,8 @@ export default function Inventaire() {
                             <td className="px-3 py-2.5">
                               <button
                                 onClick={() => setCorrectionDialog({
+                                  inventaireId: ligne.dernierInventaire?.id ?? null,
+                                  inventaireDate: ligne.dernierInventaire?.date ?? null,
                                   articleId: ligne.articleId,
                                   entrepotId: selectedEntrepot,
                                   nom: ligne.article?.nom ?? '',
@@ -512,57 +561,160 @@ export default function Inventaire() {
       )}
 
       {/* ─── Dialog correction article ─────────────────────────────────────── */}
-      {correctionDialog && (
+      {correctionDialog && (() => {
+        const invDate = correctionDialog.inventaireDate ? new Date(correctionDialog.inventaireDate) : null;
+        const joursEcoules = invDate ? Math.floor((Date.now() - invDate.getTime()) / (24 * 60 * 60 * 1000)) : null;
+        const joursRestants = joursEcoules !== null ? 3 - joursEcoules : null;
+        const delaiDepasse = joursRestants !== null && joursRestants < 0;
+        const peutCorrection = !!correctionDialog.inventaireId && !delaiDepasse;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Corriger un article</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">{correctionDialog.nom} — <span className="font-mono">{correctionDialog.reference}</span></p>
+                </div>
+                <button onClick={() => setCorrectionDialog(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Statut délai */}
+              {!correctionDialog.inventaireId ? (
+                <div className="flex items-start gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <p>Aucun inventaire enregistré pour cet article. Utilisez <strong>Saisir un inventaire</strong> pour créer un premier inventaire.</p>
+                </div>
+              ) : delaiDepasse ? (
+                <div className="flex items-start gap-2 text-xs bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <p>Le délai de correction de 3 jours est dépassé (inventaire du {invDate ? formatDate(invDate.toISOString()) : '—'}). Créez un nouvel inventaire via <strong>Saisir un inventaire</strong>.</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs bg-primary/5 border border-primary/20 text-primary rounded-lg px-3 py-2">
+                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                  <p>Inventaire du {invDate ? formatDate(invDate.toISOString()) : '—'} — <strong>{joursRestants === 0 ? 'dernier jour' : `encore ${joursRestants} jour(s)`}</strong> pour corriger</p>
+                </div>
+              )}
+
+              {peutCorrection && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Nouvelle quantité comptée</label>
+                    <input
+                      type="number" min={0}
+                      value={correctionDialog.newQte}
+                      onChange={e => setCorrectionDialog(d => d ? { ...d, newQte: parseInt(e.target.value) || 0 } : d)}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    {correctionDialog.stockActuel !== correctionDialog.newQte && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Avant : <span className="font-semibold">{correctionDialog.stockActuel}</span>
+                        {' → '}
+                        Après : <span className={cn('font-semibold', correctionDialog.newQte > correctionDialog.stockActuel ? 'text-green-600' : 'text-red-600')}>
+                          {correctionDialog.newQte}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1 block">
+                      Motif de la correction <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex. : erreur de saisie, comptage manuel…"
+                      value={correctionDialog.commentaire}
+                      onChange={e => setCorrectionDialog(d => d ? { ...d, commentaire: e.target.value } : d)}
+                      className={cn(
+                        'w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30',
+                        !correctionDialog.commentaire.trim() ? 'border-amber-300 focus:ring-amber-300/30' : 'border-border',
+                      )}
+                    />
+                    {!correctionDialog.commentaire.trim() && (
+                      <p className="text-xs text-amber-600 mt-1">Le motif est obligatoire pour tracer la correction.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => setCorrectionDialog(null)}
+                  className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                  Annuler
+                </button>
+                {peutCorrection && (
+                  <button
+                    onClick={() => {
+                      if (!correctionDialog.commentaire.trim()) { toast.error('Le motif de correction est obligatoire'); return; }
+                      corrigerMut.mutate({
+                        inventaireId: correctionDialog.inventaireId!,
+                        quantiteNouvelle: correctionDialog.newQte,
+                        commentaire: correctionDialog.commentaire,
+                      });
+                    }}
+                    disabled={corrigerMut.isPending || !correctionDialog.commentaire.trim()}
+                    className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                    {corrigerMut.isPending ? 'Enregistrement…' : 'Enregistrer la correction'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── Dialog rapport de stock ────────────────────────────────────────── */}
+      {rapportDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold">Corriger un article</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{correctionDialog.nom} — <span className="font-mono">{correctionDialog.reference}</span></p>
+                <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de stock</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Export de l'état du stock sur une période</p>
               </div>
-              <button onClick={() => setCorrectionDialog(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setRapportDialog(false)} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
             </div>
-            <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-              Seul cet article sera mis à jour — les autres articles de l'inventaire ne sont pas touchés.
+            <div className="text-xs text-muted-foreground bg-muted/20 rounded-lg px-3 py-2 space-y-0.5">
+              <p>• Stock réel à la date de début</p>
+              <p>• Entrées et sorties sur la période</p>
+              <p>• Stock final à la date de fin</p>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Nouvelle quantité comptée</label>
-                <input
-                  type="number" min={0}
-                  value={correctionDialog.newQte}
-                  onChange={e => setCorrectionDialog(d => d ? { ...d, newQte: parseInt(e.target.value) || 0 } : d)}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
+                <input type="date" value={rapportParams.dateDebut}
+                  onChange={e => setRapportParams(p => ({ ...p, dateDebut: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Commentaire (optionnel)</label>
-                <input
-                  type="text"
-                  placeholder="Raison de la correction…"
-                  value={correctionDialog.commentaire}
-                  onChange={e => setCorrectionDialog(d => d ? { ...d, commentaire: e.target.value } : d)}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de fin</label>
+                <input type="date" value={rapportParams.dateFin}
+                  onChange={e => setRapportParams(p => ({ ...p, dateFin: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt (optionnel — tous si vide)</label>
+                <select value={rapportParams.entrepotId}
+                  onChange={e => setRapportParams(p => ({ ...p, entrepotId: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option value="">Tous les entrepôts</option>
+                  {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setCorrectionDialog(null)}
+              <button onClick={() => setRapportDialog(false)}
                 className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
                 Annuler
               </button>
               <button
-                onClick={() => updateArticleMut.mutate({
-                  entrepotId: correctionDialog.entrepotId,
-                  articleId: correctionDialog.articleId,
-                  quantite: correctionDialog.newQte,
-                  commentaire: correctionDialog.commentaire || undefined,
-                })}
-                disabled={updateArticleMut.isPending}
-                className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                {updateArticleMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
+                onClick={() => rapportMut.mutate()}
+                disabled={rapportMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : 'Télécharger Excel'}
               </button>
             </div>
           </div>

@@ -85,6 +85,25 @@ export class InventairesController {
     return this.service.importInventaire(file.buffer, req.user?.id);
   }
 
+  // ── Rapport de stock (avant :id pour éviter conflits) ────────────────────
+
+  @Get('rapport-stock')
+  async getRapportStock(@Query() params: any, @Res() res: Response) {
+    if (!params.dateDebut || !params.dateFin) {
+      res.status(400).json({ message: 'dateDebut et dateFin sont requis' });
+      return;
+    }
+    const buffer = await this.service.getRapportStock({
+      dateDebut: params.dateDebut,
+      dateFin: params.dateFin,
+      entrepotId: params.entrepotId || undefined,
+    });
+    const filename = `rapport-stock-${params.dateDebut}-au-${params.dateFin}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
   // ── Listes / états ────────────────────────────────────────────────────────
 
   @Get()
@@ -127,5 +146,20 @@ export class InventairesController {
   @Delete(':id')
   deleteOne(@Param('id') id: string, @Request() req: any) {
     return this.service.deleteOne(id, req.user?.id);
+  }
+
+  // ── Corrections d'inventaire ──────────────────────────────────────────────
+
+  @Get(':id/corrections')
+  getCorrections(@Param('id') id: string) {
+    return this.service.getCorrections(id);
+  }
+
+  @Post(':id/corriger')
+  corrigerInventaire(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.service.corrigerInventaire(id, {
+      quantiteNouvelle: body.quantiteNouvelle,
+      commentaire: body.commentaire,
+    }, req.user?.id);
   }
 }
