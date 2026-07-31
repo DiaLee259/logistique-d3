@@ -154,7 +154,7 @@ export class LivraisonsService {
       orderBy: { dateLivraison: 'asc' },
     });
 
-    const rows: { date: string; numero: string; entrepot: string; fournisseur: string; article: string; reference: string; unite: string; quantiteRecue: number }[] = [];
+    const rows: { date: string; numero: string; entrepot: string; fournisseur: string; article: string; reference: string; unite: string; quantiteRecue: number; commentaire: string }[] = [];
     for (const liv of livraisons) {
       for (const ligne of liv.lignes) {
         if (ligne.quantiteRecue > 0) {
@@ -167,6 +167,7 @@ export class LivraisonsService {
             reference: ligne.article.reference,
             unite: ligne.article.unite,
             quantiteRecue: ligne.quantiteRecue,
+            commentaire: liv.commentaire ?? '',
           });
         }
       }
@@ -185,6 +186,7 @@ export class LivraisonsService {
       { header: 'Référence', key: 'reference', width: 18 },
       { header: 'Unité', key: 'unite', width: 8 },
       { header: 'Qté reçue', key: 'quantiteRecue', width: 12 },
+      { header: 'Commentaire', key: 'commentaire', width: 35 },
     ];
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };

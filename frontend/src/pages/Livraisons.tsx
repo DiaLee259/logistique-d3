@@ -55,7 +55,8 @@ export default function Livraisons() {
   const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '', articleId: '' });
   const [rapportData, setRapportData] = useState<any[] | null>(null);
   const [rapportView, setRapportView] = useState<'form' | 'table'>('form');
-  const [rapportGroupBy, setRapportGroupBy] = useState<'date' | 'article'>('date');
+  const [rapportGroupBy, setRapportGroupBy] = useState<'date' | 'article' | 'entrepot'>('date');
+  const [rapportCollapsed, setRapportCollapsed] = useState<Set<string>>(new Set());
 
   const filterParams: Record<string, string> = {};
   if (filterMois) filterParams.mois = filterMois;
@@ -606,9 +607,8 @@ export default function Livraisons() {
             {rapportView === 'table' && rapportData && (() => {
               const grandTotal = rapportData.reduce((s, r) => s + r.quantiteRecue, 0);
 
-              // Groupement
-              const groupKey = (r: any) => rapportGroupBy === 'date' ? r.date : r.reference;
-              const groupLabel = (r: any) => rapportGroupBy === 'date' ? r.date : `${r.reference} — ${r.article}`;
+              const groupKey = (r: any) => rapportGroupBy === 'date' ? r.date : rapportGroupBy === 'article' ? r.reference : r.entrepot;
+              const groupLabel = (r: any) => rapportGroupBy === 'date' ? r.date : rapportGroupBy === 'article' ? `${r.reference} — ${r.article}` : r.entrepot;
               const groups = new Map<string, any[]>();
               for (const r of rapportData) {
                 const k = groupKey(r);
@@ -616,22 +616,68 @@ export default function Livraisons() {
                 groups.get(k)!.push(r);
               }
 
+              const toggleCollapse = (key: string) => {
+                setRapportCollapsed(prev => {
+                  const next = new Set(prev);
+                  next.has(key) ? next.delete(key) : next.add(key);
+                  return next;
+                });
+              };
+
+              const COLS = rapportGroupBy === 'date'
+                ? ['Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue', 'Commentaire']
+                : rapportGroupBy === 'article'
+                ? ['Article', 'Référence', 'Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Unité', 'Qté reçue', 'Commentaire']
+                : ['Entrepôt', 'Date', 'N° Livraison', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue', 'Commentaire'];
+
+              const detailCells = (row: any) => {
+                if (rapportGroupBy === 'date') return <>
+                  <td className="px-3 py-1.5 pl-7 whitespace-nowrap text-muted-foreground">{row.date}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.numero}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
+                  <td className="px-3 py-1.5 max-w-[130px] truncate">{row.fournisseur}</td>
+                  <td className="px-3 py-1.5 max-w-[160px] truncate">{row.article}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                  <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                  <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
+                  <td className="px-3 py-1.5 max-w-[160px] truncate text-muted-foreground italic">{row.commentaire}</td>
+                </>;
+                if (rapportGroupBy === 'article') return <>
+                  <td className="px-3 py-1.5 pl-7 max-w-[140px] truncate text-muted-foreground">{row.article}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.numero}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
+                  <td className="px-3 py-1.5 max-w-[130px] truncate">{row.fournisseur}</td>
+                  <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                  <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
+                  <td className="px-3 py-1.5 max-w-[160px] truncate text-muted-foreground italic">{row.commentaire}</td>
+                </>;
+                return <>
+                  <td className="px-3 py-1.5 pl-7 font-mono text-muted-foreground">{row.entrepot}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.numero}</td>
+                  <td className="px-3 py-1.5 max-w-[130px] truncate">{row.fournisseur}</td>
+                  <td className="px-3 py-1.5 max-w-[160px] truncate">{row.article}</td>
+                  <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                  <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                  <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
+                  <td className="px-3 py-1.5 max-w-[160px] truncate text-muted-foreground italic">{row.commentaire}</td>
+                </>;
+              };
+
               return (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-                      <button onClick={() => setRapportGroupBy('date')}
-                        className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === 'date' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-                        Par date
-                      </button>
-                      <button onClick={() => setRapportGroupBy('article')}
-                        className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === 'article' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-                        Par article
-                      </button>
+                      {(['date', 'article', 'entrepot'] as const).map(g => (
+                        <button key={g} onClick={() => { setRapportGroupBy(g); setRapportCollapsed(new Set()); }}
+                          className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === g ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                          {g === 'date' ? 'Par date' : g === 'article' ? 'Par article' : 'Par entrepôt'}
+                        </button>
+                      ))}
                     </div>
-                    <button
-                      onClick={() => rapportMut.mutate()}
-                      disabled={rapportMut.isPending}
+                    <button onClick={() => rapportMut.mutate()} disabled={rapportMut.isPending}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
                       {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
                     </button>
@@ -640,55 +686,35 @@ export default function Livraisons() {
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-muted z-10">
                         <tr>
-                          {(rapportGroupBy === 'date'
-                            ? ['Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue']
-                            : ['Article', 'Référence', 'Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Unité', 'Qté reçue']
-                          ).map(h => (
-                            <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                          ))}
+                          {COLS.map(h => <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
                         {[...groups.entries()].map(([key, rows]) => {
+                          const collapsed = rapportCollapsed.has(key);
                           const subTotal = rows.reduce((s, r) => s + r.quantiteRecue, 0);
                           return (
                             <>
-                              <tr key={`group-${key}`} className="bg-primary/5 border-t border-border">
-                                <td colSpan={7} className="px-3 py-1.5 font-semibold text-primary text-xs">
+                              <tr key={`g-${key}`} className="bg-primary/8 border-t border-border cursor-pointer hover:bg-primary/10 select-none"
+                                onClick={() => toggleCollapse(key)}>
+                                <td className="px-3 py-1.5 font-semibold text-primary flex items-center gap-1.5">
+                                  <span className="text-muted-foreground w-3">{collapsed ? '▶' : '▼'}</span>
                                   {groupLabel(rows[0])}
+                                  <span className="text-muted-foreground font-normal ml-1">({rows.length} ligne{rows.length > 1 ? 's' : ''})</span>
                                 </td>
-                                <td className="px-3 py-1.5 text-right font-bold text-primary whitespace-nowrap">
-                                  {formatNumber(subTotal)}
-                                </td>
+                                {COLS.slice(1, -1).map(h => <td key={h} />)}
+                                <td className="px-3 py-1.5 text-right font-bold text-primary whitespace-nowrap">{formatNumber(subTotal)}</td>
                               </tr>
-                              {rows.map((row: any, i: number) => (
+                              {!collapsed && rows.map((row: any, i: number) => (
                                 <tr key={`${key}-${i}`} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                                  {rapportGroupBy === 'date' ? <>
-                                    <td className="px-3 py-1.5 pl-6 whitespace-nowrap text-muted-foreground">{row.date}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.numero}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
-                                    <td className="px-3 py-1.5 max-w-[140px] truncate">{row.fournisseur}</td>
-                                    <td className="px-3 py-1.5 max-w-[180px] truncate">{row.article}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
-                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
-                                    <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
-                                  </> : <>
-                                    <td className="px-3 py-1.5 pl-6 max-w-[160px] truncate text-muted-foreground">{row.article}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
-                                    <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.numero}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
-                                    <td className="px-3 py-1.5 max-w-[140px] truncate">{row.fournisseur}</td>
-                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
-                                    <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
-                                  </>}
+                                  {detailCells(row)}
                                 </tr>
                               ))}
                             </>
                           );
                         })}
-                        <tr className="border-t-2 border-primary/30 bg-primary/5 font-bold">
-                          <td colSpan={7} className="px-3 py-2 text-xs font-bold text-foreground">TOTAL</td>
+                        <tr className="border-t-2 border-primary/40 bg-primary/5">
+                          <td colSpan={8} className="px-3 py-2 text-xs font-bold text-foreground">TOTAL</td>
                           <td className="px-3 py-2 text-right text-sm font-bold text-primary">+{formatNumber(grandTotal)}</td>
                         </tr>
                       </tbody>
