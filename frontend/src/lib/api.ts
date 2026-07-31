@@ -197,6 +197,10 @@ export const livraisonsApi = {
   delete: (id: string) => api.delete(`/livraisons/${id}`).then(r => r.data),
   template: () => api.get('/livraisons/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/livraisons/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  rapportLivraisons: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
+    api.get('/livraisons/rapport', { params, responseType: 'blob' }).then(r => r.data as Blob),
+  rapportLivraisonsJson: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
+    api.get('/livraisons/rapport', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
@@ -243,8 +247,10 @@ export const inventairesApi = {
     api.post(`/inventaires/${inventaireId}/corriger`, data).then(r => r.data),
   getCorrections: (inventaireId: string) =>
     api.get(`/inventaires/${inventaireId}/corrections`).then(r => r.data),
-  rapportStock: (params: { dateDebut: string; dateFin: string; entrepotId?: string }) =>
+  rapportStock: (params: { dateDebut: string; dateFin: string; entrepotId?: string; articleId?: string }) =>
     api.get('/inventaires/rapport-stock', { params, responseType: 'blob' }).then(r => r.data as Blob),
+  rapportStockJson: (params: { dateDebut: string; dateFin: string; entrepotId?: string; articleId?: string }) =>
+    api.get('/inventaires/rapport-stock', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
   corbeille: () => api.get('/inventaires/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/inventaires/corbeille/${id}/restaurer`).then(r => r.data),
   supprimerDefinitivement: (id: string) => api.delete(`/inventaires/corbeille/${id}`).then(r => r.data),

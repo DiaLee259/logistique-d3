@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List } from 'lucide-react';
+import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List, BarChart2, Eye, FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { livraisonsApi, articlesApi, entrepotsApi, uploadsApi } from '@/lib/api';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, formatNumber } from '@/lib/utils';
 import type { Livraison, Article, Entrepot } from '@/lib/types';
 
 const statutLivraisonLabel: Record<string, string> = {
@@ -40,7 +40,7 @@ export default function Livraisons() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [vue, setVue] = useState<'liste' | 'matrice' | 'matrice-dates'>('liste');
+  const [vue, setVue] = useState<'liste' | 'matrice'>('liste');
   const [filterStatut, setFilterStatut] = useState('');
 
   // Filters
@@ -48,6 +48,13 @@ export default function Livraisons() {
   const [filterMois, setFilterMois] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterArticleId, setFilterArticleId] = useState('');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const [rapportDialog, setRapportDialog] = useState(false);
+  const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '', articleId: '' });
+  const [rapportData, setRapportData] = useState<any[] | null>(null);
+  const [rapportView, setRapportView] = useState<'form' | 'table'>('form');
 
   const filterParams: Record<string, string> = {};
   if (filterMois) filterParams.mois = filterMois;
@@ -104,6 +111,34 @@ export default function Livraisons() {
       toast.success(`Import terminé : ${data.created} ajoutées, ${data.skipped} ignorées`);
     },
     onError: () => toast.error("Erreur lors de l'import"),
+  });
+
+  const rapportMut = useMutation({
+    mutationFn: () => livraisonsApi.rapportLivraisons({
+      dateDebut: rapportParams.dateDebut,
+      dateFin: rapportParams.dateFin,
+      entrepotId: rapportParams.entrepotId || undefined,
+      articleId: rapportParams.articleId || undefined,
+    }),
+    onSuccess: (blob) => {
+      downloadBlob(blob as Blob, `rapport-livraisons-${rapportParams.dateDebut}-au-${rapportParams.dateFin}.xlsx`);
+      toast.success('Rapport téléchargé');
+    },
+    onError: () => toast.error('Erreur lors de la génération du rapport'),
+  });
+
+  const rapportJsonMut = useMutation({
+    mutationFn: () => livraisonsApi.rapportLivraisonsJson({
+      dateDebut: rapportParams.dateDebut,
+      dateFin: rapportParams.dateFin,
+      entrepotId: rapportParams.entrepotId || undefined,
+      articleId: rapportParams.articleId || undefined,
+    }),
+    onSuccess: (data) => {
+      setRapportData(data);
+      setRapportView('table');
+    },
+    onError: () => toast.error('Erreur lors de la visualisation'),
   });
 
   const closeDialog = () => {
@@ -185,11 +220,6 @@ export default function Livraisons() {
               vue === 'matrice' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
             <LayoutGrid className="w-3.5 h-3.5" /> Matrice
           </button>
-          <button onClick={() => setVue('matrice-dates')}
-            className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs rounded font-medium transition-colors',
-              vue === 'matrice-dates' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            <LayoutGrid className="w-3.5 h-3.5" /> Par dates
-          </button>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => livraisonsApi.template().then(b => downloadBlob(b, 'template-livraisons.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
@@ -199,6 +229,10 @@ export default function Livraisons() {
             Importer
           </button>
           <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+          <button onClick={() => { setRapportView('form'); setRapportData(null); setRapportDialog(true); }}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
+            <BarChart2 className="w-3.5 h-3.5" /> Rapport
+          </button>
         </div>
         <button onClick={() => setDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
@@ -258,82 +292,6 @@ export default function Livraisons() {
                             );
                           })}
                           <td className="px-2 py-2 text-center font-bold text-primary">{total > 0 ? total : '—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ── Vue Matrice Par Dates (tous entrepôts confondus) ── */}
-      {vue === 'matrice-dates' && (() => {
-        // Grouper par date (YYYY-MM-DD)
-        const dateMap = new Map<string, typeof filtered>();
-        filtered.forEach(l => {
-          const key = new Date(l.dateLivraison).toISOString().split('T')[0];
-          if (!dateMap.has(key)) dateMap.set(key, []);
-          dateMap.get(key)!.push(l);
-        });
-        const dates = [...dateMap.keys()].sort();
-
-        // Tous les articles présents
-        const artMap = new Map<string, string>();
-        filtered.forEach(l => l.lignes?.forEach((li: any) => {
-          if (li.article && !artMap.has(li.articleId)) artMap.set(li.articleId, li.article.nom ?? li.articleId);
-        }));
-        const arts = [...artMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-
-        // lookup: articleId_date → sum quantiteRecue
-        const lookup = new Map<string, number>();
-        filtered.forEach(l => {
-          const key = new Date(l.dateLivraison).toISOString().split('T')[0];
-          l.lignes?.forEach((li: any) => {
-            const k = `${li.articleId}_${key}`;
-            lookup.set(k, (lookup.get(k) ?? 0) + li.quantiteRecue);
-          });
-        });
-
-        return (
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            {arts.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted-foreground">Aucune donnée pour ce filtre.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="text-xs w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide sticky left-0 bg-muted/30 min-w-[200px]">Article</th>
-                      {dates.map(d => (
-                        <th key={d} className="text-center px-2 py-2.5 font-semibold text-muted-foreground min-w-[100px]">
-                          <div className="text-primary font-bold">{formatDate(d)}</div>
-                        </th>
-                      ))}
-                      <th className="text-center px-2 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide min-w-[80px]">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {arts.map(([artId, nom]) => {
-                      const total = dates.reduce((s, d) => s + (lookup.get(`${artId}_${d}`) ?? 0), 0);
-                      if (total === 0) return null;
-                      return (
-                        <tr key={artId} className="border-t border-border/30 hover:bg-muted/10">
-                          <td className="px-3 py-2 sticky left-0 bg-card border-r border-border/30">
-                            <p className="font-medium">{nom}</p>
-                            <p className="font-mono text-muted-foreground">{articles.find((a: any) => a.id === artId)?.reference ?? ''}</p>
-                          </td>
-                          {dates.map(d => {
-                            const qte = lookup.get(`${artId}_${d}`);
-                            return (
-                              <td key={d} className="px-2 py-2 text-center">
-                                {qte ? <span className="font-bold text-green-700">{qte}</span> : <span className="text-muted-foreground/30">—</span>}
-                              </td>
-                            );
-                          })}
-                          <td className="px-2 py-2 text-center font-bold text-primary">{total}</td>
                         </tr>
                       );
                     })}
@@ -561,6 +519,127 @@ export default function Livraisons() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ─── Dialog rapport livraisons ──────────────────────────────────────── */}
+      {rapportDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className={`bg-card rounded-xl shadow-2xl w-full border border-border p-6 space-y-4 ${rapportView === 'table' ? 'max-w-4xl' : 'max-w-sm'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de livraisons</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {rapportView === 'table'
+                    ? `${rapportData?.length ?? 0} ligne(s) — ${rapportParams.dateDebut} → ${rapportParams.dateFin}`
+                    : 'Détail des réceptions par article sur une période'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {rapportView === 'table' && (
+                  <button onClick={() => setRapportView('form')} className="px-3 py-1 text-xs border border-border rounded-lg hover:bg-muted text-muted-foreground">
+                    ← Filtres
+                  </button>
+                )}
+                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            {rapportView === 'form' && (
+              <>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
+                      <input type="date" value={rapportParams.dateDebut}
+                        onChange={e => setRapportParams(p => ({ ...p, dateDebut: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de fin</label>
+                      <input type="date" value={rapportParams.dateFin}
+                        onChange={e => setRapportParams(p => ({ ...p, dateFin: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt (optionnel)</label>
+                    <select value={rapportParams.entrepotId}
+                      onChange={e => setRapportParams(p => ({ ...p, entrepotId: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+                      <option value="">Tous les entrepôts</option>
+                      {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Article (optionnel)</label>
+                    <select value={rapportParams.articleId}
+                      onChange={e => setRapportParams(p => ({ ...p, articleId: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
+                      <option value="">Tous les articles</option>
+                      {articles.map(a => <option key={a.id} value={a.id}>{a.reference} — {a.nom}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); }}
+                    className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
+                    Annuler
+                  </button>
+                  <button
+                    onClick={() => rapportJsonMut.mutate()}
+                    disabled={rapportJsonMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg border border-primary text-primary font-medium hover:bg-primary/10 disabled:opacity-50">
+                    {rapportJsonMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement…</> : <><Eye className="w-3.5 h-3.5" /> Visualiser</>}
+                  </button>
+                  <button
+                    onClick={() => rapportMut.mutate()}
+                    disabled={rapportMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                    {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : <><FileDown className="w-3.5 h-3.5" /> Télécharger Excel</>}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {rapportView === 'table' && rapportData && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-muted-foreground">{rapportData.length} ligne(s)</span>
+                  <button
+                    onClick={() => rapportMut.mutate()}
+                    disabled={rapportMut.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                    {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
+                  </button>
+                </div>
+                <div className="overflow-auto max-h-[60vh] rounded-lg border border-border">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted">
+                      <tr>
+                        {['Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rapportData.map((row: any, i: number) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
+                          <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs">{row.numero}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs">{row.entrepot}</td>
+                          <td className="px-3 py-1.5 max-w-[120px] truncate">{row.fournisseur}</td>
+                          <td className="px-3 py-1.5 max-w-[180px] truncate">{row.article}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs">{row.reference}</td>
+                          <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                          <td className="px-3 py-1.5 text-right font-semibold text-emerald-600">+{formatNumber(row.quantiteRecue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
