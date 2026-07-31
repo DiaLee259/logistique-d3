@@ -93,15 +93,19 @@ export class InventairesController {
       res.status(400).json({ message: 'dateDebut et dateFin sont requis' });
       return;
     }
-    const buffer = await this.service.getRapportStock({
+    const format = params.format || 'excel';
+    const data = await this.service.getRapportStock({
       dateDebut: params.dateDebut,
       dateFin: params.dateFin,
       entrepotId: params.entrepotId || undefined,
+      articleId: params.articleId || undefined,
+      format,
     });
+    if (format === 'json') { res.json(data); return; }
     const filename = `rapport-stock-${params.dateDebut}-au-${params.dateFin}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(buffer);
+    res.send(data);
   }
 
   // ── Listes / états ────────────────────────────────────────────────────────

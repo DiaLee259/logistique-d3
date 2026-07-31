@@ -239,7 +239,7 @@ export class InventairesService {
     return baseQte + (entrees._sum.quantiteFournie ?? 0) - (sorties._sum.quantiteFournie ?? 0);
   }
 
-  async getRapportStock(params: { dateDebut: string; dateFin: string; entrepotId?: string }): Promise<Buffer> {
+  async getRapportStock(params: { dateDebut: string; dateFin: string; entrepotId?: string; articleId?: string; format?: string }): Promise<Buffer | any[]> {
     const dateDebutEOD = new Date(params.dateDebut);
     dateDebutEOD.setHours(23, 59, 59, 999);
     const dateFinEOD = new Date(params.dateFin);
@@ -247,25 +247,29 @@ export class InventairesService {
 
     const whereEntrepot: any = { actif: true };
     if (params.entrepotId) whereEntrepot.id = params.entrepotId;
+    const whereArticle: any = { actif: true };
+    if (params.articleId) whereArticle.id = params.articleId;
 
     const [entrepots, articles] = await Promise.all([
       this.prisma.entrepot.findMany({ where: whereEntrepot, orderBy: { code: 'asc' } }),
-      this.prisma.article.findMany({ where: { actif: true }, orderBy: { nom: 'asc' } }),
+      this.prisma.article.findMany({ where: whereArticle, orderBy: { nom: 'asc' } }),
     ]);
 
     const entrepotIds = entrepots.map(e => e.id);
     const articleIds = articles.map(a => a.id);
 
-    // Dernier inventaire par (article, entrepôt) avant ou à dateDebutEOD
-    const inventairesAvant = await this.prisma.inventairePhysique.findMany({
-      where: { articleId: { in: articleIds }, entrepotId: { in: entrepotIds }, date: { lte: dateDebutEOD }, deletedAt: null },
+    // Tous les inventaires jusqu'à dateFinEOD — on en dérive les deux maps (début ET fin)
+    const allInventaires = await this.prisma.inventairePhysique.findMany({
+      where: { articleId: { in: articleIds }, entrepotId: { in: entrepotIds }, date: { lte: dateFinEOD }, deletedAt: null },
       orderBy: { date: 'desc' },
       select: { articleId: true, entrepotId: true, quantite: true, date: true },
     });
-    const lastInvMap = new Map<string, { quantite: number; date: Date }>();
-    for (const inv of inventairesAvant) {
+    const lastInvBeforeDebutMap = new Map<string, { quantite: number; date: Date }>();
+    const lastInvBeforeFinMap = new Map<string, { quantite: number; date: Date }>();
+    for (const inv of allInventaires) {
       const key = `${inv.articleId}:${inv.entrepotId}`;
-      if (!lastInvMap.has(key)) lastInvMap.set(key, { quantite: inv.quantite, date: inv.date });
+      if (!lastInvBeforeFinMap.has(key)) lastInvBeforeFinMap.set(key, { quantite: inv.quantite, date: inv.date });
+      if (inv.date <= dateDebutEOD && !lastInvBeforeDebutMap.has(key)) lastInvBeforeDebutMap.set(key, { quantite: inv.quantite, date: inv.date });
     }
 
     // Tous les mouvements jusqu'à dateFinEOD
@@ -273,8 +277,6 @@ export class InventairesService {
       where: { articleId: { in: articleIds }, entrepotId: { in: entrepotIds }, date: { lte: dateFinEOD }, deletedAt: null },
       select: { articleId: true, entrepotId: true, type: true, quantiteFournie: true, date: true },
     });
-
-    // Index des mouvements par clé article:entrepôt
     const mouvByKey = new Map<string, typeof allMouvements>();
     for (const m of allMouvements) {
       const key = `${m.articleId}:${m.entrepotId}`;
@@ -282,37 +284,45 @@ export class InventairesService {
       mouvByKey.get(key)!.push(m);
     }
 
-    const rows: { entrepot: string; article: string; reference: string; unite: string; stockDebut: number; entrees: number; sorties: number; stockFin: number }[] = [];
+    type Row = { entrepot: string; article: string; reference: string; unite: string; stockDebut: number; entrees: number; sorties: number; stockFin: number };
+    const rows: Row[] = [];
 
     for (const entrepot of entrepots) {
       for (const article of articles) {
         const key = `${article.id}:${entrepot.id}`;
-        const lastInv = lastInvMap.get(key);
-        const fromDate = lastInv?.date ?? new Date(0);
-        let stockDebut = lastInv?.quantite ?? 0;
+
+        // stockDebut : formule hybride à dateDebutEOD
+        const lastInvDebut = lastInvBeforeDebutMap.get(key);
+        const fromDateDebut = lastInvDebut?.date ?? new Date(0);
+        let stockDebut = lastInvDebut?.quantite ?? 0;
+
+        // stockFin : formule hybride indépendante à dateFinEOD (corrige le bug précédent)
+        const lastInvFin = lastInvBeforeFinMap.get(key);
+        const fromDateFin = lastInvFin?.date ?? new Date(0);
+        let stockFin = lastInvFin?.quantite ?? 0;
+
         let entrees = 0;
         let sorties = 0;
 
         for (const m of mouvByKey.get(key) ?? []) {
           const qty = m.quantiteFournie ?? 0;
           const isEntree = (m.type as string) === 'ENTREE';
-          if (m.date > fromDate && m.date <= dateDebutEOD) {
-            stockDebut += isEntree ? qty : -qty;
-          } else if (m.date > dateDebutEOD && m.date <= dateFinEOD) {
+          if (m.date > fromDateDebut && m.date <= dateDebutEOD) stockDebut += isEntree ? qty : -qty;
+          if (m.date > fromDateFin && m.date <= dateFinEOD) stockFin += isEntree ? qty : -qty;
+          if (m.date > dateDebutEOD && m.date <= dateFinEOD) {
             if (isEntree) entrees += qty; else sorties += qty;
           }
         }
 
-        const stockFin = stockDebut + entrees - sorties;
-        if (stockDebut === 0 && entrees === 0 && sorties === 0) continue;
-
+        if (stockDebut === 0 && entrees === 0 && sorties === 0 && stockFin === 0) continue;
         rows.push({ entrepot: entrepot.code, article: article.nom, reference: article.reference, unite: article.unite, stockDebut, entrees, sorties, stockFin });
       }
     }
 
+    if (params.format === 'json') return rows;
+
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Rapport de stock');
-
     ws.columns = [
       { header: 'Entrepôt', key: 'entrepot', width: 12 },
       { header: 'Article', key: 'article', width: 40 },
@@ -323,7 +333,6 @@ export class InventairesService {
       { header: `Sorties (${params.dateDebut} → ${params.dateFin})`, key: 'sorties', width: 26 },
       { header: `Stock au ${params.dateFin}`, key: 'stockFin', width: 20 },
     ];
-
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
@@ -335,26 +344,18 @@ export class InventairesService {
       rowNum++;
       const r = ws.addRow(row);
       r.alignment = { vertical: 'middle' };
-      if (rowNum % 2 === 0) {
-        r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
-      }
+      if (rowNum % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
       const cellFin = r.getCell('stockFin');
       if (row.stockFin < row.stockDebut) cellFin.font = { color: { argb: 'FFCC0000' }, bold: true };
       else if (row.stockFin > row.stockDebut) cellFin.font = { color: { argb: 'FF007700' }, bold: true };
       else cellFin.font = { bold: true };
     }
-
-    ws.eachRow(r => {
-      r.eachCell(cell => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD0D7E4' } },
-          bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
-          left: { style: 'thin', color: { argb: 'FFD0D7E4' } },
-          right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
-        };
-      });
-    });
-
+    ws.eachRow(r => r.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+      };
+    }));
     return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 

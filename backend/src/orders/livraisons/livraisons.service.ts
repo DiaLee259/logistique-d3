@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { StatutLivraison, TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MouvementsService } from '../../stock/mouvements/mouvements.service';
-import { StockCalculatorService } from '../../stock/stock-calculator.service';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()
@@ -10,7 +9,6 @@ export class LivraisonsService {
   constructor(
     private prisma: PrismaService,
     private mouvementsService: MouvementsService,
-    private calculator: StockCalculatorService,
   ) {}
 
   async findAll(filters: any) {
@@ -55,18 +53,8 @@ export class LivraisonsService {
     commentaire?: string;
     commandeId?: string;
   }, userId?: string) {
-    // On base le numéro sur le MAX existant (et non sur count) pour éviter
-    // les conflits quand des livraisons sont supprimées définitivement via la corbeille.
-    const year = new Date().getFullYear();
-    const lastLivraison = await this.prisma.livraison.findFirst({
-      where: { numero: { startsWith: `LIV-${year}-` } },
-      orderBy: { numero: 'desc' },
-      select: { numero: true },
-    });
-    const lastNum = lastLivraison
-      ? parseInt(lastLivraison.numero.split('-')[2] ?? '0', 10)
-      : 0;
-    const numero = `LIV-${year}-${String(lastNum + 1).padStart(4, '0')}`;
+    const count = await this.prisma.livraison.count();
+    const numero = `LIV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
     const livraison = await this.prisma.livraison.create({
       data: {
@@ -89,7 +77,7 @@ export class LivraisonsService {
       include: { lignes: { include: { article: true } }, entrepot: true },
     });
 
-    // Créer les mouvements d'entrée en stock, liés à cette livraison
+    // Créer les mouvements d'entrée en stock
     for (const ligne of data.lignes) {
       if (ligne.quantiteRecue > 0) {
         await this.mouvementsService.create({
@@ -100,8 +88,7 @@ export class LivraisonsService {
           quantiteFournie: ligne.quantiteRecue,
           sourceDestination: data.fournisseur,
           commentaire: `Livraison ${numero}`,
-          livraisonId: livraison.id,
-        } as any, userId);
+        }, userId);
       }
     }
 
@@ -137,48 +124,87 @@ export class LivraisonsService {
   }
 
   async supprimerDefinitivement(id: string) {
-    // Récupérer les mouvements liés avant suppression pour recalculer le stock
-    const mouvements = await this.prisma.mouvement.findMany({
-      where: { livraisonId: id },
-      select: { articleId: true, entrepotId: true },
-    });
-
-    // Supprimer les mouvements liés (le ON DELETE SET NULL est ignoré ici, on les supprime vraiment)
-    await this.prisma.mouvement.deleteMany({ where: { livraisonId: id } });
-
     // LigneLivraison a onDelete: Cascade → supprimées automatiquement
-    const result = await this.prisma.livraison.delete({ where: { id } });
-
-    // Recalculer le stock pour chaque article/entrepôt impacté
-    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
-    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
-    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
-
-    return result;
+    return this.prisma.livraison.delete({ where: { id } });
   }
 
   async viderCorbeille() {
+    return this.prisma.livraison.deleteMany({ where: { NOT: { deletedAt: null } } });
+  }
+
+  async getRapportLivraisons(params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string; format?: string }): Promise<Buffer | any[]> {
+    const dateDebutSOD = new Date(params.dateDebut);
+    dateDebutSOD.setHours(0, 0, 0, 0);
+    const dateFinEOD = new Date(params.dateFin);
+    dateFinEOD.setHours(23, 59, 59, 999);
+
     const livraisons = await this.prisma.livraison.findMany({
-      where: { NOT: { deletedAt: null } },
-      select: { id: true },
+      where: {
+        deletedAt: null,
+        dateLivraison: { gte: dateDebutSOD, lte: dateFinEOD },
+        ...(params.entrepotId ? { entrepotId: params.entrepotId } : {}),
+      },
+      include: {
+        lignes: {
+          include: { article: true },
+          ...(params.articleId ? { where: { articleId: params.articleId } } : {}),
+        },
+        entrepot: true,
+      },
+      orderBy: { dateLivraison: 'asc' },
     });
-    if (!livraisons.length) return { count: 0 };
-    const ids = livraisons.map(l => l.id);
 
-    // Récupérer les mouvements liés pour recalcul
-    const mouvements = await this.prisma.mouvement.findMany({
-      where: { livraisonId: { in: ids } },
-      select: { articleId: true, entrepotId: true },
-    });
+    const rows: { date: string; numero: string; entrepot: string; fournisseur: string; article: string; reference: string; unite: string; quantiteRecue: number }[] = [];
+    for (const liv of livraisons) {
+      for (const ligne of liv.lignes) {
+        if (ligne.quantiteRecue > 0) {
+          rows.push({
+            date: liv.dateLivraison.toISOString().slice(0, 10),
+            numero: liv.numero,
+            entrepot: liv.entrepot.code,
+            fournisseur: liv.fournisseur,
+            article: ligne.article.nom,
+            reference: ligne.article.reference,
+            unite: ligne.article.unite,
+            quantiteRecue: ligne.quantiteRecue,
+          });
+        }
+      }
+    }
 
-    await this.prisma.mouvement.deleteMany({ where: { livraisonId: { in: ids } } });
-    const result = await this.prisma.livraison.deleteMany({ where: { id: { in: ids } } });
+    if (params.format === 'json') return rows;
 
-    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
-    for (const m of mouvements) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
-    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
-
-    return result;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Rapport livraisons');
+    ws.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'N° Livraison', key: 'numero', width: 18 },
+      { header: 'Entrepôt', key: 'entrepot', width: 12 },
+      { header: 'Fournisseur', key: 'fournisseur', width: 25 },
+      { header: 'Article', key: 'article', width: 40 },
+      { header: 'Référence', key: 'reference', width: 18 },
+      { header: 'Unité', key: 'unite', width: 8 },
+      { header: 'Qté reçue', key: 'quantiteRecue', width: 12 },
+    ];
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 40;
+    let rowNum = 1;
+    for (const row of rows) {
+      rowNum++;
+      const r = ws.addRow(row);
+      r.alignment = { vertical: 'middle' };
+      if (rowNum % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+    }
+    ws.eachRow(r => r.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+      };
+    }));
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 
   async findCorbeille() {
