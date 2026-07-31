@@ -201,6 +201,8 @@ export const livraisonsApi = {
     api.get('/livraisons/rapport', { params, responseType: 'blob' }).then(r => r.data as Blob),
   rapportLivraisonsJson: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
     api.get('/livraisons/rapport', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
+  corrigerLigne: (id: string, ligneId: string, data: { quantiteNouvelle: number; commentaire: string }) =>
+    api.patch(`/livraisons/${id}/lignes/${ligneId}`, data).then(r => r.data),
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────

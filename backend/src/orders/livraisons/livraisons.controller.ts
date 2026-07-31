@@ -91,6 +91,11 @@ export class LivraisonsController {
     return this.service.create(body, req.user?.id);
   }
 
+  @Patch(':id/lignes/:ligneId')
+  corrigerLigne(@Param('id') id: string, @Param('ligneId') ligneId: string, @Body() body: any, @Request() req: any) {
+    return this.service.corrigerLigne(id, ligneId, body, req.user?.id);
+  }
+
   @Patch(':id/statut')
   updateStatut(@Param('id') id: string, @Body() body: { statut: any; bonLivraisonUrl?: string; bonCommandeUrl?: string }) {
     return this.service.updateStatut(id, body.statut, body);
