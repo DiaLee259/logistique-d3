@@ -55,6 +55,7 @@ export default function Livraisons() {
   const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '', articleId: '' });
   const [rapportData, setRapportData] = useState<any[] | null>(null);
   const [rapportView, setRapportView] = useState<'form' | 'table'>('form');
+  const [rapportGroupBy, setRapportGroupBy] = useState<'date' | 'article'>('date');
 
   const filterParams: Record<string, string> = {};
   if (filterMois) filterParams.mois = filterMois;
@@ -525,7 +526,7 @@ export default function Livraisons() {
       {/* ─── Dialog rapport livraisons ──────────────────────────────────────── */}
       {rapportDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className={`bg-card rounded-xl shadow-2xl w-full border border-border p-6 space-y-4 ${rapportView === 'table' ? 'max-w-4xl' : 'max-w-sm'}`}>
+          <div className={`bg-card rounded-xl shadow-2xl w-full border border-border p-6 space-y-4 ${rapportView === 'table' ? 'max-w-6xl' : 'max-w-sm'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de livraisons</h3>
@@ -602,44 +603,100 @@ export default function Livraisons() {
               </>
             )}
 
-            {rapportView === 'table' && rapportData && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-muted-foreground">{rapportData.length} ligne(s)</span>
-                  <button
-                    onClick={() => rapportMut.mutate()}
-                    disabled={rapportMut.isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                    {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
-                  </button>
-                </div>
-                <div className="overflow-auto max-h-[60vh] rounded-lg border border-border">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-muted">
-                      <tr>
-                        {['Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue'].map(h => (
-                          <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rapportData.map((row: any, i: number) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
-                          <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
-                          <td className="px-3 py-1.5 font-mono text-xs">{row.numero}</td>
-                          <td className="px-3 py-1.5 font-mono text-xs">{row.entrepot}</td>
-                          <td className="px-3 py-1.5 max-w-[120px] truncate">{row.fournisseur}</td>
-                          <td className="px-3 py-1.5 max-w-[180px] truncate">{row.article}</td>
-                          <td className="px-3 py-1.5 font-mono text-xs">{row.reference}</td>
-                          <td className="px-3 py-1.5 text-center">{row.unite}</td>
-                          <td className="px-3 py-1.5 text-right font-semibold text-emerald-600">+{formatNumber(row.quantiteRecue)}</td>
+            {rapportView === 'table' && rapportData && (() => {
+              const grandTotal = rapportData.reduce((s, r) => s + r.quantiteRecue, 0);
+
+              // Groupement
+              const groupKey = (r: any) => rapportGroupBy === 'date' ? r.date : r.reference;
+              const groupLabel = (r: any) => rapportGroupBy === 'date' ? r.date : `${r.reference} — ${r.article}`;
+              const groups = new Map<string, any[]>();
+              for (const r of rapportData) {
+                const k = groupKey(r);
+                if (!groups.has(k)) groups.set(k, []);
+                groups.get(k)!.push(r);
+              }
+
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                      <button onClick={() => setRapportGroupBy('date')}
+                        className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === 'date' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                        Par date
+                      </button>
+                      <button onClick={() => setRapportGroupBy('article')}
+                        className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === 'article' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                        Par article
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => rapportMut.mutate()}
+                      disabled={rapportMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
+                      {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
+                    </button>
+                  </div>
+                  <div className="overflow-auto max-h-[65vh] rounded-lg border border-border">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted z-10">
+                        <tr>
+                          {(rapportGroupBy === 'date'
+                            ? ['Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Article', 'Référence', 'Unité', 'Qté reçue']
+                            : ['Article', 'Référence', 'Date', 'N° Livraison', 'Entrepôt', 'Fournisseur', 'Unité', 'Qté reçue']
+                          ).map(h => (
+                            <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {[...groups.entries()].map(([key, rows]) => {
+                          const subTotal = rows.reduce((s, r) => s + r.quantiteRecue, 0);
+                          return (
+                            <>
+                              <tr key={`group-${key}`} className="bg-primary/5 border-t border-border">
+                                <td colSpan={7} className="px-3 py-1.5 font-semibold text-primary text-xs">
+                                  {groupLabel(rows[0])}
+                                </td>
+                                <td className="px-3 py-1.5 text-right font-bold text-primary whitespace-nowrap">
+                                  {formatNumber(subTotal)}
+                                </td>
+                              </tr>
+                              {rows.map((row: any, i: number) => (
+                                <tr key={`${key}-${i}`} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                                  {rapportGroupBy === 'date' ? <>
+                                    <td className="px-3 py-1.5 pl-6 whitespace-nowrap text-muted-foreground">{row.date}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.numero}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
+                                    <td className="px-3 py-1.5 max-w-[140px] truncate">{row.fournisseur}</td>
+                                    <td className="px-3 py-1.5 max-w-[180px] truncate">{row.article}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                                    <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
+                                  </> : <>
+                                    <td className="px-3 py-1.5 pl-6 max-w-[160px] truncate text-muted-foreground">{row.article}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
+                                    <td className="px-3 py-1.5 whitespace-nowrap">{row.date}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.numero}</td>
+                                    <td className="px-3 py-1.5 font-mono">{row.entrepot}</td>
+                                    <td className="px-3 py-1.5 max-w-[140px] truncate">{row.fournisseur}</td>
+                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
+                                    <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">+{formatNumber(row.quantiteRecue)}</td>
+                                  </>}
+                                </tr>
+                              ))}
+                            </>
+                          );
+                        })}
+                        <tr className="border-t-2 border-primary/30 bg-primary/5 font-bold">
+                          <td colSpan={7} className="px-3 py-2 text-xs font-bold text-foreground">TOTAL</td>
+                          <td className="px-3 py-2 text-right text-sm font-bold text-primary">+{formatNumber(grandTotal)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
