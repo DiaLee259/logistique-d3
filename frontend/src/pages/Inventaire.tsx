@@ -714,8 +714,8 @@ export default function Inventaire() {
               </div>
             </div>
 
-            {/* Contenu scrollable */}
-            <div className="flex-1 overflow-auto p-6">
+            {/* Contenu */}
+            <div className="flex-1 min-h-0 flex flex-col p-6">
 
               {rapportView === 'form' && (
                 <div className="max-w-sm space-y-4">
@@ -780,6 +780,8 @@ export default function Inventaire() {
               {rapportView === 'table' && rapportData && (() => {
                 const totalEntrees = rapportData.reduce((s, r) => s + r.entrees, 0);
                 const totalSorties = rapportData.reduce((s, r) => s + r.sorties, 0);
+                const totalStockDebut = rapportData.reduce((s, r) => s + (r.stockDebut ?? 0), 0);
+                const totalStockFin = rapportData.reduce((s, r) => s + (r.stockFin ?? 0), 0);
 
                 const groupKey = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : r.reference;
                 const groupLabel = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : `${r.reference} — ${r.article}`;
@@ -794,7 +796,7 @@ export default function Inventaire() {
                 });
 
                 return (
-                  <div className="flex flex-col h-full gap-3">
+                  <div className="flex flex-col flex-1 min-h-0 gap-3">
                     <div className="flex items-center justify-between flex-shrink-0">
                       <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
                         {(['entrepot', 'article'] as const).map(g => (
@@ -809,13 +811,21 @@ export default function Inventaire() {
                         {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
                       </button>
                     </div>
-                    <div className="overflow-auto flex-1 rounded-lg border border-border">
+                    <div className="overflow-auto flex-1 min-h-0 rounded-lg border border-border">
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 bg-muted z-10">
                           <tr>
-                            {['Entrepôt', 'Référence', 'Article', 'Unité', 'Stock début', 'Entrées', 'Sorties', 'Stock fin'].map(h => (
+                            {(['Entrepôt', 'Référence', 'Article', 'Unité'] as const).map(h => (
                               <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                             ))}
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap leading-tight">
+                              Stock début<br /><span className="text-[10px] font-normal opacity-60">{rapportParams.dateDebut}</span>
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap">Entrées</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap">Sorties</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground whitespace-nowrap leading-tight">
+                              Stock fin<br /><span className="text-[10px] font-normal opacity-60">{rapportParams.dateFin}</span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -823,6 +833,8 @@ export default function Inventaire() {
                             const collapsed = rapportCollapsed.has(key);
                             const subEntrees = rows.reduce((s, r) => s + r.entrees, 0);
                             const subSorties = rows.reduce((s, r) => s + r.sorties, 0);
+                            const subStockDebut = rows.reduce((s, r) => s + (r.stockDebut ?? 0), 0);
+                            const subStockFin = rows.reduce((s, r) => s + (r.stockFin ?? 0), 0);
                             return (
                               <>
                                 <tr key={`g-${key}`} className="bg-primary/5 border-t border-border cursor-pointer hover:bg-primary/10 select-none"
@@ -832,10 +844,10 @@ export default function Inventaire() {
                                     {groupLabel(rows[0])}
                                     <span className="text-muted-foreground font-normal ml-2 text-xs">({rows.length} ligne{rows.length > 1 ? 's' : ''})</span>
                                   </td>
-                                  <td className="px-3 py-1.5" />
+                                  <td className="px-3 py-1.5 text-right font-bold text-muted-foreground">{formatNumber(subStockDebut)}</td>
                                   <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{subEntrees > 0 ? `+${formatNumber(subEntrees)}` : '—'}</td>
                                   <td className="px-3 py-1.5 text-right font-bold text-red-500">{subSorties > 0 ? `-${formatNumber(subSorties)}` : '—'}</td>
-                                  <td className="px-3 py-1.5" />
+                                  <td className="px-3 py-1.5 text-right font-bold text-primary">{formatNumber(subStockFin)}</td>
                                 </tr>
                                 {!collapsed && rows.map((row: any, i: number) => (
                                   <tr key={`${key}-${i}`} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
@@ -854,10 +866,10 @@ export default function Inventaire() {
                           })}
                           <tr className="border-t-2 border-primary/40 bg-primary/5">
                             <td colSpan={4} className="px-3 py-2 font-bold text-xs text-foreground">TOTAL</td>
-                            <td />
+                            <td className="px-3 py-2 text-right font-bold text-foreground">{formatNumber(totalStockDebut)}</td>
                             <td className="px-3 py-2 text-right font-bold text-emerald-600">{totalEntrees > 0 ? `+${formatNumber(totalEntrees)}` : '—'}</td>
                             <td className="px-3 py-2 text-right font-bold text-red-500">{totalSorties > 0 ? `-${formatNumber(totalSorties)}` : '—'}</td>
-                            <td />
+                            <td className="px-3 py-2 text-right font-bold text-primary">{formatNumber(totalStockFin)}</td>
                           </tr>
                         </tbody>
                       </table>

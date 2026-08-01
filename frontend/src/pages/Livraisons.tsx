@@ -652,8 +652,8 @@ export default function Livraisons() {
               </div>
             </div>
 
-            {/* Contenu scrollable */}
-            <div className="flex-1 overflow-auto p-6">
+            {/* Contenu */}
+            <div className="flex-1 min-h-0 flex flex-col p-6">
 
             {rapportView === 'form' && (
               <div className="max-w-sm space-y-3">
@@ -773,7 +773,7 @@ export default function Livraisons() {
               };
 
               return (
-                <div className="flex flex-col h-full gap-3">
+                <div className="flex flex-col flex-1 min-h-0 gap-3">
                   <div className="flex items-center justify-between flex-shrink-0">
                     <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
                       {(['date', 'article', 'entrepot'] as const).map(g => (
@@ -788,7 +788,7 @@ export default function Livraisons() {
                       {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
                     </button>
                   </div>
-                  <div className="overflow-auto flex-1 rounded-lg border border-border">
+                  <div className="overflow-auto flex-1 min-h-0 rounded-lg border border-border">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-muted z-10">
                         <tr>
