@@ -829,9 +829,9 @@ export default function Livraisons() {
                 </div>
               );
             })()}
-            </div>{/* flex-1 overflow-auto */}
-          </div>{/* bg-card flex flex-col */}
-        </div>{/* fixed overlay */}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
