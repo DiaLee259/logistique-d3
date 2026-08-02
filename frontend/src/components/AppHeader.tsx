@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Bell, LogOut, RefreshCw, Sun, Moon, Check, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Bell, LogOut, RefreshCw, Check, X, Palette } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme, THEMES } from '@/contexts/ThemeContext';
 import { notificationsApi } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
+import { getRoleShortLabel } from '@/config/roles';
 import type { Notification } from '@/lib/types';
 
 const pageTitles: Record<string, string> = {
@@ -14,16 +15,33 @@ const pageTitles: Record<string, string> = {
   '/mouvements': 'Mouvements de stock',
   '/commandes': 'Commandes',
   '/livraisons': 'Livraisons fournisseurs',
+  '/commandes-ts': 'Commandes TS',
+  '/inventaire': 'Inventaire',
+  '/consommables': 'Consommables Terrain',
+  '/analytique-conso': 'Analytique Consommables',
+  '/intervenants': 'Intervenants',
+  '/guide': 'Guide',
+  '/corbeille': 'Corbeille',
   '/parametres': 'Paramètres',
 };
 
 export default function AppHeader() {
   const { logout, user } = useAuth();
-  const { theme, toggle } = useTheme();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const qc = useQueryClient();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const themeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setThemeOpen(false);
+    };
+    if (themeOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [themeOpen]);
 
   const title = Object.entries(pageTitles)
     .reverse()
@@ -49,20 +67,88 @@ export default function AppHeader() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
+  const lightThemes = THEMES.filter(t => !t.dark);
+  const darkThemes = THEMES.filter(t => t.dark);
+
   return (
     <header className="flex items-center justify-between px-5 py-2.5 bg-card border-b border-border">
       <h1 className="text-sm font-semibold text-foreground">{title}</h1>
 
       <div className="flex items-center gap-1.5">
 
-        {/* Dark/Light toggle */}
-        <button
-          onClick={toggle}
-          title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-          className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-        >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
+        {/* Sélecteur de thème */}
+        <div className="relative" ref={themeRef}>
+          <button
+            onClick={() => setThemeOpen(p => !p)}
+            title="Choisir un thème"
+            className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          >
+            <Palette className="w-4 h-4" />
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-border/60 flex-shrink-0"
+              style={{ backgroundColor: THEMES.find(t => t.name === theme)?.primary ?? '#2563eb' }}
+            />
+          </button>
+
+          {themeOpen && (
+            <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-xl p-3 w-56">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Clairs</p>
+              <div className="space-y-0.5 mb-3">
+                {lightThemes.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => { setTheme(t.name); setThemeOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs transition-colors',
+                      theme === t.name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: t.bg }}
+                    >
+                      <span
+                        className="block w-2 h-2 rounded-full absolute top-1 left-1"
+                        style={{ backgroundColor: t.primary }}
+                      />
+                    </span>
+                    <span className="flex-1 text-left">{t.label}</span>
+                    {theme === t.name && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Sombres</p>
+              <div className="space-y-0.5">
+                {darkThemes.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => { setTheme(t.name); setThemeOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs transition-colors',
+                      theme === t.name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 border border-border/40 shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: t.bg }}
+                    >
+                      <span
+                        className="block w-2 h-2 rounded-full absolute top-1 left-1"
+                        style={{ backgroundColor: t.primary }}
+                      />
+                    </span>
+                    <span className="flex-1 text-left">{t.label}</span>
+                    {theme === t.name && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Refresh global */}
         <button
@@ -141,9 +227,7 @@ export default function AppHeader() {
           <div className="hidden sm:block text-right">
             <p className="text-xs font-medium text-foreground leading-tight">{user?.prenom} {user?.nom}</p>
             <p className="text-xs text-muted-foreground leading-tight">
-              {user?.role === 'LOGISTICIEN_1' ? 'Log. Backoffice' :
-               user?.role === 'LOGISTICIEN_2' ? 'Log. Terrain' :
-               user?.role === 'CHEF_PROJET' ? 'Chef de projet' : 'Admin'}
+              {user?.role ? getRoleShortLabel(user.role) : ''}
             </p>
           </div>
           <button

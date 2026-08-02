@@ -16,13 +16,17 @@ api.interceptors.response.use(
   res => res,
   err => {
     const msg = err.response?.data?.message;
-    if (err.response?.status === 401) {
+    const isLoginRoute = err.config?.url?.includes('/auth/login');
+
+    if (err.response?.status === 401 && !isLoginRoute) {
+      // Token expiré ou révoqué sur une route protégée → on déconnecte
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     } else if (err.response?.status === 403) {
       toast.error('Accès non autorisé pour votre rôle');
     } else if (msg) {
+      // Sur la route login, affiche l'erreur normalement sans recharger la page
       toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
     }
     return Promise.reject(err);
@@ -48,10 +52,12 @@ export const dashboardApi = {
     api.get('/dashboard/departements', { params }).then(r => r.data),
   demandeurs: (params?: Record<string, string>) =>
     api.get('/dashboard/demandeurs', { params }).then(r => r.data),
-  delais: () => api.get('/dashboard/delais').then(r => r.data),
-  topArticles: (limit = 5) =>
-    api.get('/dashboard/top-articles', { params: { limit } }).then(r => r.data),
-  commandes: () => api.get('/dashboard/commandes').then(r => r.data),
+  delais: (params?: Record<string, string>) =>
+    api.get('/dashboard/delais', { params }).then(r => r.data),
+  topArticles: (params?: Record<string, string>) =>
+    api.get('/dashboard/top-articles', { params: { limit: 5, ...params } }).then(r => r.data),
+  commandes: (params?: Record<string, string>) =>
+    api.get('/dashboard/commandes', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
@@ -103,6 +109,14 @@ export const mouvementsApi = {
     api.patch(`/mouvements/${id}/toggle/${field}`).then(r => r.data),
   template: () => api.get('/mouvements/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/mouvements/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  transfert: (data: { entrepotSourceId: string; entrepotDestinationId: string; lignes: { articleId: string; quantite: number }[]; commentaire?: string }) =>
+    api.post('/mouvements/transfert', data).then(r => r.data),
+  listAll: (params?: Record<string, string>) =>
+    api.get('/mouvements', { params: { ...params, limit: '9999', page: '1' } }).then(r => r.data),
+  corbeille: () => api.get('/mouvements/corbeille').then(r => r.data),
+  restaurer: (id: string) => api.patch(`/mouvements/corbeille/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/mouvements/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/mouvements/corbeille/vider').then(r => r.data),
 };
 
 // ── Commandes ─────────────────────────────────────────────────────────────────
@@ -115,6 +129,10 @@ export const commandesApi = {
   viderCorbeille: () => api.delete('/commandes/corbeille/vider').then(r => r.data),
   get: (id: string) => api.get(`/commandes/${id}`).then(r => r.data),
   create: (data: any) => api.post('/commandes', data).then(r => r.data),
+  createTransfertInterne: (data: { entrepotSourceId: string; entrepotDestinationId: string; lignes: { articleId: string; quantiteDemandee: number }[]; commentaire?: string }) =>
+    api.post('/commandes/transfert-interne', data).then(r => r.data),
+  refuser: (id: string, motif: string) =>
+    api.patch(`/commandes/${id}/refuser`, { motif }).then(r => r.data),
   valider: (id: string, data: any) =>
     api.patch(`/commandes/${id}/valider`, data).then(r => r.data),
   modifier: (id: string, data: any) =>
@@ -123,7 +141,7 @@ export const commandesApi = {
     api.patch(`/commandes/${id}/expedier`, data ?? {}).then(r => r.data),
   marquerLivree: (id: string) =>
     api.patch(`/commandes/${id}/livree`).then(r => r.data),
-  annuler: (id: string) => api.patch(`/commandes/${id}/annuler`).then(r => r.data),
+  annuler: (id: string, motif?: string) => api.patch(`/commandes/${id}/annuler`, { motif }).then(r => r.data),
   marquerEmailEnvoye: (id: string) =>
     api.patch(`/commandes/${id}/email-envoye`).then(r => r.data),
   marquerBonRetourRecu: (id: string, url?: string) =>
@@ -137,6 +155,19 @@ export const commandesApi = {
     api.post('/commandes/liens', { nom, expiresInDays }).then(r => r.data),
   desactiverLien: (id: string) =>
     api.patch(`/commandes/liens/${id}/desactiver`).then(r => r.data),
+  managers: {
+    list: () => api.get('/commandes/managers-zone').then(r => r.data),
+    create: (data: any) => api.post('/commandes/managers-zone', data).then(r => r.data),
+    update: (id: string, data: any) => api.patch(`/commandes/managers-zone/${id}`, data).then(r => r.data),
+    delete: (id: string) => api.delete(`/commandes/managers-zone/${id}`).then(r => r.data),
+  },
+  liens: {
+    list: () => api.get('/commandes/liens').then(r => r.data),
+    create: (data: any) => api.post('/commandes/liens', data).then(r => r.data),
+    update: (id: string, data: any) => api.patch(`/commandes/liens/${id}`, data).then(r => r.data),
+    desactiver: (id: string) => api.patch(`/commandes/liens/${id}/desactiver`).then(r => r.data),
+    delete: (id: string) => api.delete(`/commandes/liens/${id}`).then(r => r.data),
+  },
   // Public (no auth)
   getPublic: (token: string) =>
     api.get(`/commandes/public/${token}`).then(r => r.data),
@@ -148,6 +179,7 @@ export const commandesApi = {
     api.patch('/commandes/bulk-entrepot', { commandeIds, entrepotId }).then(r => r.data),
   template: () => api.get('/commandes/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/commandes/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  backfillLienData: () => api.patch('/commandes/backfill-lien-data').then(r => r.data),
 };
 
 // ── Livraisons ────────────────────────────────────────────────────────────────
@@ -165,6 +197,10 @@ export const livraisonsApi = {
   delete: (id: string) => api.delete(`/livraisons/${id}`).then(r => r.data),
   template: () => api.get('/livraisons/template', { responseType: 'blob' }).then(r => r.data as Blob),
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/livraisons/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  rapportLivraisons: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
+    api.get('/livraisons/rapport', { params, responseType: 'blob' }).then(r => r.data as Blob),
+  rapportLivraisonsJson: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
+    api.get('/livraisons/rapport', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
@@ -205,6 +241,20 @@ export const inventairesApi = {
   import: (file: File) => { const fd = new FormData(); fd.append('file', file); return api.post('/inventaires/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
   deleteOne: (id: string) => api.delete(`/inventaires/${id}`).then(r => r.data),
   deleteBulk: (ids: string[]) => api.delete('/inventaires/bulk', { data: { ids } }).then(r => r.data),
+  updateArticle: (data: { entrepotId: string; articleId: string; quantite: number; commentaire?: string }) =>
+    api.post('/inventaires/update-article', data).then(r => r.data),
+  corriger: (inventaireId: string, data: { quantiteNouvelle: number; commentaire: string }) =>
+    api.post(`/inventaires/${inventaireId}/corriger`, data).then(r => r.data),
+  getCorrections: (inventaireId: string) =>
+    api.get(`/inventaires/${inventaireId}/corrections`).then(r => r.data),
+  rapportStock: (params: { dateDebut: string; dateFin: string; entrepotId?: string; articleId?: string }) =>
+    api.get('/inventaires/rapport-stock', { params, responseType: 'blob' }).then(r => r.data as Blob),
+  rapportStockJson: (params: { dateDebut: string; dateFin: string; entrepotId?: string; articleId?: string }) =>
+    api.get('/inventaires/rapport-stock', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
+  corbeille: () => api.get('/inventaires/corbeille').then(r => r.data),
+  restaurer: (id: string) => api.patch(`/inventaires/corbeille/${id}/restaurer`).then(r => r.data),
+  supprimerDefinitivement: (id: string) => api.delete(`/inventaires/corbeille/${id}`).then(r => r.data),
+  viderCorbeille: () => api.delete('/inventaires/corbeille/vider').then(r => r.data),
 };
 
 // ── Commandes TS ──────────────────────────────────────────────────────────────
@@ -255,6 +305,24 @@ export const notificationsApi = {
   count: () => api.get('/notifications/count').then(r => r.data),
   marquerLue: (id: string) => api.patch(`/notifications/${id}/lire`).then(r => r.data),
   marquerToutesLues: () => api.patch('/notifications/lire-toutes').then(r => r.data),
+};
+
+// ── Consommables ─────────────────────────────────────────────────────────────
+export const consommablesApi = {
+  summary: () => api.get('/consommables/summary').then(r => r.data),
+  listImports: () => api.get('/consommables/imports').then(r => r.data),
+  getFilters: () => api.get('/consommables/filters').then(r => r.data),
+  calcul: (params?: Record<string, string>) =>
+    api.get('/consommables/calcul', { params }).then(r => r.data),
+  repartition: (params?: Record<string, string>) =>
+    api.get('/consommables/repartition', { params }).then(r => r.data),
+  listFormules: () => api.get('/consommables/formules').then(r => r.data),
+  updateFormule: (id: string, data: { multiplicateur?: number; multiplicateurNok?: number; minimumQte?: number; actif?: boolean }) =>
+    api.put(`/consommables/formules/${id}`, data).then(r => r.data),
+  analyse: (params?: Record<string, string>) =>
+    api.get('/consommables/analyse', { params }).then(r => r.data),
+  commandesArticles: (params?: Record<string, string>) =>
+    api.get('/consommables/commandes-articles', { params }).then(r => r.data),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

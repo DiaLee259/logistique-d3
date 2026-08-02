@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -7,9 +8,9 @@ import {
 import {
   TrendingUp, TrendingDown, Package, AlertTriangle,
   ClipboardList, Truck, CheckCircle, Activity, Calendar, Clock,
-  Settings2, Eye, EyeOff, X,
+  Settings2, Eye, EyeOff, X, ChevronRight,
 } from 'lucide-react';
-import { dashboardApi, entrepotsApi, articlesApi, inventairesApi } from '@/lib/api';
+import { dashboardApi, entrepotsApi, articlesApi, inventairesApi, consommablesApi } from '@/lib/api';
 import KpiCard from '@/components/KpiCard';
 import { formatDate, formatNumber, statutCommandeLabel } from '@/lib/utils';
 import type { DashboardKpis, Entrepot, Article } from '@/lib/types';
@@ -23,16 +24,19 @@ const SECTIONS = [
   { id: 'departements', label: 'Volume par département' },
   { id: 'demandeurs', label: 'Commandes par demandeur' },
   { id: 'topArticles', label: 'Top articles' },
+  { id: 'suiviCommandes', label: 'Suivi des commandes' },
+  { id: 'suiviConsommation', label: 'Suivi consommation' },
 ] as const;
 
 type SectionId = typeof SECTIONS[number]['id'];
 
 function loadVisible(): Record<SectionId, boolean> {
+  const defaults: Record<SectionId, boolean> = { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, topArticles: true, suiviCommandes: true, suiviConsommation: true };
   try {
     const raw = localStorage.getItem('dashboard-sections');
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
   } catch {}
-  return { delais: true, evolution: true, statuts: true, departements: true, demandeurs: true, topArticles: true };
+  return defaults;
 }
 
 export default function Dashboard() {
@@ -106,6 +110,13 @@ export default function Dashboard() {
     enabled: visible.topArticles,
   });
 
+  const { data: consoAnalyse } = useQuery<{ rows: { nomProduit: string; codeArticle: string; quantiteEstimee: number }[] }>({
+    queryKey: ['dashboard-conso-analyse'],
+    queryFn:  () => consommablesApi.analyse({ groupBy: 'departement' }),
+    enabled:  visible.suiviConsommation,
+    staleTime: 5 * 60_000,
+  });
+
   const { data: commandesStats = [] } = useQuery<{ statut: string; count: number }[]>({
     queryKey: ['dashboard-commandes'],
     queryFn: () => dashboardApi.commandes(),
@@ -138,6 +149,16 @@ export default function Dashboard() {
 
   const commandesEnCours = (kpis?.commandesValidees ?? 0) + (kpis?.commandesExpediees ?? 0);
   const anyFilter = filterMois || filterEntrepot || filterArticle;
+
+  const consoTopArticles = useMemo(() => {
+    if (!consoAnalyse?.rows) return [];
+    const totals = new Map<string, { nom: string; total: number }>();
+    for (const r of consoAnalyse.rows) {
+      const prev = totals.get(r.codeArticle);
+      totals.set(r.codeArticle, { nom: r.nomProduit, total: (prev?.total ?? 0) + r.quantiteEstimee });
+    }
+    return Array.from(totals.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [consoAnalyse]);
 
   return (
     <div className="space-y-4">
@@ -462,6 +483,122 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Suivi des commandes */}
+      {visible.suiviCommandes && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Suivi des commandes</h3>
+            <Link to="/commandes" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Voir tout <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {/* Pipeline */}
+          <div className="flex items-center gap-1.5">
+            {[
+              {
+                label: 'En attente', value: kpis?.commandesEnAttente ?? 0,
+                bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300',
+                dot: 'bg-amber-500',
+              },
+              {
+                label: 'Validées', value: kpis?.commandesValidees ?? 0,
+                bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300',
+                dot: 'bg-blue-500',
+              },
+              {
+                label: 'Expédiées', value: kpis?.commandesExpediees ?? 0,
+                bg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-700 dark:text-purple-300',
+                dot: 'bg-purple-500',
+              },
+              {
+                label: 'Livrées', value: kpis?.commandesLivrees ?? 0,
+                bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-300',
+                dot: 'bg-green-500',
+              },
+            ].map((step, i, arr) => (
+              <div key={step.label} className="contents">
+                <div className={`flex-1 rounded-lg p-2.5 text-center ${step.bg}`}>
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${step.dot}`} />
+                    <span className={`text-[10px] font-medium ${step.text}`}>{step.label}</span>
+                  </div>
+                  <p className={`text-lg font-bold ${step.text}`}>{step.value}</p>
+                </div>
+                {i < arr.length - 1 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Barre taux de service */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${kpis?.tauxService ?? 0}%`,
+                  backgroundColor: (kpis?.tauxService ?? 0) >= 80 ? '#10b981' : (kpis?.tauxService ?? 0) >= 50 ? '#f59e0b' : '#ef4444',
+                }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              Taux de service : <span className="font-semibold text-foreground">{kpis?.tauxService ?? 0}%</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Suivi consommation terrain */}
+      {visible.suiviConsommation && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Suivi consommation terrain</h3>
+            <Link to="/analytique-conso" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Analyse complète <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {!consoAnalyse ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 animate-pulse">
+                  <div className="w-4 h-3 bg-muted rounded" />
+                  <div className="flex-1 h-3 bg-muted rounded" />
+                  <div className="w-16 h-3 bg-muted rounded" />
+                  <div className="w-24 h-1.5 bg-muted rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : consoTopArticles.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Aucune donnée de consommation</p>
+          ) : (
+            <div className="space-y-2">
+              {consoTopArticles.map((a, i) => {
+                const maxVal = consoTopArticles[0]?.total ?? 1;
+                return (
+                  <div key={a.nom} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{a.nom}</p>
+                    </div>
+                    <span className="text-xs tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
+                      {Math.round(a.total).toLocaleString('fr-FR')}
+                    </span>
+                    <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full"
+                        style={{ width: `${(a.total / maxVal) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground/60 mt-3">Quantités estimées · toutes périodes · par article</p>
         </div>
       )}
     </div>

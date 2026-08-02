@@ -6,6 +6,7 @@ import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi } from '@/
 import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
+import { ROLES_CONFIG, getRoleColor } from '@/config/roles';
 import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges } from '@/lib/types';
 import { DEFAULT_PRIVILEGES } from '@/lib/types';
 
@@ -361,14 +362,9 @@ export default function Parametres() {
     else createIntervenantMut.mutate(payload);
   };
 
-  const roles = [
-    { value: 'ADMIN', label: 'Administrateur', color: 'bg-red-100 text-red-700' },
-    { value: 'LOGISTICIEN_1', label: 'Logisticien 1 (Backoffice)', color: 'bg-blue-100 text-blue-700' },
-    { value: 'LOGISTICIEN_2', label: 'Logisticien 2 (Terrain)', color: 'bg-purple-100 text-purple-700' },
-    { value: 'CHEF_PROJET', label: 'Chef de projet', color: 'bg-green-100 text-green-700' },
-  ];
+  const roles = ROLES_CONFIG;
 
-  const roleColor = (r: string) => roles.find(x => x.value === r)?.color ?? 'bg-gray-100 text-gray-700';
+  const roleColor = (r: string) => getRoleColor(r);
 
   const allowedEntrepots = user?.privileges?.entrepots ?? [];
   const visibleEntrepots = allowedEntrepots.length > 0

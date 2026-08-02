@@ -132,6 +132,83 @@ export class LivraisonsService {
     return this.prisma.livraison.deleteMany({ where: { NOT: { deletedAt: null } } });
   }
 
+  async getRapportLivraisons(params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string; format?: string }): Promise<Buffer | any[]> {
+    const dateDebutSOD = new Date(params.dateDebut);
+    dateDebutSOD.setHours(0, 0, 0, 0);
+    const dateFinEOD = new Date(params.dateFin);
+    dateFinEOD.setHours(23, 59, 59, 999);
+
+    const livraisons = await this.prisma.livraison.findMany({
+      where: {
+        deletedAt: null,
+        dateLivraison: { gte: dateDebutSOD, lte: dateFinEOD },
+        ...(params.entrepotId ? { entrepotId: params.entrepotId } : {}),
+      },
+      include: {
+        lignes: {
+          include: { article: true },
+          ...(params.articleId ? { where: { articleId: params.articleId } } : {}),
+        },
+        entrepot: true,
+      },
+      orderBy: { dateLivraison: 'asc' },
+    });
+
+    const rows: { date: string; numero: string; entrepot: string; fournisseur: string; article: string; reference: string; unite: string; quantiteRecue: number; commentaire: string }[] = [];
+    for (const liv of livraisons) {
+      for (const ligne of liv.lignes) {
+        if (ligne.quantiteRecue > 0) {
+          rows.push({
+            date: liv.dateLivraison.toISOString().slice(0, 10),
+            numero: liv.numero,
+            entrepot: liv.entrepot.code,
+            fournisseur: liv.fournisseur,
+            article: ligne.article.nom,
+            reference: ligne.article.reference,
+            unite: ligne.article.unite,
+            quantiteRecue: ligne.quantiteRecue,
+            commentaire: liv.commentaire ?? '',
+          });
+        }
+      }
+    }
+
+    if (params.format === 'json') return rows;
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Rapport livraisons');
+    ws.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'N° Livraison', key: 'numero', width: 18 },
+      { header: 'Entrepôt', key: 'entrepot', width: 12 },
+      { header: 'Fournisseur', key: 'fournisseur', width: 25 },
+      { header: 'Article', key: 'article', width: 40 },
+      { header: 'Référence', key: 'reference', width: 18 },
+      { header: 'Unité', key: 'unite', width: 8 },
+      { header: 'Qté reçue', key: 'quantiteRecue', width: 12 },
+      { header: 'Commentaire', key: 'commentaire', width: 35 },
+    ];
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 40;
+    let rowNum = 1;
+    for (const row of rows) {
+      rowNum++;
+      const r = ws.addRow(row);
+      r.alignment = { vertical: 'middle' };
+      if (rowNum % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+    }
+    ws.eachRow(r => r.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+      };
+    }));
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
+  }
+
   async findCorbeille() {
     return this.prisma.livraison.findMany({
       where: { NOT: { deletedAt: null } },

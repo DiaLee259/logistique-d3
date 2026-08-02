@@ -16,6 +16,7 @@ import { CommandesTSModule } from './orders/commandes-ts/commandes-ts.module';
 import { InventairesModule } from './stock/inventaires/inventaires.module';
 import { RepertoireModule } from './repertoire/repertoire.module';
 import { AdminModule } from './admin/admin.module';
+import { ConsommablesModule } from './consommables/consommables.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AdminModule } from './admin/admin.module';
     InventairesModule,
     RepertoireModule,
     AdminModule,
+    ConsommablesModule,
   ],
 })
 export class AppModule {}
