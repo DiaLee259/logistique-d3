@@ -99,7 +99,7 @@ export default function Dashboard() {
     totalCommandesAnalysees?: number;
   }>({
     queryKey: ['dashboard-delais'],
-    queryFn: dashboardApi.delais,
+    queryFn: () => dashboardApi.delais(),
     refetchInterval: 60_000,
     enabled: visible.delais,
   });
