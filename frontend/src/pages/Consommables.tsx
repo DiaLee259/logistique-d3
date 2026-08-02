@@ -211,8 +211,17 @@ export default function Consommables() {
       const r = await consommablesApi.importInterventions(file, force);
       setIntResult(r);
       setPendingIntFile(null);
-      toast.success('Import démarré — traitement en arrière-plan');
-      qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+      if (r.statut === 'EN_COURS') {
+        toast.success('Import démarré — traitement en arrière-plan');
+        qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+      } else if (r.statut === 'SUCCES' || r.statut === 'PARTIEL') {
+        toast.success(`Import terminé — ${(r.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes`);
+        qc.invalidateQueries({ queryKey: ['consommables-summary'] });
+        qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+      } else {
+        toast.error('Import échoué — voir l\'historique pour les détails');
+        qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+      }
     } catch (err: any) {
       const msg: string = err?.response?.data?.message ?? err?.message ?? 'Erreur inconnue';
       setIntError(msg);

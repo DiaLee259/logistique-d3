@@ -140,7 +140,7 @@ export class ConsommablesImportService {
   async startInterventionsImport(
     file: Express.Multer.File,
     force = false,
-  ): Promise<{ importId: string; statut: string }> {
+  ): Promise<{ importId: string; statut: string; nbLignesImportees: number; nbLignesTotal: number }> {
     // Doublon check
     if (!force) {
       const dup = await this.prisma.importConsommableLog.findFirst({
@@ -159,20 +159,29 @@ export class ConsommablesImportService {
       data: { id: uuidv4(), nomFichier: file.originalname, statut: 'EN_COURS' },
     });
 
-    const buffer = file.buffer;
-    setImmediate(() => {
-      this.runInterventionsImport(buffer, log.id, file.originalname).catch(err => {
-        this.logger.error(`Import ${file.originalname} échoué :`, err);
-        this.prisma.importConsommableLog
-          .update({
-            where: { id: log.id },
-            data: { statut: 'ECHEC', erreurs: [{ message: String(err?.message ?? err) }] as any },
-          })
-          .catch(() => {});
-      });
+    // Traitement synchrone — setImmediate ne s'exécute pas sur Vercel serverless
+    // après que la réponse est envoyée (la fonction est gelée immédiatement).
+    try {
+      await this.runInterventionsImport(file.buffer, log.id, file.originalname);
+    } catch (err) {
+      this.logger.error(`Import ${file.originalname} échoué :`, err);
+      await this.prisma.importConsommableLog.update({
+        where: { id: log.id },
+        data: { statut: 'ECHEC', erreurs: [{ message: String(err?.message ?? err) }] as any },
+      }).catch(() => {});
+    }
+
+    const result = await this.prisma.importConsommableLog.findUnique({
+      where: { id: log.id },
+      select: { id: true, statut: true, nbLignesTotal: true, nbLignesImportees: true },
     });
 
-    return { importId: log.id, statut: 'EN_COURS' };
+    return {
+      importId: result!.id,
+      statut: result!.statut,
+      nbLignesImportees: result?.nbLignesImportees ?? 0,
+      nbLignesTotal: result?.nbLignesTotal ?? 0,
+    };
   }
 
   private async runInterventionsImport(buffer: Buffer, importId: string, filename: string) {
