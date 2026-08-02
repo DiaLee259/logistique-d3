@@ -5,16 +5,12 @@ import { MouvementsService } from './mouvements.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { RolesGuard } from '../../auth/roles.guard';
-import { Roles } from '../../auth/roles.decorator';
 import * as ExcelJS from 'exceljs';
 
 @Controller('mouvements')
 @UseGuards(JwtAuthGuard)
 export class MouvementsController {
   constructor(private service: MouvementsService) {}
-
-  // ── Routes statiques GET (avant les routes paramétrées) ──────────────────
 
   @Get('template')
   async templateMouvements(@Res() res: Response) {
@@ -43,41 +39,21 @@ export class MouvementsController {
     res.send(buffer);
   }
 
-  @Get('corbeille')
-  findCorbeille() { return this.service.findCorbeille(); }
-
-  // ── Route liste (GET /) ───────────────────────────────────────────────────
-
-  @Get()
-  findAll(@Query() filters: FilterMouvementsDto, @Request() req: any) {
-    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
-    const managerZone = req.user?.managerZone ?? null;
-    return this.service.findAll({ ...filters, userEntrepots, managerZone } as any);
-  }
-
-  // ── Route paramétrée GET /:id (après les statiques) ──────────────────────
-
-  @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.service.findById(id);
-  }
-
-  // ── Routes POST statiques (avant POST générique) ──────────────────────────
-
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async importMouvements(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
     return this.service.importMouvements(file.buffer, req.user?.id);
   }
 
-  @Post('batch')
-  createMultiple(@Body() body: { items: CreateMouvementDto[] }, @Request() req) {
-    return this.service.createMultiple(body.items, req.user?.id);
+  @Get()
+  findAll(@Query() filters: FilterMouvementsDto, @Request() req: any) {
+    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
+    return this.service.findAll({ ...filters, userEntrepots } as any);
   }
 
-  @Post('transfert')
-  transferer(@Body() body: any, @Request() req) {
-    return this.service.transferer({ ...body, userId: req.user?.id });
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.service.findById(id);
   }
 
   @Post()
@@ -85,38 +61,20 @@ export class MouvementsController {
     return this.service.create(dto, req.user?.id);
   }
 
-  // ── PUT ───────────────────────────────────────────────────────────────────
+  @Post('batch')
+  createMultiple(@Body() body: { items: CreateMouvementDto[] }, @Request() req) {
+    return this.service.createMultiple(body.items, req.user?.id);
+  }
 
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: Partial<CreateMouvementDto>) {
     return this.service.update(id, dto);
   }
 
-  // ── DELETE statiques (corbeille) avant DELETE /:id ────────────────────────
-
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'CHEF_PROJET')
-  @Delete('corbeille/vider')
-  viderCorbeille() { return this.service.viderCorbeille(); }
-
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'CHEF_PROJET')
-  @Delete('corbeille/:id')
-  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
-
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'CHEF_PROJET')
   @Delete(':id')
-  delete(@Param('id') id: string, @Request() req: any) {
-    return this.service.delete(id, req.user?.id);
+  delete(@Param('id') id: string) {
+    return this.service.delete(id);
   }
-
-  // ── PATCH statiques avant PATCH /:id ─────────────────────────────────────
-
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'CHEF_PROJET')
-  @Patch('corbeille/:id/restaurer')
-  restaurer(@Param('id') id: string) { return this.service.restore(id); }
 
   @Patch(':id/toggle/:field')
   toggleField(@Param('id') id: string, @Param('field') field: 'envoye' | 'recu') {

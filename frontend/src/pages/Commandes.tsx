@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Eye, X,
-  Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare, ArrowLeftRight,
+  Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/api';
@@ -109,9 +109,7 @@ export default function Commandes() {
   const [filterDateFin, setFilterDateFin] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterManager, setFilterManager] = useState('');
-  const [filterTypePrestataire, setFilterTypePrestataire] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [page, setPage] = useState(1);
 
   // Expand / sélection
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -158,21 +156,14 @@ export default function Commandes() {
     if (filterDateFin) p.dateFin = filterDateFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
     if (filterManager) p.manager = filterManager;
-    if (filterTypePrestataire) p.typePrestataire = filterTypePrestataire;
-    p.page = String(page);
     return p;
   };
 
-  // Réinitialiser la page quand un filtre change
-  const resetPage = () => setPage(1);
-
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager, filterTypePrestataire, page],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
-
-  const totalPages = result?.totalPages ?? 1;
 
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots'],
@@ -205,24 +196,6 @@ export default function Commandes() {
       toast.success('Commande créée');
       setNewDialogOpen(false);
       resetForm();
-    },
-  });
-
-  // ── Transfert interne ─────────────────────────────────────────────────────
-  const [transfertDialog, setTransfertDialog] = useState(false);
-  const [tSrc, setTSrc] = useState('');
-  const [tDst, setTDst] = useState('');
-  const [tCommentaire, setTCommentaire] = useState('');
-  const [tLignes, setTLignes] = useState<{ articleId: string; quantiteDemandee: number }[]>([{ articleId: '', quantiteDemandee: 1 }]);
-
-  const createTransfertMut = useMutation({
-    mutationFn: commandesApi.createTransfertInterne,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['commandes'] });
-      toast.success('Commande transfert créée');
-      setTransfertDialog(false);
-      setTSrc(''); setTDst(''); setTCommentaire('');
-      setTLignes([{ articleId: '', quantiteDemandee: 1 }]);
     },
   });
 
@@ -306,38 +279,31 @@ export default function Commandes() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); resetPage(); }} placeholder="Rechercher…"
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…"
             className="w-full pl-8 pr-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
 
-        <select value={filterStatut} onChange={e => { setFilterStatut(e.target.value); resetPage(); }}
+        <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
           <option value="">Tous statuts</option>
           {statuts.map(s => <option key={s} value={s}>{statutCommandeLabel(s)}</option>)}
         </select>
 
-        <select value={filterEntrepot} onChange={e => { setFilterEntrepot(e.target.value); resetPage(); }}
+        <select value={filterEntrepot} onChange={e => setFilterEntrepot(e.target.value)}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
           <option value="">Tous entrepôts</option>
           {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
         </select>
 
         <div className="relative min-w-32">
-          <input value={filterManager} onChange={e => { setFilterManager(e.target.value); resetPage(); }} placeholder="Filtrer manager…"
+          <input value={filterManager} onChange={e => setFilterManager(e.target.value)} placeholder="Filtrer manager…"
             className="w-full px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20" />
           {filterManager && (
-            <button onClick={() => { setFilterManager(''); resetPage(); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => setFilterManager('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}
         </div>
-
-        <select value={filterTypePrestataire} onChange={e => { setFilterTypePrestataire(e.target.value); resetPage(); }}
-          className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
-          <option value="">Tous types</option>
-          <option value="SOCIETE">Société</option>
-          <option value="AUTO">Auto-entrepreneur</option>
-        </select>
 
         <button onClick={() => setShowFilters(v => !v)}
           className={cn('flex items-center gap-1.5 px-3 py-2 text-xs border rounded-lg transition-colors',
@@ -368,12 +334,6 @@ export default function Commandes() {
           </button>
         )}
 
-        {hasRole('ADMIN', 'CHEF_PROJET', 'LOGISTICIEN_1', 'LOGISTICIEN_2') && (
-          <button onClick={() => setTransfertDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs bg-card border border-border rounded-lg hover:border-primary hover:text-primary transition-colors">
-            <ArrowLeftRight className="w-3.5 h-3.5" /> Transfert interne
-          </button>
-        )}
         <button onClick={() => setNewDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
           <Plus className="w-3.5 h-3.5" /> Nouvelle commande
@@ -399,7 +359,7 @@ export default function Commandes() {
               className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
           </div>
           <div className="flex items-end">
-            <button onClick={() => { setFilterMois(''); setFilterDateDebut(''); setFilterDateFin(''); resetPage(); }}
+            <button onClick={() => { setFilterMois(''); setFilterDateDebut(''); setFilterDateFin(''); }}
               className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
               Réinitialiser
             </button>
@@ -445,16 +405,16 @@ export default function Commandes() {
                   </th>
                 )}
                 <th className="w-6 px-1 py-2.5" />
-                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Manager', 'Type', 'Entrepôt', 'Statut', ''].map(h => (
+                {['N° Commande', 'Date réception', 'Date traitement', 'Département', 'Demandeur', 'Société', 'Manager', 'Entrepôt', 'Statut', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Chargement…</td></tr>
               ) : commandes.length === 0 ? (
-                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
+                <tr><td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="text-center py-12 text-muted-foreground">Aucune commande</td></tr>
               ) : commandes.map(c => {
                 const isExpanded = expandedIds.has(c.id);
                 const isSelected = selectedIds.has(c.id);
@@ -490,15 +450,6 @@ export default function Commandes() {
                       <td className="px-3 py-2.5 text-muted-foreground">{c.societe ?? '—'}</td>
                       <td className="px-3 py-2.5 text-muted-foreground">{c.manager ?? '—'}</td>
                       <td className="px-3 py-2.5">
-                        {(c as any).typePrestataire === 'SOCIETE' ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">Société</span>
-                        ) : (c as any).typePrestataire === 'AUTO' ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Auto</span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
                         {entrepotCode
                           ? <span className="font-mono text-xs font-semibold text-primary">{entrepotCode}</span>
                           : <span className="text-muted-foreground text-xs">—</span>}
@@ -519,7 +470,7 @@ export default function Commandes() {
                     </tr>
                     {isExpanded && c.lignes && c.lignes.length > 0 && (
                       <tr className="bg-muted/10 border-b border-border/50">
-                        <td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 14 : 13} className="px-6 py-2">
+                        <td colSpan={hasRole('ADMIN', 'LOGISTICIEN_1') ? 13 : 12} className="px-6 py-2">
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-muted-foreground">
@@ -551,43 +502,9 @@ export default function Commandes() {
             </tbody>
           </table>
         </div>
-        {result && totalPages > 0 && (
+        {result && (
           <div className="px-3 py-2 border-t border-border flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {result.total} commande(s) — page {page} / {totalPages}
-            </p>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage(p => p - 1)}
-                  className="px-2.5 py-1 text-xs border border-border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ← Préc.
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={cn(
-                      'w-7 h-7 text-xs rounded-lg border transition-colors',
-                      p === page
-                        ? 'bg-primary text-white border-primary font-semibold'
-                        : 'border-border hover:bg-muted'
-                    )}
-                  >
-                    {p}
-                  </button>
-                ))}
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                  className="px-2.5 py-1 text-xs border border-border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Suiv. →
-                </button>
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground">{result.total} commande(s) — page {result.page}/{result.totalPages}</p>
           </div>
         )}
       </div>
@@ -615,91 +532,6 @@ export default function Commandes() {
               <button onClick={() => deleteMut.mutate(confirmDeleteId)} disabled={deleteMut.isPending}
                 className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
                 {deleteMut.isPending ? 'Suppression…' : 'Supprimer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Dialog transfert interne ──────────────────────────────────────── */}
-      {transfertDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <div className="flex items-center gap-2">
-                <ArrowLeftRight className="w-4 h-4 text-primary" />
-                <h2 className="text-sm font-semibold">Nouveau transfert interne</h2>
-              </div>
-              <button onClick={() => setTransfertDialog(false)} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt source *</label>
-                  <select value={tSrc} onChange={e => setTSrc(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
-                    <option value="">— Source —</option>
-                    {entrepots.map((e: Entrepot) => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt destination *</label>
-                  <select value={tDst} onChange={e => setTDst(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
-                    <option value="">— Destination —</option>
-                    {entrepots.filter((e: Entrepot) => e.id !== tSrc).map((e: Entrepot) => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-muted-foreground">Articles à transférer *</label>
-                  <button onClick={() => setTLignes(l => [...l, { articleId: '', quantiteDemandee: 1 }])}
-                    className="text-xs text-primary hover:underline">+ Ajouter un article</button>
-                </div>
-                <div className="space-y-2">
-                  {tLignes.map((l, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <select value={l.articleId} onChange={e => setTLignes(ls => ls.map((x, j) => j === i ? { ...x, articleId: e.target.value } : x))}
-                        className="flex-1 px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none">
-                        <option value="">— Choisir un article —</option>
-                        {articles.map((a: Article) => <option key={a.id} value={a.id}>{a.nom} ({a.reference})</option>)}
-                      </select>
-                      <input type="number" min={1} value={l.quantiteDemandee}
-                        onChange={e => setTLignes(ls => ls.map((x, j) => j === i ? { ...x, quantiteDemandee: parseInt(e.target.value) || 1 } : x))}
-                        className="w-20 px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none text-center" />
-                      {tLignes.length > 1 && (
-                        <button onClick={() => setTLignes(ls => ls.filter((_, j) => j !== i))}
-                          className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Commentaire (optionnel)</label>
-                <input type="text" value={tCommentaire} onChange={e => setTCommentaire(e.target.value)}
-                  placeholder="Raison du transfert…"
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg bg-background focus:outline-none" />
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
-                ℹ️ La commande sera traitée comme une commande normale. Le mouvement transfert sera créé automatiquement lors de l'expédition.
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-5 pb-5">
-              <button onClick={() => setTransfertDialog(false)} className="px-4 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-              <button
-                onClick={() => {
-                  const validLignes = tLignes.filter(l => l.articleId && l.quantiteDemandee > 0);
-                  if (!tSrc || !tDst) { toast.error('Entrepôts requis'); return; }
-                  if (validLignes.length === 0) { toast.error('Au moins un article requis'); return; }
-                  createTransfertMut.mutate({ entrepotSourceId: tSrc, entrepotDestinationId: tDst, lignes: validLignes, commentaire: tCommentaire || undefined });
-                }}
-                disabled={createTransfertMut.isPending}
-                className="px-4 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50">
-                {createTransfertMut.isPending ? 'Création…' : `Créer (${tLignes.filter(l => l.articleId).length} article(s))`}
               </button>
             </div>
           </div>

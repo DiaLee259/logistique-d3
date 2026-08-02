@@ -17,8 +17,6 @@ import Inventaire from '@/pages/Inventaire';
 import Guide from '@/pages/Guide';
 import Corbeille from '@/pages/Corbeille';
 import Intervenants from '@/pages/Intervenants';
-import Consommables from '@/pages/Consommables';
-import AnalytiqueConsommables from '@/pages/AnalytiqueConsommables';
 import NotFound from '@/pages/NotFound';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -50,8 +48,6 @@ function AppRoutes() {
         <Route path="livraisons" element={<Livraisons />} />
         <Route path="commandes-ts" element={<CommandesTS />} />
         <Route path="inventaire" element={<Inventaire />} />
-        <Route path="consommables" element={<Consommables />} />
-        <Route path="analytique-conso" element={<AnalytiqueConsommables />} />
         <Route path="intervenants" element={<Intervenants />} />
         <Route path="guide" element={<Guide />} />
         <Route path="corbeille" element={<Corbeille />} />

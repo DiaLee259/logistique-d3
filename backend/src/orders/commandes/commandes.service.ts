@@ -24,20 +24,12 @@ export class CommandesService {
 
     const andClauses: any[] = [];
 
-    // Filtrage selon le rôle : manager de zone ou privilèges entrepôt
-    if (filters.managerZone) {
-      const mz = filters.managerZone as { id: string; nom: string; departements: any[] };
-      const entrepotIds = [...new Set(
-        (mz.departements as any[]).map((d: any) => d.entrepotId).filter(Boolean)
-      )] as string[];
-      andClauses.push({ OR: [
-        { manager: { equals: mz.nom, mode: 'insensitive' } },
-        ...(entrepotIds.length ? [{ entrepotSource: { in: entrepotIds } }] : []),
-      ]});
-    } else if (filters.userEntrepots?.length) {
+    // Filtrage par entrepôt selon les privilèges du user
+    if (filters.userEntrepots?.length) {
+      const isLog1OrAdmin = ['ADMIN', 'LOGISTICIEN_1'].includes(filters.userRole ?? '');
       andClauses.push({ OR: [
         { entrepotSource: { in: filters.userEntrepots } },
-        ...(filters.voirSansEntrepot !== false ? [{ entrepotSource: null }] : []),
+        ...(isLog1OrAdmin ? [{ entrepotSource: null }] : []),
       ]});
     }
 
@@ -95,7 +87,6 @@ export class CommandesService {
         expediteur: { select: { id: true, nom: true, prenom: true } },
         intervenant: { select: { id: true, nom: true, prenom: true } },
         livraisons: true,
-        lien: { select: { id: true, nom: true, token: true } },
       },
     });
     if (!c || c.deletedAt) throw new NotFoundException('Commande introuvable');
@@ -152,76 +143,6 @@ export class CommandesService {
     return commande;
   }
 
-  /** Crée une commande de type TRANSFERT interne (Log1 / Log2 / Chef / Admin) */
-  async createTransfertInterne(dto: {
-    entrepotSourceId: string;
-    entrepotDestinationId: string;
-    lignes: { articleId: string; quantiteDemandee: number; commentaire?: string }[];
-    commentaire?: string;
-  }) {
-    if (dto.entrepotSourceId === dto.entrepotDestinationId) {
-      throw new BadRequestException('Source et destination doivent être différentes');
-    }
-    if (!dto.lignes?.length) throw new BadRequestException('Au moins un article requis');
-
-    const [src, dst] = await Promise.all([
-      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotSourceId } }),
-      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotDestinationId } }),
-    ]);
-    if (!src || !dst) throw new BadRequestException('Entrepôt introuvable');
-
-    const numero = await this.genNumeroCommande();
-
-    const commande = await this.prisma.commande.create({
-      data: {
-        numero,
-        departement: 'TRANSFERT_INTERNE',
-        typeCommande: 'TRANSFERT',
-        entrepotSource: dto.entrepotSourceId,
-        entrepotDestinationId: dto.entrepotDestinationId,
-        commentaire: dto.commentaire ?? null,
-        lignes: {
-          create: dto.lignes.map(l => ({
-            articleId: l.articleId,
-            quantiteDemandee: l.quantiteDemandee,
-            commentaire: l.commentaire ?? null,
-          })),
-        },
-      },
-      include: { lignes: { include: { article: true } } },
-    } as any);
-
-    await this.prisma.notification.create({
-      data: {
-        type: 'NOUVELLE_COMMANDE',
-        titre: '⇄ Transfert interne créé',
-        message: `${numero} — ${src.code} → ${dst.code}`,
-        lien: `/commandes/${commande.id}`,
-      },
-    });
-
-    return commande;
-  }
-
-  // Refuser une commande (Log1) avec motif obligatoire
-  async refuser(id: string, motif: string) {
-    const commande = await this.findById(id);
-    if (!['EN_ATTENTE', 'EN_VALIDATION'].includes(commande.statut)) {
-      throw new BadRequestException('Seule une commande en attente peut être refusée');
-    }
-    if (!motif?.trim()) {
-      throw new BadRequestException('Un motif de refus est obligatoire');
-    }
-    return this.prisma.commande.update({
-      where: { id },
-      data: {
-        statut: 'REFUSEE' as any,
-        commentaireRefus: motif.trim(),
-        dateTraitement: new Date(),
-      },
-    });
-  }
-
   // Suivi public d'une commande par numéro
   async getSuiviPublic(numero: string) {
     const commande = await this.prisma.commande.findFirst({
@@ -237,7 +158,6 @@ export class CommandesService {
         dateTraitement: true,
         dateExpedition: true,
         dateLivraison: true,
-        commentaireRefus: true,
         lignes: {
           select: {
             quantiteDemandee: true,
@@ -254,25 +174,9 @@ export class CommandesService {
 
   // Créer depuis formulaire public prestataire
   async createPublique(token: string, dto: any) {
-    const lien = await this.prisma.lienPrestataire.findUnique({
-      where: { token },
-      include: { managerZone: true },
-    });
+    const lien = await this.prisma.lienPrestataire.findUnique({ where: { token } });
     if (!lien || !lien.actif) throw new BadRequestException('Lien invalide ou expiré');
     if (lien.expiresAt && lien.expiresAt < new Date()) throw new BadRequestException('Lien expiré');
-
-    // Détecter l'entrepôt depuis le(s) département(s) sélectionné(s)
-    // dto.departement peut être "49" ou "49,75" (multi-sélection)
-    let entrepotSource: string | undefined;
-    if (lien.managerZone && dto.departement) {
-      const depts = lien.managerZone.departements as { code: string; entrepotId: string; entrepotCode: string }[];
-      const selectedCodes = String(dto.departement).split(',').map((s: string) => s.trim()).filter(Boolean);
-      const matchedEntrepots = [...new Set(
-        selectedCodes.map(code => depts.find(d => d.code === code)?.entrepotId).filter(Boolean)
-      )] as string[];
-      // Un seul entrepôt commun → on l'assigne ; plusieurs → null (Log1 tranchera)
-      if (matchedEntrepots.length === 1) entrepotSource = matchedEntrepots[0];
-    }
 
     const numero = await this.genNumeroCommande();
 
@@ -284,16 +188,13 @@ export class CommandesService {
         emailDemandeur: dto.emailDemandeur,
         societe: dto.societe,
         interlocuteur: dto.interlocuteur,
-        manager: lien.managerZone?.nom ?? dto.manager,
+        manager: dto.manager,
         nombreGrilles: dto.nombreGrilles ? parseInt(dto.nombreGrilles) : undefined,
         typeGrille: dto.typeGrille,
         telephoneDestinataire: dto.telephoneDestinataire,
         adresseLivraison: dto.adresseLivraison,
         commentaire: dto.commentaire,
         statut: StatutCommande.EN_ATTENTE,
-        entrepotSource: entrepotSource ?? null,
-        lienId: lien.id,
-        typePrestataire: lien.typePrestataire ?? null,
         lignes: {
           create: (dto.lignes || []).map((l: any) => ({
             articleId: l.articleId,
@@ -305,11 +206,13 @@ export class CommandesService {
       include: { lignes: { include: { article: true } } },
     });
 
+    // Incrémenter le compteur d'utilisations
     await this.prisma.lienPrestataire.update({
       where: { token },
       data: { utilisations: { increment: 1 } },
     });
 
+    // Notification broadcast
     await this.prisma.notification.create({
       data: {
         type: 'NOUVELLE_COMMANDE',
@@ -328,12 +231,12 @@ export class CommandesService {
       throw new BadRequestException('Commande ne peut pas être validée dans cet état');
     }
 
+    // entrepotSource est désormais au niveau commande (choix unique de Log1)
     const entrepotId = data.entrepotSource ?? undefined;
     const stockRef = entrepotId
-      ? null
+      ? null // calculé par ligne
       : await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
 
-    // Mettre à jour les lignes existantes
     for (const ligne of data.lignes || []) {
       const ligneCmd = commande.lignes.find(l => l.id === ligne.id);
       const stock = entrepotId
@@ -345,24 +248,6 @@ export class CommandesService {
         data: {
           quantiteValidee: ligne.quantiteValidee,
           stockDisponible: stock?.quantite ?? 0,
-        },
-      });
-    }
-
-    // Créer les nouvelles lignes ajoutées par Log1 (article substitué)
-    for (const nl of data.nouvelleLignes || []) {
-      if (!nl.articleId || nl.quantiteValidee <= 0) continue;
-      const stock = entrepotId
-        ? await this.prisma.stock.findUnique({ where: { articleId_entrepotId: { articleId: nl.articleId, entrepotId } } })
-        : stockRef;
-      await this.prisma.ligneCommande.create({
-        data: {
-          commandeId: id,
-          articleId: nl.articleId,
-          quantiteDemandee: nl.quantiteValidee,
-          quantiteValidee: nl.quantiteValidee,
-          stockDisponible: stock?.quantite ?? 0,
-          commentaire: nl.commentaire ?? null,
         },
       });
     }
@@ -400,12 +285,13 @@ export class CommandesService {
     return this.prisma.commande.update({ where: { id }, data: update });
   }
 
-  async expedier(id: string, userId: string, data: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[]; nouvelleLignes?: { articleId: string; quantite: number; commentaire?: string }[] }) {
+  async expedier(id: string, userId: string, data: { commentaire?: string; lignes?: { ligneId: string; quantite: number }[] }) {
     const commande = await this.findById(id);
     if (!['VALIDEE', 'EN_ATTENTE_LOG2'].includes(commande.statut)) {
       throw new BadRequestException('La commande doit être validée avant expédition');
     }
 
+    // Entrepôt source : défini au niveau commande par Log1
     let entrepotId: string | undefined = (commande as any).entrepotSource ?? undefined;
     if (!entrepotId) {
       const stock = await this.prisma.stock.findFirst({ orderBy: { quantite: 'desc' } });
@@ -413,131 +299,36 @@ export class CommandesService {
     }
     if (!entrepotId) throw new BadRequestException('Aucun entrepôt disponible pour l\'expédition');
 
-    // ── Commandes STANDARD : SORTIE par ligne + nouvelles lignes Log2 ──────────
-    // Pour les TRANSFERT, on ne passe pas ici — leur propre bloc ci-dessous
-    // crée simultanément SORTIE (source) + ENTREE (destination) liées par transfertId.
-    if ((commande as any).typeCommande !== 'TRANSFERT') {
-      // Traiter les lignes existantes
-      for (const ligne of commande.lignes) {
-        const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
-        const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
-        if (!quantiteLivree || quantiteLivree <= 0) continue;
+    // Créer un mouvement SORTIE pour chaque ligne avec la quantité réelle envoyée par Log2
+    for (const ligne of commande.lignes) {
+      const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
+      // quantiteLivree = ce que Log2 a réellement envoyé (peut différer du validé)
+      const quantiteLivree = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
+      if (!quantiteLivree || quantiteLivree <= 0) continue;
 
-        await this.prisma.ligneCommande.update({
-          where: { id: ligne.id },
-          data: { quantiteFournie: quantiteLivree },
-        });
+      await this.prisma.ligneCommande.update({
+        where: { id: ligne.id },
+        data: { quantiteFournie: quantiteLivree }, // quantiteFournie = quantité livrée réelle
+      });
 
-        await this.prisma.mouvement.create({
-          data: {
-            articleId: ligne.articleId,
-            entrepotId,
-            type: 'SORTIE' as any,
-            quantiteDemandee: (ligne as any).quantiteDemandee,
-            quantiteValidee: (ligne as any).quantiteValidee ?? null,
-            quantiteFournie: quantiteLivree,
-            departement: commande.departement,
-            manager: (commande as any).manager ?? null,
-            numeroCommande: commande.numero,
-            numeroOperation: commande.numero,
-            sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
-            commandeId: id,
-          } as any,
-        });
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: ligne.articleId,
+          entrepotId,
+          type: 'SORTIE' as any,
+          quantiteDemandee: (ligne as any).quantiteDemandee,
+          quantiteValidee: (ligne as any).quantiteValidee ?? null,
+          quantiteFournie: quantiteLivree,
+          departement: commande.departement,
+          manager: (commande as any).manager ?? null,
+          numeroCommande: commande.numero,
+          numeroOperation: commande.numero,
+          sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
+          commandeId: id,
+        } as any,
+      });
 
-        await this.calculator.sync(ligne.articleId, entrepotId);
-      }
-
-      // Créer et expédier les nouvelles lignes ajoutées par Log2 (article substitué)
-      for (const nl of data.nouvelleLignes || []) {
-        if (!nl.articleId || nl.quantite <= 0) continue;
-        await this.prisma.ligneCommande.create({
-          data: {
-            commandeId: id,
-            articleId: nl.articleId,
-            quantiteDemandee: nl.quantite,
-            quantiteValidee: nl.quantite,
-            quantiteFournie: nl.quantite,
-            commentaire: nl.commentaire ?? null,
-          },
-        });
-
-        await this.prisma.mouvement.create({
-          data: {
-            articleId: nl.articleId,
-            entrepotId,
-            type: 'SORTIE' as any,
-            quantiteDemandee: nl.quantite,
-            quantiteValidee: nl.quantite,
-            quantiteFournie: nl.quantite,
-            departement: commande.departement,
-            manager: (commande as any).manager ?? null,
-            numeroCommande: commande.numero,
-            numeroOperation: commande.numero,
-            sourceDestination: commande.demandeur ?? commande.societe ?? undefined,
-            commandeId: id,
-          } as any,
-        });
-
-        await this.calculator.sync(nl.articleId, entrepotId);
-      }
-    }
-
-    // ── Cas TRANSFERT : créer SORTIE + ENTREE liées ──────────────────────────
-    if ((commande as any).typeCommande === 'TRANSFERT') {
-      const entrepotDestId = (commande as any).entrepotDestinationId;
-      if (!entrepotDestId) throw new BadRequestException('Entrepôt destination manquant sur la commande transfert');
-      const entrepotDst = await this.prisma.entrepot.findUnique({ where: { id: entrepotDestId } });
-      const entrepotSrc = await this.prisma.entrepot.findUnique({ where: { id: entrepotId! } });
-      if (!entrepotDst || !entrepotSrc) throw new BadRequestException('Entrepôt introuvable');
-
-      const { v4: uuidv4 } = await import('uuid');
-      const transfertId = uuidv4();
-
-      for (const ligne of commande.lignes) {
-        const ligneOverride = data.lignes?.find(l => l.ligneId === ligne.id);
-        const qte = ligneOverride?.quantite ?? (ligne as any).quantiteValidee ?? (ligne as any).quantiteDemandee;
-        if (!qte || qte <= 0) continue;
-
-        await this.prisma.ligneCommande.update({ where: { id: ligne.id }, data: { quantiteFournie: qte } });
-
-        // SORTIE depuis source
-        await this.prisma.mouvement.create({
-          data: {
-            articleId: ligne.articleId,
-            entrepotId: entrepotId!,
-            type: 'SORTIE' as any,
-            quantiteDemandee: (ligne as any).quantiteDemandee,
-            quantiteValidee: (ligne as any).quantiteValidee ?? null,
-            quantiteFournie: qte,
-            sourceDestination: `→ ${entrepotDst.code}`,
-            numeroCommande: commande.numero,
-            numeroOperation: commande.numero,
-            commandeId: id,
-            transfertId,
-          } as any,
-        });
-
-        // ENTREE dans destination
-        await this.prisma.mouvement.create({
-          data: {
-            articleId: ligne.articleId,
-            entrepotId: entrepotDestId,
-            type: 'ENTREE' as any,
-            quantiteDemandee: (ligne as any).quantiteDemandee,
-            quantiteValidee: (ligne as any).quantiteValidee ?? null,
-            quantiteFournie: qte,
-            sourceDestination: `← ${entrepotSrc.code}`,
-            numeroCommande: commande.numero,
-            numeroOperation: commande.numero,
-            commandeId: id,
-            transfertId,
-          } as any,
-        });
-
-        await this.calculator.sync(ligne.articleId, entrepotId!);
-        await this.calculator.sync(ligne.articleId, entrepotDestId);
-      }
+      await this.calculator.sync(ligne.articleId, entrepotId);
     }
 
     return this.prisma.commande.update({
@@ -581,92 +372,29 @@ export class CommandesService {
     });
   }
 
-  async annuler(id: string, motif?: string) {
-    return this.prisma.commande.update({
-      where: { id },
-      data: {
-        statut: StatutCommande.ANNULEE,
-        ...(motif?.trim() ? { commentaireRefus: motif.trim() } : {}),
-      },
-    });
+  async annuler(id: string) {
+    return this.prisma.commande.update({ where: { id }, data: { statut: StatutCommande.ANNULEE } });
   }
 
   // ─── Liens prestataire ──────────────────────────────────────────────────────
 
-  async genererLienPrestataire(data: {
-    nom: string;
-    expiresInDays?: number;
-    managerZoneId?: string;
-    typePrestataire?: string;
-    departementsActifs?: string[];
-  }, userId: string) {
+  async genererLienPrestataire(nom: string, userId: string, expiresInDays?: number) {
     const token = uuidv4();
-    const expiresAt = data.expiresInDays
-      ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
+    const expiresAt = expiresInDays
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
       : null;
 
     return this.prisma.lienPrestataire.create({
-      data: {
-        token,
-        nom: data.nom,
-        createdBy: userId,
-        expiresAt,
-        managerZoneId: data.managerZoneId ?? null,
-        typePrestataire: data.typePrestataire ?? null,
-        departementsActifs: data.departementsActifs ?? [],
-      },
-      include: { managerZone: true },
-    });
-  }
-
-  async updateLienPrestataire(id: string, data: {
-    nom?: string;
-    managerZoneId?: string | null;
-    typePrestataire?: string | null;
-    departementsActifs?: string[];
-    actif?: boolean;
-  }) {
-    return this.prisma.lienPrestataire.update({
-      where: { id },
-      data,
-      include: { managerZone: true },
+      data: { token, nom, createdBy: userId, expiresAt },
     });
   }
 
   async listLiensPrestataire() {
-    return this.prisma.lienPrestataire.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { managerZone: { select: { id: true, nom: true, departements: true } } },
-    });
-  }
-
-  // ─── Managers de zone ───────────────────────────────────────────────────────
-
-  async listManagersZone() {
-    return this.prisma.managerZone.findMany({
-      orderBy: { nom: 'asc' },
-      include: { liens: { where: { actif: true }, select: { id: true, nom: true } } },
-    });
-  }
-
-  async createManagerZone(data: { nom: string; departements: any[] }) {
-    return this.prisma.managerZone.create({ data });
-  }
-
-  async updateManagerZone(id: string, data: { nom?: string; departements?: any[]; actif?: boolean }) {
-    return this.prisma.managerZone.update({ where: { id }, data });
-  }
-
-  async deleteManagerZone(id: string) {
-    return this.prisma.managerZone.delete({ where: { id } });
+    return this.prisma.lienPrestataire.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
   async desactiverLien(id: string) {
     return this.prisma.lienPrestataire.update({ where: { id }, data: { actif: false } });
-  }
-
-  async deleteLienPrestataire(id: string) {
-    return this.prisma.lienPrestataire.delete({ where: { id } });
   }
 
   async bulkSetEntrepot(commandeIds: string[], entrepotId: string) {
@@ -750,28 +478,17 @@ export class CommandesService {
   }
 
   async getLienPublic(token: string) {
-    const lien = await this.prisma.lienPrestataire.findUnique({
-      where: { token },
-      include: { managerZone: true },
-    });
+    const lien = await this.prisma.lienPrestataire.findUnique({ where: { token } });
     if (!lien || !lien.actif) throw new NotFoundException('Lien invalide ou expiré');
 
+    // Retourner la liste des articles pour le formulaire
     const articles = await this.prisma.article.findMany({
       where: { actif: true },
       select: { id: true, nom: true, reference: true, unite: true, description: true },
       orderBy: { createdAt: 'asc' },
     });
 
-    return {
-      lien: {
-        nom: lien.nom,
-        expiresAt: lien.expiresAt,
-        typePrestataire: lien.typePrestataire,
-        managerNom: lien.managerZone?.nom ?? null,
-        departementsActifs: lien.departementsActifs,
-      },
-      articles,
-    };
+    return { lien: { nom: lien.nom, expiresAt: lien.expiresAt }, articles };
   }
 
   async importCommandes(buffer: Buffer, userId?: string) {
@@ -862,83 +579,5 @@ export class CommandesService {
       skipped++;
     }
     return { created, skipped, errors, total: lignes.length + skipped };
-  }
-
-  /**
-   * Backfill one-shot : enrichit les commandes avec les données des liens prestataires.
-   * Stratégie de correspondance :
-   *   1. Par lienId (commandes récentes)
-   *   2. Par manager name → managerZone.nom (commandes anciennes sans lienId)
-   * Règles :
-   *   - manager       : toujours écrasé si on a l'info depuis le lien
-   *   - typePrestataire : toujours écrasé si on a l'info
-   *   - entrepotSource  : uniquement si vide (ne pas écraser la sélection Log1)
-   */
-  async backfillLienData() {
-    // Charger toutes les commandes non supprimées
-    const commandes = await this.prisma.commande.findMany({
-      where: { deletedAt: null },
-      select: {
-        id: true,
-        departement: true,
-        manager: true,
-        typePrestataire: true,
-        entrepotSource: true,
-        lienId: true,
-      },
-    });
-
-    // Charger tous les liens avec leurs managerZones (une seule requête)
-    const liens = await this.prisma.lienPrestataire.findMany({
-      include: { managerZone: true },
-    });
-
-    let updated = 0;
-    let skipped = 0;
-
-    for (const cmd of commandes) {
-      // 1. Correspondance par lienId
-      let lien = cmd.lienId ? liens.find(l => l.id === cmd.lienId) ?? null : null;
-
-      // 2. Fallback : correspondance par nom du manager ↔ managerZone.nom
-      if (!lien && cmd.manager) {
-        lien = liens.find(l =>
-          l.managerZone?.nom?.toLowerCase().trim() === cmd.manager?.toLowerCase().trim()
-        ) ?? null;
-      }
-
-      if (!lien) { skipped++; continue; }
-
-      const patch: Record<string, any> = {};
-
-      // Manager ← managerZone.nom (TOUJOURS écraser si on a l'info)
-      if (lien.managerZone?.nom) {
-        patch.manager = lien.managerZone.nom;
-      }
-
-      // typePrestataire ← lien.typePrestataire (TOUJOURS écraser si on a l'info)
-      if (lien.typePrestataire) {
-        patch.typePrestataire = lien.typePrestataire;
-      }
-
-      // entrepotSource ← UNIQUEMENT si vide (on ne touche pas aux choix Log1)
-      if (!cmd.entrepotSource && lien.managerZone && cmd.departement) {
-        const depts = lien.managerZone.departements as { code: string; entrepotId: string }[];
-        const selectedCodes = String(cmd.departement).split(',').map(s => s.trim()).filter(Boolean);
-        const matchedEntrepots = [...new Set(
-          selectedCodes.map(code => depts.find(d => d.code === code)?.entrepotId).filter(Boolean)
-        )] as string[];
-        if (matchedEntrepots.length === 1) {
-          patch.entrepotSource = matchedEntrepots[0];
-        }
-      }
-
-      if (Object.keys(patch).length === 0) { skipped++; continue; }
-
-      await this.prisma.commande.update({ where: { id: cmd.id }, data: patch });
-      updated++;
-    }
-
-    return { total: commandes.length, updated, skipped };
   }
 }

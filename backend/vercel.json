@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npm run build:vercel",
+  "buildCommand": "npm install && npx prisma generate && npm run build",
   "installCommand": "npm install",
   "functions": {
     "api/index.js": {
       "memory": 512,
-      "maxDuration": 60,
+      "maxDuration": 30,
       "includeFiles": "dist/**,node_modules/.prisma/**,node_modules/@prisma/client/**"
     }
   },

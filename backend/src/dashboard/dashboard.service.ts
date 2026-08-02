@@ -32,9 +32,9 @@ export class DashboardService {
     if (articleId) mouvFilter.articleId = articleId;
     if (debut || fin) mouvFilter.date = dateFilter;
 
+    // Filtre de date pour commandes (sur dateReception)
     const cmdDateFilter: any = { deletedAt: null };
-    if (entrepotId) cmdDateFilter.entrepotSource = entrepotId;
-    else if (userEntrepots.length) cmdDateFilter.entrepotSource = { in: userEntrepots };
+    if (userEntrepots.length) cmdDateFilter.entrepotSource = { in: userEntrepots };
     if (debut || fin) {
       cmdDateFilter.dateReception = {};
       if (debut) cmdDateFilter.dateReception.gte = new Date(debut);
@@ -125,12 +125,11 @@ export class DashboardService {
     return Object.entries(byDay).map(([date, v]) => ({ date, ...v }));
   }
 
-  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = [], articleId?: string) {
+  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { type: TypeMouvement.SORTIE };
     if (entrepotId) where.entrepotId = entrepotId;
     else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
-    if (articleId) where.articleId = articleId;
     if (parsed.dateDebut || parsed.dateFin) {
       where.date = {};
       if (parsed.dateDebut) where.date.gte = new Date(parsed.dateDebut);
@@ -150,23 +149,14 @@ export class DashboardService {
     }));
   }
 
-  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = [], entrepotId?: string, articleId?: string) {
+  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = []) {
     const parsed = mois ? parseMois(mois) : {};
     const where: any = { statut: { not: 'ANNULEE' }, deletedAt: null };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
     if (parsed.dateDebut || parsed.dateFin) {
       where.dateReception = {};
       if (parsed.dateDebut) where.dateReception.gte = new Date(parsed.dateDebut);
       if (parsed.dateFin) where.dateReception.lte = new Date(parsed.dateFin + 'T23:59:59');
-    }
-    if (articleId) {
-      const lignes = await this.prisma.ligneCommande.findMany({
-        where: { articleId },
-        select: { commandeId: true },
-        distinct: ['commandeId'],
-      });
-      where.id = { in: lignes.map(l => l.commandeId) };
     }
 
     const data = await this.prisma.commande.groupBy({
@@ -183,13 +173,12 @@ export class DashboardService {
     }));
   }
 
-  async getDelaisMoyens(userEntrepots: string[] = [], entrepotId?: string) {
+  async getDelaisMoyens(userEntrepots: string[] = []) {
     const where: any = {
       deletedAt: null,
       statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
     };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
 
     const commandes = await this.prisma.commande.findMany({
       where,
@@ -233,10 +222,9 @@ export class DashboardService {
     };
   }
 
-  async getTopArticles(limit = 5, userEntrepots: string[] = [], entrepotId?: string) {
+  async getTopArticles(limit = 5, userEntrepots: string[] = []) {
     const where: any = { type: TypeMouvement.SORTIE };
-    if (entrepotId) where.entrepotId = entrepotId;
-    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
+    if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
 
     const data = await this.prisma.mouvement.groupBy({
       by: ['articleId'],
@@ -257,18 +245,9 @@ export class DashboardService {
     }));
   }
 
-  async getResumeCommandes(userEntrepots: string[] = [], entrepotId?: string, articleId?: string) {
+  async getResumeCommandes(userEntrepots: string[] = []) {
     const where: any = { deletedAt: null };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
-    if (articleId) {
-      const lignes = await this.prisma.ligneCommande.findMany({
-        where: { articleId },
-        select: { commandeId: true },
-        distinct: ['commandeId'],
-      });
-      where.id = { in: lignes.map(l => l.commandeId) };
-    }
+    if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
 
     const par_statut = await this.prisma.commande.groupBy({
       by: ['statut'],
@@ -276,109 +255,5 @@ export class DashboardService {
       _count: { id: true },
     });
     return par_statut.map(s => ({ statut: s.statut, count: s._count.id }));
-  }
-
-  async getBilanArticles(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string, userEntrepots: string[] = []) {
-    const parsed = mois ? parseMois(mois) : {};
-    const debut = parsed.dateDebut ?? dateDebut;
-    const fin = parsed.dateFin ?? dateFin;
-
-    const mouvBase: any = {};
-    if (entrepotId) mouvBase.entrepotId = entrepotId;
-    else if (userEntrepots.length) mouvBase.entrepotId = { in: userEntrepots };
-    if (articleId) mouvBase.articleId = articleId;
-
-    const periodFilter: any = {};
-    if (debut || fin) {
-      periodFilter.date = {};
-      if (debut) periodFilter.date.gte = new Date(debut);
-      if (fin) periodFilter.date.lte = new Date(fin + 'T23:59:59');
-    }
-
-    const stockFilter: any = {};
-    if (entrepotId) stockFilter.entrepotId = entrepotId;
-    else if (userEntrepots.length) stockFilter.entrepotId = { in: userEntrepots };
-    if (articleId) stockFilter.articleId = articleId;
-
-    const [entreesData, sortiesData, currentStocks] = await Promise.all([
-      this.prisma.mouvement.groupBy({
-        by: ['articleId'],
-        where: { ...mouvBase, ...periodFilter, type: TypeMouvement.ENTREE },
-        _sum: { quantiteFournie: true },
-      }),
-      this.prisma.mouvement.groupBy({
-        by: ['articleId'],
-        where: { ...mouvBase, ...periodFilter, type: TypeMouvement.SORTIE },
-        _sum: { quantiteFournie: true },
-      }),
-      this.prisma.stock.findMany({
-        where: stockFilter,
-        select: { articleId: true, quantite: true },
-      }),
-    ]);
-
-    const currentStockMap = new Map<string, number>();
-    for (const s of currentStocks) {
-      currentStockMap.set(s.articleId, (currentStockMap.get(s.articleId) ?? 0) + s.quantite);
-    }
-
-    // If date filter: compute stock at dateFin by removing post-period movements
-    let stockFinalMap: Map<string, number>;
-    if (fin) {
-      const afterFilter = { date: { gt: new Date(fin + 'T23:59:59') } };
-      const [entAfter, sorAfter] = await Promise.all([
-        this.prisma.mouvement.groupBy({
-          by: ['articleId'],
-          where: { ...mouvBase, ...afterFilter, type: TypeMouvement.ENTREE },
-          _sum: { quantiteFournie: true },
-        }),
-        this.prisma.mouvement.groupBy({
-          by: ['articleId'],
-          where: { ...mouvBase, ...afterFilter, type: TypeMouvement.SORTIE },
-          _sum: { quantiteFournie: true },
-        }),
-      ]);
-      const entAfterMap = new Map(entAfter.map(e => [e.articleId, e._sum.quantiteFournie ?? 0]));
-      const sorAfterMap = new Map(sorAfter.map(s => [s.articleId, s._sum.quantiteFournie ?? 0]));
-      stockFinalMap = new Map();
-      for (const [id, cur] of currentStockMap) {
-        stockFinalMap.set(id, Math.max(0, cur - (entAfterMap.get(id) ?? 0) + (sorAfterMap.get(id) ?? 0)));
-      }
-    } else {
-      stockFinalMap = new Map(currentStockMap);
-    }
-
-    const entMap = new Map(entreesData.map(e => [e.articleId, e._sum.quantiteFournie ?? 0]));
-    const sorMap = new Map(sortiesData.map(s => [s.articleId, s._sum.quantiteFournie ?? 0]));
-
-    const allIds = new Set([...entMap.keys(), ...sorMap.keys(), ...stockFinalMap.keys()]);
-
-    const articles = await this.prisma.article.findMany({
-      where: { id: { in: [...allIds] } },
-      select: { id: true, nom: true, reference: true, unite: true },
-    });
-    const artMap = new Map(articles.map(a => [a.id, a]));
-
-    return [...allIds]
-      .map(id => {
-        const entrees = entMap.get(id) ?? 0;
-        const sorties = sorMap.get(id) ?? 0;
-        const stockFinal = Math.max(0, stockFinalMap.get(id) ?? 0);
-        const stockInitial = Math.max(0, stockFinal - entrees + sorties);
-        const art = artMap.get(id);
-        return {
-          articleId: id,
-          nom: art?.nom ?? 'Inconnu',
-          reference: art?.reference ?? '',
-          unite: art?.unite ?? '',
-          stockInitial,
-          entrees,
-          sorties,
-          stockFinal,
-        };
-      })
-      .filter(r => r.entrees > 0 || r.sorties > 0 || r.stockFinal > 0)
-      .sort((a, b) => (b.entrees + b.sorties) - (a.entrees + a.sorties))
-      .slice(0, 20);
   }
 }

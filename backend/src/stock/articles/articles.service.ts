@@ -9,40 +9,20 @@ export class ArticlesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(entrepotId?: string, includeInactif = false) {
-    const [articles, lastInventaires] = await Promise.all([
-      this.prisma.article.findMany({
-        where: includeInactif ? undefined : { actif: true },
-        include: {
-          stocks: {
-            where: entrepotId ? { entrepotId } : undefined,
-            include: { entrepot: { select: { id: true, code: true, nom: true } } },
-          },
+    const articles = await this.prisma.article.findMany({
+      where: includeInactif ? undefined : { actif: true },
+      include: {
+        stocks: {
+          where: entrepotId ? { entrepotId } : undefined,
+          include: { entrepot: { select: { id: true, code: true, nom: true } } },
         },
-        orderBy: { createdAt: 'asc' },
-      }),
-      // Dernier inventaire par (articleId, entrepotId)
-      this.prisma.inventairePhysique.findMany({
-        where: entrepotId ? { entrepotId } : undefined,
-        orderBy: { date: 'desc' },
-      }),
-    ]);
-
-    // Map : "articleId:entrepotId" -> quantité du dernier inventaire
-    const lastInvMap = new Map<string, number>();
-    for (const inv of lastInventaires) {
-      const key = `${inv.articleId}:${inv.entrepotId}`;
-      if (!lastInvMap.has(key)) lastInvMap.set(key, inv.quantite); // premier = le plus récent
-    }
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
     return articles.map(a => ({
       ...a,
-      stocks: a.stocks.map(st => ({
-        ...st,
-        quantiteTheorique: st.quantite,                                               // dernier inventaire + mouvements post-inventaire
-        quantitePhysique: lastInvMap.get(`${a.id}:${st.entrepotId}`) ?? null,        // dernier inventaire brut
-      })),
-      stockTotal: a.stocks.reduce((s, st) => s + st.quantite, 0),                   // total théorique
-      stockTotalPhysique: a.stocks.reduce((s, st) => s + (lastInvMap.get(`${a.id}:${st.entrepotId}`) ?? 0), 0),
+      stockTotal: a.stocks.reduce((s, st) => s + st.quantite, 0),
       enAlerte: a.stocks.some(st => st.quantite <= a.seuilAlerte),
     }));
   }
@@ -231,32 +211,6 @@ export class ArticlesService {
     const entreesMap = Object.fromEntries(entrees.map(e => [e.articleId, e._sum.quantiteFournie ?? 0]));
     const sortiesMap = Object.fromEntries(sorties.map(s => [s.articleId, s._sum.quantiteFournie ?? 0]));
 
-    // Stock théorique : table Stock = dernier inventaire + mouvements post-inventaire (calculé par StockCalculator)
-    const stocksTheo = await this.prisma.stock.findMany({
-      where: entrepotId ? { entrepotId } : undefined,
-    });
-    const stockTheoriqueMap = new Map<string, number>();
-    for (const s of stocksTheo) {
-      stockTheoriqueMap.set(s.articleId, (stockTheoriqueMap.get(s.articleId) ?? 0) + s.quantite);
-    }
-
-    // Stock physique : dernier inventaire par (articleId, entrepotId)
-    const lastInventaires = await this.prisma.inventairePhysique.findMany({
-      where: entrepotId ? { entrepotId } : undefined,
-      orderBy: { date: 'desc' },
-    });
-    const lastInvByKey = new Map<string, number>();
-    for (const inv of lastInventaires) {
-      const key = `${inv.articleId}:${inv.entrepotId}`;
-      if (!lastInvByKey.has(key)) lastInvByKey.set(key, inv.quantite);
-    }
-    // Somme par articleId
-    const stockPhysiqueMap = new Map<string, number>();
-    for (const [key, qty] of lastInvByKey) {
-      const articleId = key.split(':')[0];
-      stockPhysiqueMap.set(articleId, (stockPhysiqueMap.get(articleId) ?? 0) + qty);
-    }
-
     const articles = await this.prisma.article.findMany({
       where: { actif: true },
       include: {
@@ -269,14 +223,14 @@ export class ArticlesService {
     });
 
     return articles.map(a => {
-      const stockPhysique = stockPhysiqueMap.get(a.id) ?? 0;   // dernier inventaire
-      const stockTheorique = stockTheoriqueMap.get(a.id) ?? 0;  // dernier inv + mouvements post-inv
+      const stockPhysique = a.stocks.reduce((s, st) => s + st.quantite, 0);
       const totalEntrees = entreesMap[a.id] ?? 0;
       const totalSorties = sortiesMap[a.id] ?? 0;
-      const ecart = stockTheorique - stockPhysique;             // différence théo vs physique
+      const stockTheorique = totalEntrees - totalSorties;
+      const ecart = stockPhysique - stockTheorique;
       return {
         ...a,
-        stockTotal: stockTheorique,
+        stockTotal: stockPhysique,
         stockPhysique,
         stockTheorique,
         totalEntrees,

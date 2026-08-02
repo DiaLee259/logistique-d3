@@ -14,5 +14,4 @@ export class FilterMouvementsDto {
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() page?: string;
   @IsOptional() @IsString() limit?: string;
-  @IsOptional() @IsString() transfert?: string;
 }

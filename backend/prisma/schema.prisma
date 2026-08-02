@@ -10,6 +10,12 @@ datasource db {
 
 // ─── ENUMS ────────────────────────────────────────────────────────────────────
 
+enum Role {
+  ADMIN
+  LOGISTICIEN_1
+  LOGISTICIEN_2
+  CHEF_PROJET
+}
 
 enum TypeMouvement {
   ENTREE
@@ -24,7 +30,6 @@ enum StatutCommande {
   EXPEDIEE             // Expédiée par Log2
   LIVREE               // Confirmée reçue par le prestataire
   ANNULEE
-  REFUSEE              // Refusée par Log1 avec motif
 }
 
 enum StatutLivraison {
@@ -44,23 +49,21 @@ enum ProdSav {
 // ─── UTILISATEURS ─────────────────────────────────────────────────────────────
 
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
-  password       String
-  nom            String
-  prenom         String
-  role           String   @default("LOGISTICIEN_2")
-  actif          Boolean  @default(true)
-  privileges     Json?    // UserPrivileges JSON object
-  managerZoneId  String?  // liaison optionnelle à un ManagerZone
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  nom        String
+  prenom     String
+  role       Role     @default(LOGISTICIEN_2)
+  actif      Boolean  @default(true)
+  privileges Json?    // UserPrivileges JSON object
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   commandesValidees  Commande[] @relation("ValideurLog1")
   commandesExpediees Commande[] @relation("ExpediteurLog2")
   mouvements         Mouvement[]
   commandesTS        CommandeTS[]
-  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -156,19 +159,13 @@ model Mouvement {
   recu               Boolean       @default(false)
   userId             String?
   commandeId         String?
-  livraisonId        String?       // livraison fournisseur qui a généré ce mouvement
-  transfertId        String?       // UUID liant les 2 mouvements d'un transfert inter-entrepôt
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
-  deletedAt          DateTime?
-  deletedById        String?
-  deletedByName      String?
 
-  article   Article    @relation(fields: [articleId], references: [id])
-  entrepot  Entrepot   @relation(fields: [entrepotId], references: [id])
-  user      User?      @relation(fields: [userId], references: [id])
-  commande  Commande?  @relation(fields: [commandeId], references: [id])
-  livraison Livraison? @relation(fields: [livraisonId], references: [id], onDelete: SetNull)
+  article  Article   @relation(fields: [articleId], references: [id])
+  entrepot Entrepot  @relation(fields: [entrepotId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+  commande Commande? @relation(fields: [commandeId], references: [id])
 
   @@map("mouvements")
 }
@@ -195,7 +192,6 @@ model Commande {
   statut               StatutCommande @default(EN_ATTENTE)
   commentaire          String?
   commentaireLog2      String?
-  commentaireRefus     String?   // motif de refus Log1
   fichierExcelUrl      String?
   fichierPerceptionUrl String?
   bonRetourUrl         String?
@@ -214,12 +210,6 @@ model Commande {
   intervenantId            String?
 
   entrepotSource           String?        // entrepôt choisi par Log1 à la validation
-  entrepotDestinationId    String?        // entrepôt destination (commandes de type TRANSFERT)
-  typeCommande             String?        @default("STANDARD") // STANDARD | TRANSFERT
-
-  lienId           String?
-  typePrestataire  String?
-  lien             LienPrestataire? @relation(fields: [lienId], references: [id])
 
   valideur     User?        @relation("ValideurLog1", fields: [valideurId], references: [id])
   expediteur   User?        @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
@@ -252,38 +242,17 @@ model LigneCommande {
   @@map("lignes_commande")
 }
 
-// ─── MANAGER DE ZONE ──────────────────────────────────────────────────────────
-
-model ManagerZone {
-  id           String              @id @default(uuid())
-  nom          String
-  departements Json                @default("[]")
-  actif        Boolean             @default(true)
-  createdAt    DateTime            @default(now())
-  liens        LienPrestataire[]
-  users        User[]
-
-  @@map("managers_zone")
-}
-
 // ─── LIEN PRESTATAIRE ─────────────────────────────────────────────────────────
 
 model LienPrestataire {
-  id                 String       @id @default(uuid())
-  token              String       @unique @default(uuid())
-  nom                String
-  actif              Boolean      @default(true)
-  expiresAt          DateTime?
-  createdBy          String?
-  utilisations       Int          @default(0)
-  createdAt          DateTime     @default(now())
-
-  managerZoneId      String?
-  typePrestataire    String?
-  departementsActifs String[]     @default([])
-
-  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id])
-  commandes          Commande[]
+  id          String    @id @default(uuid())
+  token       String    @unique @default(uuid())
+  nom         String    // libellé du lien ex: "Formulaire commande Dept 49"
+  actif       Boolean   @default(true)
+  expiresAt   DateTime?
+  createdBy   String?
+  utilisations Int      @default(0)
+  createdAt   DateTime  @default(now())
 
   @@map("liens_prestataire")
 }
@@ -307,10 +276,9 @@ model Livraison {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  entrepot   Entrepot         @relation(fields: [entrepotId], references: [id])
-  commande   Commande?        @relation(fields: [commandeId], references: [id])
-  lignes     LigneLivraison[]
-  mouvements Mouvement[]
+  entrepot Entrepot         @relation(fields: [entrepotId], references: [id])
+  commande Commande?        @relation(fields: [commandeId], references: [id])
+  lignes   LigneLivraison[]
 
   @@map("livraisons")
 }
@@ -351,36 +319,17 @@ model Consommation {
 // ─── INVENTAIRE PHYSIQUE ──────────────────────────────────────────────────────
 
 model InventairePhysique {
-  id            String    @id @default(uuid())
-  articleId     String
-  entrepotId    String
-  quantite      Int
-  date          DateTime  @default(now())
-  userId        String?
-  commentaire   String?
-  deletedAt     DateTime?
-  deletedById   String?
-  deletedByName String?
+  id          String   @id @default(uuid())
+  articleId   String
+  entrepotId  String
+  quantite    Int
+  date        DateTime @default(now())
+  userId      String?
+  commentaire String?
 
-  article      Article                @relation(fields: [articleId], references: [id])
-  corrections  CorrectionInventaire[]
+  article Article @relation(fields: [articleId], references: [id])
 
   @@map("inventaires_physiques")
-}
-
-model CorrectionInventaire {
-  id              String   @id @default(uuid())
-  inventaireId    String
-  quantiteAvant   Int
-  quantiteApres   Int
-  commentaire     String
-  correctedById   String?
-  correctedByName String
-  createdAt       DateTime @default(now())
-
-  inventaire InventairePhysique @relation(fields: [inventaireId], references: [id], onDelete: Cascade)
-
-  @@map("corrections_inventaire")
 }
 
 // ─── COMMANDES TS (APPROVISIONNEMENT PÉRIODIQUE) ──────────────────────────────
@@ -470,151 +419,6 @@ model Intervenant {
   commandes Commande[]
 
   @@map("intervenants")
-}
-
-// ─── MODULE CONSOMMABLES TERRAIN ─────────────────────────────────────────────
-//
-// Pipeline : Upload Excel → ETL Python → InterventionTerrain (PostgreSQL)
-//            → requêtes groupées → affichage dashboard
-//
-// Chaque import charge un fichier Excel (INTERVENTION TECHNO SMART, ~400k lignes).
-// ImportConsommableLog trace chaque opération.
-// FormuleConsommable stocke les coefficients éditables (les conditions de calcul
-// sont implémentées dans le service, les paramètres sont ici).
-
-model ImportConsommableLog {
-  id                String   @id @default(uuid())
-  nomFichier        String
-  dateImport        DateTime @default(now())
-  nbLignesTotal     Int      @default(0)
-  nbLignesImportees Int      @default(0)
-  nbErreurs         Int      @default(0)
-  dureeSecondes     Float?
-  statut            String   // SUCCES | ECHEC | PARTIEL
-  erreurs           Json?    // [{ligne: 42, message: "..."}]
-  periodeDebut      DateTime?
-  periodeFin        DateTime?
-  createdAt         DateTime @default(now())
-
-  interventions InterventionTerrain[]
-
-  @@map("imports_consommable_log")
-}
-
-model InterventionTerrain {
-  id                  String   @id @default(uuid())
-
-  // ── Identifiants source ──────────────────────────────────────────────────
-  idInterventionIw    BigInt?
-  idInterventionGrdv  BigInt?
-
-  // ── Technicien & société ─────────────────────────────────────────────────
-  idTechnicienCas     BigInt?
-  nomTechnicien       String?  // Paramètre.Tech — ex: "GOS François"
-  nomSociete          String?  // Paramètre.Nom de la sociètèe — ex: "HZ groupe"
-
-  // ── Géographie ───────────────────────────────────────────────────────────
-  codeDepartement     String?  // Code département NRO — ex: "49"
-  departement         String?  // Département NRO — ex: "Maine-et-Loire"
-
-  // ── Temporel ─────────────────────────────────────────────────────────────
-  dateIntervention    DateTime?
-  moisIntervention    DateTime? // tronqué au 1er du mois pour groupements
-  semaineIntervention String?   // ex: "2025-W49"
-
-  // ── Technique ────────────────────────────────────────────────────────────
-  technologie         String?  // PON | P2P
-  infrastructure      String?  // Standard | Poteau | Chambre | Façade
-  operateur           String?  // ORANGE | FREE | SFR
-  typeAbonne          String?  // New | Migration
-  modeleModem         String?  // Freebox Révolution | Freebox Pop | etc.
-
-  // ── Classification (colonnes calculées dans l'Excel) ─────────────────────
-  typezone            String?  // ZMD | ZTD | RIP
-  activites           String?  // PROD | SAV  (calculé depuis le champ Activité)
-  typePresta          String?  // PLP | Autre (calculé depuis AboRacco–debriefPLP)
-
-  // ── Résultat intervention ─────────────────────────────────────────────────
-  etat                String?  // OK | NOK
-  codeCloture         String?
-  categorieEchec      String?
-
-  // ── Champs pour formules spécifiques ─────────────────────────────────────
-  // Nécessaires pour Déport de PTO (E22/E23) et EPIBOX (E28) — actuellement
-  // cassés dans l'Excel (#REF!), à reconstruire depuis les vraies colonnes.
-  aboRacco110         String?  // AboRacco – 110 (type débrief PTO)
-  aboRacco120         String?  // AboRacco – 120
-
-  // ── Traçabilité import ────────────────────────────────────────────────────
-  sourceImportId      String?
-  createdAt           DateTime @default(now())
-
-  sourceImport ImportConsommableLog? @relation(fields: [sourceImportId], references: [id], onDelete: SetNull)
-
-  // Index pour les requêtes de calcul (COUNTIFS-équivalents en SQL)
-  @@index([typezone, activites, etat])
-  @@index([typezone, activites, etat, infrastructure])
-  @@index([technologie, activites, typeAbonne, etat])
-  @@index([codeDepartement])
-  @@index([moisIntervention])
-  @@index([semaineIntervention])
-  @@index([nomTechnicien])
-  @@index([nomSociete])
-  @@index([sourceImportId])
-  @@map("interventions_terrain")
-}
-
-model FormuleConsommable {
-  id                   String   @id @default(uuid())
-  ordre                Int      @default(0)        // ordre d'affichage
-  actif                Boolean  @default(true)
-
-  // ── Identification produit ────────────────────────────────────────────────
-  codeArticle          String   @unique             // ex: "O-KPTOMA40-0-PN"
-  nomProduit           String                       // ex: "KIT PTO MONO 40M"
-  categorie            String?                      // ex: "STANDARD - ZMD MONO"
-
-  // ── Description lisible de la formule ────────────────────────────────────
-  // Affichée dans l'UI pour expliquer le calcul à l'utilisateur.
-  // Ex: "40% des interventions PROD OK ZMD Standard hors PLP"
-  descriptionFormule   String
-
-  // ── Conditions de filtre (null = pas de filtre sur cette dimension) ───────
-  conditionZone        String?  // ZMD | ZTD | RIP | null
-  conditionInfra       String?  // Standard | Poteau | Chambre | null
-  conditionInfraMode   String   @default("EQ")  // EQ (=) ou NEQ (<>)
-  conditionEtat        String?  // OK | NOK | null (= OK+NOK)
-  conditionActivite    String   @default("PROD") // PROD | SAV | tous
-  conditionTechnologie String?  // PON | P2P | null
-  conditionTypeAbonne  String?  // New | Migration | null
-  excludePLP           Boolean  @default(false)  // exclure typePresta = "PLP"
-
-  // ── Coefficients éditables ────────────────────────────────────────────────
-  // Ce sont les seuls paramètres modifiables par l'utilisateur.
-  // La logique de filtre est dans le service, le coefficient est ici.
-  multiplicateur       Float    @default(1.0)
-  multiplicateurNok    Float    @default(0.0)  // ratio sur les NOK (ex: 0.15)
-  minimumQte           Int?     // quantité minimum (null = pas de minimum fixe)
-
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  @@map("formules_consommable")
-}
-
-// ─── RÉFÉRENTIEL TECHNICIENS ─────────────────────────────────────────────────
-// Importé depuis le fichier de référence. Permet d'enrichir les interventions
-// terrain dont les colonnes nomTechnicien / nomSociete sont vides.
-
-model TechnicienRef {
-  id            String   @id @default(uuid())
-  idCas         BigInt   @unique
-  nomTechnicien String
-  nomSociete    String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("techniciens_ref")
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────

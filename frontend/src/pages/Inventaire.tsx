@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2, Loader2, Pencil, BarChart2, Clock, FileDown, Eye } from 'lucide-react';
+import { AlertTriangle, Plus, X, Check, ClipboardCheck, History, ChevronDown, ChevronRight, LayoutGrid, List, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { inventairesApi, entrepotsApi, articlesApi } from '@/lib/api';
+import { inventairesApi, entrepotsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import type { Entrepot } from '@/lib/types';
 
@@ -30,11 +30,6 @@ export default function Inventaire() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots'],
     queryFn: () => entrepotsApi.list(),
-  });
-
-  const { data: articles = [] } = useQuery<{ id: string; nom: string; reference: string }[]>({
-    queryKey: ['articles-list'],
-    queryFn: () => articlesApi.list(),
   });
 
   const { data: alertes = [] } = useQuery<{ entrepot: Entrepot; dernierInventaire: string | null; enAlerte: boolean }[]>({
@@ -66,78 +61,6 @@ export default function Inventaire() {
   });
 
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<{ key: string; ids: string[] } | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
-  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-
-  const [correctionDialog, setCorrectionDialog] = useState<{
-    inventaireId: string | null;
-    inventaireDate: string | null;
-    articleId: string;
-    entrepotId: string;
-    nom: string;
-    reference: string;
-    stockActuel: number;
-    newQte: number;
-    commentaire: string;
-  } | null>(null);
-
-  const [rapportDialog, setRapportDialog] = useState(false);
-  const [rapportParams, setRapportParams] = useState({ dateDebut: firstOfMonth, dateFin: today, entrepotId: '', articleId: '' });
-  const [rapportData, setRapportData] = useState<any[] | null>(null);
-  const [rapportView, setRapportView] = useState<'form' | 'table'>('form');
-  const [rapportGroupBy, setRapportGroupBy] = useState<'entrepot' | 'article'>('entrepot');
-  const [rapportCollapsed, setRapportCollapsed] = useState<Set<string>>(new Set());
-
-  const corrigerMut = useMutation({
-    mutationFn: ({ inventaireId, quantiteNouvelle, commentaire }: { inventaireId: string; quantiteNouvelle: number; commentaire: string }) =>
-      inventairesApi.corriger(inventaireId, { quantiteNouvelle, commentaire }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventaire-etat'] });
-      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
-      toast.success('Correction enregistrée');
-      setCorrectionDialog(null);
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.message || 'Erreur lors de la correction'),
-  });
-
-  const rapportMut = useMutation({
-    mutationFn: () => inventairesApi.rapportStock({
-      dateDebut: rapportParams.dateDebut,
-      dateFin: rapportParams.dateFin,
-      entrepotId: rapportParams.entrepotId || undefined,
-      articleId: rapportParams.articleId || undefined,
-    }),
-    onSuccess: (blob) => {
-      downloadBlob(blob as Blob, `rapport-stock-${rapportParams.dateDebut}-au-${rapportParams.dateFin}.xlsx`);
-      toast.success('Rapport téléchargé');
-    },
-    onError: () => toast.error('Erreur lors de la génération du rapport'),
-  });
-
-  const rapportJsonMut = useMutation({
-    mutationFn: () => inventairesApi.rapportStockJson({
-      dateDebut: rapportParams.dateDebut,
-      dateFin: rapportParams.dateFin,
-      entrepotId: rapportParams.entrepotId || undefined,
-      articleId: rapportParams.articleId || undefined,
-    }),
-    onSuccess: (data) => {
-      setRapportData(data);
-      setRapportView('table');
-    },
-    onError: () => toast.error('Erreur lors de la visualisation'),
-  });
-
-  const updateArticleMut = useMutation({
-    mutationFn: inventairesApi.updateArticle,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventaire-etat'] });
-      qc.invalidateQueries({ queryKey: ['inventaires-historique'] });
-      toast.success('Article mis à jour');
-      setCorrectionDialog(null);
-    },
-    onError: () => toast.error('Erreur lors de la correction'),
-  });
 
   const deleteBulkMut = useMutation({
     mutationFn: (ids: string[]) => inventairesApi.deleteBulk(ids),
@@ -261,11 +184,6 @@ export default function Inventaire() {
           </button>
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <button
-            onClick={() => setRapportDialog(true)}
-            className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
-            <BarChart2 className="w-3.5 h-3.5" /> Rapport de stock
-          </button>
           <button onClick={() => inventairesApi.template().then(b => downloadBlob(b, 'template-inventaire.xlsx'))} className="px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card">
             Modèle Excel
           </button>
@@ -521,15 +439,14 @@ export default function Inventaire() {
                         <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Qté comptée</th>
                         <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Écart</th>
                         <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Date inventaire</th>
-                        <th className="px-3 py-2.5"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {etatLoading ? (
-                        <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">Chargement…</td></tr>
+                        <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">Chargement…</td></tr>
                       ) : etat.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">Aucun article actif</td></tr>
-                      ) : etat.map((ligne: any) => {
+                        <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">Aucun article actif</td></tr>
+                      ) : etat.map(ligne => {
                         const ecart = ligne.ecart;
                         return (
                           <tr key={ligne.articleId} className="border-t border-border/40 hover:bg-muted/10">
@@ -553,24 +470,6 @@ export default function Inventaire() {
                             <td className="px-3 py-2.5 text-muted-foreground">
                               {ligne.dernierInventaire ? formatDate(ligne.dernierInventaire.date) : '—'}
                             </td>
-                            <td className="px-3 py-2.5">
-                              <button
-                                onClick={() => setCorrectionDialog({
-                                  inventaireId: ligne.dernierInventaire?.id ?? null,
-                                  inventaireDate: ligne.dernierInventaire?.date ?? null,
-                                  articleId: ligne.articleId,
-                                  entrepotId: selectedEntrepot,
-                                  nom: ligne.article?.nom ?? '',
-                                  reference: ligne.article?.reference ?? '',
-                                  stockActuel: ligne.dernierInventaire?.quantite ?? ligne.stockTheorique,
-                                  newQte: ligne.dernierInventaire?.quantite ?? ligne.stockTheorique,
-                                  commentaire: '',
-                                })}
-                                className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                                title="Corriger cet article">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
                           </tr>
                         );
                       })}
@@ -581,293 +480,6 @@ export default function Inventaire() {
             </div>
           )}
         </>
-      )}
-
-      {/* ─── Dialog correction article ─────────────────────────────────────── */}
-      {correctionDialog && (() => {
-        const invDate = correctionDialog.inventaireDate ? new Date(correctionDialog.inventaireDate) : null;
-        const joursEcoules = invDate ? Math.floor((Date.now() - invDate.getTime()) / (24 * 60 * 60 * 1000)) : null;
-        const joursRestants = joursEcoules !== null ? 3 - joursEcoules : null;
-        const delaiDepasse = joursRestants !== null && joursRestants < 0;
-        const peutCorrection = !!correctionDialog.inventaireId && !delaiDepasse;
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">Corriger un article</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{correctionDialog.nom} — <span className="font-mono">{correctionDialog.reference}</span></p>
-                </div>
-                <button onClick={() => setCorrectionDialog(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Statut délai */}
-              {!correctionDialog.inventaireId ? (
-                <div className="flex items-start gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2.5">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  <p>Aucun inventaire enregistré pour cet article. Utilisez <strong>Saisir un inventaire</strong> pour créer un premier inventaire.</p>
-                </div>
-              ) : delaiDepasse ? (
-                <div className="flex items-start gap-2 text-xs bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2.5">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  <p>Le délai de correction de 3 jours est dépassé (inventaire du {invDate ? formatDate(invDate.toISOString()) : '—'}). Créez un nouvel inventaire via <strong>Saisir un inventaire</strong>.</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs bg-primary/5 border border-primary/20 text-primary rounded-lg px-3 py-2">
-                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                  <p>Inventaire du {invDate ? formatDate(invDate.toISOString()) : '—'} — <strong>{joursRestants === 0 ? 'dernier jour' : `encore ${joursRestants} jour(s)`}</strong> pour corriger</p>
-                </div>
-              )}
-
-              {peutCorrection && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Nouvelle quantité comptée</label>
-                    <input
-                      type="number" min={0}
-                      value={correctionDialog.newQte}
-                      onChange={e => setCorrectionDialog(d => d ? { ...d, newQte: parseInt(e.target.value) || 0 } : d)}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    {correctionDialog.stockActuel !== correctionDialog.newQte && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Avant : <span className="font-semibold">{correctionDialog.stockActuel}</span>
-                        {' → '}
-                        Après : <span className={cn('font-semibold', correctionDialog.newQte > correctionDialog.stockActuel ? 'text-green-600' : 'text-red-600')}>
-                          {correctionDialog.newQte}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium mb-1 block">
-                      Motif de la correction <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex. : erreur de saisie, comptage manuel…"
-                      value={correctionDialog.commentaire}
-                      onChange={e => setCorrectionDialog(d => d ? { ...d, commentaire: e.target.value } : d)}
-                      className={cn(
-                        'w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30',
-                        !correctionDialog.commentaire.trim() ? 'border-amber-300 focus:ring-amber-300/30' : 'border-border',
-                      )}
-                    />
-                    {!correctionDialog.commentaire.trim() && (
-                      <p className="text-xs text-amber-600 mt-1">Le motif est obligatoire pour tracer la correction.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => setCorrectionDialog(null)}
-                  className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
-                  Annuler
-                </button>
-                {peutCorrection && (
-                  <button
-                    onClick={() => {
-                      if (!correctionDialog.commentaire.trim()) { toast.error('Le motif de correction est obligatoire'); return; }
-                      corrigerMut.mutate({
-                        inventaireId: correctionDialog.inventaireId!,
-                        quantiteNouvelle: correctionDialog.newQte,
-                        commentaire: correctionDialog.commentaire,
-                      });
-                    }}
-                    disabled={corrigerMut.isPending || !correctionDialog.commentaire.trim()}
-                    className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                    {corrigerMut.isPending ? 'Enregistrement…' : 'Enregistrer la correction'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ─── Dialog rapport de stock ────────────────────────────────────────── */}
-      {rapportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-          <div className="bg-card rounded-xl shadow-2xl border border-border flex flex-col w-[96vw] h-[92vh]">
-
-            {/* Header fixe */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-border">
-              <div>
-                <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="w-4 h-4 text-primary" /> Rapport de stock</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {rapportView === 'table'
-                    ? `${rapportData?.length ?? 0} ligne(s) — ${rapportParams.dateDebut} → ${rapportParams.dateFin}`
-                    : 'Export de l\'état du stock sur une période'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {rapportView === 'table' && (
-                  <button onClick={() => setRapportView('form')} className="px-3 py-1 text-xs border border-border rounded-lg hover:bg-muted text-muted-foreground">
-                    ← Filtres
-                  </button>
-                )}
-                <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); setRapportCollapsed(new Set()); }} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-
-            {/* Contenu scrollable */}
-            <div className="flex-1 overflow-auto p-6">
-
-              {rapportView === 'form' && (
-                <div className="max-w-sm space-y-4">
-                  <div className="text-xs text-muted-foreground bg-muted/20 rounded-lg px-3 py-2 space-y-0.5">
-                    <p>• Stock réel à la date de début</p>
-                    <p>• Entrées et sorties sur la période</p>
-                    <p>• Stock final à la date de fin</p>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de début</label>
-                        <input type="date" value={rapportParams.dateDebut}
-                          onChange={e => setRapportParams(p => ({ ...p, dateDebut: e.target.value }))}
-                          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de fin</label>
-                        <input type="date" value={rapportParams.dateFin}
-                          onChange={e => setRapportParams(p => ({ ...p, dateFin: e.target.value }))}
-                          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Entrepôt (optionnel)</label>
-                      <select value={rapportParams.entrepotId}
-                        onChange={e => setRapportParams(p => ({ ...p, entrepotId: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
-                        <option value="">Tous les entrepôts</option>
-                        {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Article (optionnel)</label>
-                      <select value={rapportParams.articleId}
-                        onChange={e => setRapportParams(p => ({ ...p, articleId: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
-                        <option value="">Tous les articles</option>
-                        {articles.map((a: any) => <option key={a.id} value={a.id}>{a.reference} — {a.nom}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setRapportDialog(false); setRapportView('form'); setRapportData(null); setRapportCollapsed(new Set()); }}
-                      className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">
-                      Annuler
-                    </button>
-                    <button onClick={() => rapportJsonMut.mutate()}
-                      disabled={rapportJsonMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg border border-primary text-primary font-medium hover:bg-primary/10 disabled:opacity-50">
-                      {rapportJsonMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement…</> : <><Eye className="w-3.5 h-3.5" /> Visualiser</>}
-                    </button>
-                    <button onClick={() => rapportMut.mutate()}
-                      disabled={rapportMut.isPending || !rapportParams.dateDebut || !rapportParams.dateFin}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                      {rapportMut.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Génération…</> : <><FileDown className="w-3.5 h-3.5" /> Télécharger Excel</>}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {rapportView === 'table' && rapportData && (() => {
-                const totalEntrees = rapportData.reduce((s, r) => s + r.entrees, 0);
-                const totalSorties = rapportData.reduce((s, r) => s + r.sorties, 0);
-
-                const groupKey = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : r.reference;
-                const groupLabel = (r: any) => rapportGroupBy === 'entrepot' ? r.entrepot : `${r.reference} — ${r.article}`;
-                const groups = new Map<string, any[]>();
-                for (const r of rapportData) {
-                  const k = groupKey(r);
-                  if (!groups.has(k)) groups.set(k, []);
-                  groups.get(k)!.push(r);
-                }
-                const toggleCollapse = (key: string) => setRapportCollapsed(prev => {
-                  const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
-                });
-
-                return (
-                  <div className="flex flex-col h-full gap-3">
-                    <div className="flex items-center justify-between flex-shrink-0">
-                      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-                        {(['entrepot', 'article'] as const).map(g => (
-                          <button key={g} onClick={() => { setRapportGroupBy(g); setRapportCollapsed(new Set()); }}
-                            className={cn('px-3 py-1 text-xs rounded font-medium transition-colors', rapportGroupBy === g ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-                            {g === 'entrepot' ? 'Par entrepôt' : 'Par article'}
-                          </button>
-                        ))}
-                      </div>
-                      <button onClick={() => rapportMut.mutate()} disabled={rapportMut.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                        {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
-                      </button>
-                    </div>
-                    <div className="overflow-auto flex-1 rounded-lg border border-border">
-                      <table className="w-full text-xs">
-                        <thead className="sticky top-0 bg-muted z-10">
-                          <tr>
-                            {['Entrepôt', 'Référence', 'Article', 'Unité', 'Stock début', 'Entrées', 'Sorties', 'Stock fin'].map(h => (
-                              <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...groups.entries()].map(([key, rows]) => {
-                            const collapsed = rapportCollapsed.has(key);
-                            const subEntrees = rows.reduce((s, r) => s + r.entrees, 0);
-                            const subSorties = rows.reduce((s, r) => s + r.sorties, 0);
-                            return (
-                              <>
-                                <tr key={`g-${key}`} className="bg-primary/5 border-t border-border cursor-pointer hover:bg-primary/10 select-none"
-                                  onClick={() => toggleCollapse(key)}>
-                                  <td className="px-3 py-1.5 font-semibold text-primary" colSpan={4}>
-                                    <span className="text-muted-foreground w-3 inline-block mr-1">{collapsed ? '▶' : '▼'}</span>
-                                    {groupLabel(rows[0])}
-                                    <span className="text-muted-foreground font-normal ml-2 text-xs">({rows.length} ligne{rows.length > 1 ? 's' : ''})</span>
-                                  </td>
-                                  <td className="px-3 py-1.5" />
-                                  <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{subEntrees > 0 ? `+${formatNumber(subEntrees)}` : '—'}</td>
-                                  <td className="px-3 py-1.5 text-right font-bold text-red-500">{subSorties > 0 ? `-${formatNumber(subSorties)}` : '—'}</td>
-                                  <td className="px-3 py-1.5" />
-                                </tr>
-                                {!collapsed && rows.map((row: any, i: number) => (
-                                  <tr key={`${key}-${i}`} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                                    <td className="px-3 py-1.5 pl-7 font-mono">{row.entrepot}</td>
-                                    <td className="px-3 py-1.5 font-mono">{row.reference}</td>
-                                    <td className="px-3 py-1.5 max-w-[200px] truncate">{row.article}</td>
-                                    <td className="px-3 py-1.5 text-center">{row.unite}</td>
-                                    <td className={`px-3 py-1.5 text-right font-medium ${row.stockDebut < 0 ? 'text-red-500' : ''}`}>{formatNumber(row.stockDebut)}</td>
-                                    <td className="px-3 py-1.5 text-right text-emerald-600">{row.entrees > 0 ? `+${formatNumber(row.entrees)}` : '—'}</td>
-                                    <td className="px-3 py-1.5 text-right text-red-500">{row.sorties > 0 ? `-${formatNumber(row.sorties)}` : '—'}</td>
-                                    <td className={`px-3 py-1.5 text-right font-semibold ${row.stockFin < 0 ? 'text-red-500' : 'text-primary'}`}>{formatNumber(row.stockFin)}</td>
-                                  </tr>
-                                ))}
-                              </>
-                            );
-                          })}
-                          <tr className="border-t-2 border-primary/40 bg-primary/5">
-                            <td colSpan={4} className="px-3 py-2 font-bold text-xs text-foreground">TOTAL</td>
-                            <td />
-                            <td className="px-3 py-2 text-right font-bold text-emerald-600">{totalEntrees > 0 ? `+${formatNumber(totalEntrees)}` : '—'}</td>
-                            <td className="px-3 py-2 text-right font-bold text-red-500">{totalSorties > 0 ? `-${formatNumber(totalSorties)}` : '—'}</td>
-                            <td />
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ─── Dialog confirmation suppression session ────────────────────────── */}
