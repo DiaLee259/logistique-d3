@@ -472,6 +472,136 @@ model Intervenant {
   @@map("intervenants")
 }
 
+// ─── MODULE CONSOMMABLES TERRAIN ─────────────────────────────────────────────
+//
+// Pipeline : Upload Excel → ETL Python → InterventionTerrain (PostgreSQL)
+//            → requêtes groupées → affichage dashboard
+//
+// Chaque import charge un fichier Excel (INTERVENTION TECHNO SMART, ~400k lignes).
+// ImportConsommableLog trace chaque opération.
+// FormuleConsommable stocke les coefficients éditables (les conditions de calcul
+// sont implémentées dans le service, les paramètres sont ici).
+
+model ImportConsommableLog {
+  id                String   @id @default(uuid())
+  nomFichier        String
+  dateImport        DateTime @default(now())
+  nbLignesTotal     Int      @default(0)
+  nbLignesImportees Int      @default(0)
+  nbErreurs         Int      @default(0)
+  dureeSecondes     Float?
+  statut            String   // SUCCES | ECHEC | PARTIEL
+  erreurs           Json?    // [{ligne: 42, message: "..."}]
+  periodeDebut      DateTime?
+  periodeFin        DateTime?
+  createdAt         DateTime @default(now())
+
+  interventions InterventionTerrain[]
+
+  @@map("imports_consommable_log")
+}
+
+model InterventionTerrain {
+  id                  String   @id @default(uuid())
+
+  // ── Identifiants source ──────────────────────────────────────────────────
+  idInterventionIw    BigInt?
+  idInterventionGrdv  BigInt?
+
+  // ── Technicien & société ─────────────────────────────────────────────────
+  idTechnicienCas     BigInt?
+  nomTechnicien       String?  // Paramètre.Tech — ex: "GOS François"
+  nomSociete          String?  // Paramètre.Nom de la sociètèe — ex: "HZ groupe"
+
+  // ── Géographie ───────────────────────────────────────────────────────────
+  codeDepartement     String?  // Code département NRO — ex: "49"
+  departement         String?  // Département NRO — ex: "Maine-et-Loire"
+
+  // ── Temporel ─────────────────────────────────────────────────────────────
+  dateIntervention    DateTime?
+  moisIntervention    DateTime? // tronqué au 1er du mois pour groupements
+  semaineIntervention String?   // ex: "2025-W49"
+
+  // ── Technique ────────────────────────────────────────────────────────────
+  technologie         String?  // PON | P2P
+  infrastructure      String?  // Standard | Poteau | Chambre | Façade
+  operateur           String?  // ORANGE | FREE | SFR
+  typeAbonne          String?  // New | Migration
+  modeleModem         String?  // Freebox Révolution | Freebox Pop | etc.
+
+  // ── Classification (colonnes calculées dans l'Excel) ─────────────────────
+  typezone            String?  // ZMD | ZTD | RIP
+  activites           String?  // PROD | SAV  (calculé depuis le champ Activité)
+  typePresta          String?  // PLP | Autre (calculé depuis AboRacco–debriefPLP)
+
+  // ── Résultat intervention ─────────────────────────────────────────────────
+  etat                String?  // OK | NOK
+  codeCloture         String?
+  categorieEchec      String?
+
+  // ── Champs pour formules spécifiques ─────────────────────────────────────
+  // Nécessaires pour Déport de PTO (E22/E23) et EPIBOX (E28) — actuellement
+  // cassés dans l'Excel (#REF!), à reconstruire depuis les vraies colonnes.
+  aboRacco110         String?  // AboRacco – 110 (type débrief PTO)
+  aboRacco120         String?  // AboRacco – 120
+
+  // ── Traçabilité import ────────────────────────────────────────────────────
+  sourceImportId      String?
+  createdAt           DateTime @default(now())
+
+  sourceImport ImportConsommableLog? @relation(fields: [sourceImportId], references: [id], onDelete: SetNull)
+
+  // Index pour les requêtes de calcul (COUNTIFS-équivalents en SQL)
+  @@index([typezone, activites, etat])
+  @@index([typezone, activites, etat, infrastructure])
+  @@index([technologie, activites, typeAbonne, etat])
+  @@index([codeDepartement])
+  @@index([moisIntervention])
+  @@index([semaineIntervention])
+  @@index([nomTechnicien])
+  @@index([nomSociete])
+  @@index([sourceImportId])
+  @@map("interventions_terrain")
+}
+
+model FormuleConsommable {
+  id                   String   @id @default(uuid())
+  ordre                Int      @default(0)        // ordre d'affichage
+  actif                Boolean  @default(true)
+
+  // ── Identification produit ────────────────────────────────────────────────
+  codeArticle          String   @unique             // ex: "O-KPTOMA40-0-PN"
+  nomProduit           String                       // ex: "KIT PTO MONO 40M"
+  categorie            String?                      // ex: "STANDARD - ZMD MONO"
+
+  // ── Description lisible de la formule ────────────────────────────────────
+  // Affichée dans l'UI pour expliquer le calcul à l'utilisateur.
+  // Ex: "40% des interventions PROD OK ZMD Standard hors PLP"
+  descriptionFormule   String
+
+  // ── Conditions de filtre (null = pas de filtre sur cette dimension) ───────
+  conditionZone        String?  // ZMD | ZTD | RIP | null
+  conditionInfra       String?  // Standard | Poteau | Chambre | null
+  conditionInfraMode   String   @default("EQ")  // EQ (=) ou NEQ (<>)
+  conditionEtat        String?  // OK | NOK | null (= OK+NOK)
+  conditionActivite    String   @default("PROD") // PROD | SAV | tous
+  conditionTechnologie String?  // PON | P2P | null
+  conditionTypeAbonne  String?  // New | Migration | null
+  excludePLP           Boolean  @default(false)  // exclure typePresta = "PLP"
+
+  // ── Coefficients éditables ────────────────────────────────────────────────
+  // Ce sont les seuls paramètres modifiables par l'utilisateur.
+  // La logique de filtre est dans le service, le coefficient est ici.
+  multiplicateur       Float    @default(1.0)
+  multiplicateurNok    Float    @default(0.0)  // ratio sur les NOK (ex: 0.15)
+  minimumQte           Int?     // quantité minimum (null = pas de minimum fixe)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("formules_consommable")
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 model Notification {
