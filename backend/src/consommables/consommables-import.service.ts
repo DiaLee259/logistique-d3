@@ -113,7 +113,8 @@ export class ConsommablesImportService {
 
   private async loadWb(buffer: Buffer): Promise<ExcelJS.Workbook> {
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(buffer as any);
     return wb;
   }
 

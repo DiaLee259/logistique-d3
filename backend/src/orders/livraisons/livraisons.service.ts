@@ -95,6 +95,17 @@ export class LivraisonsService {
     return livraison;
   }
 
+  async corrigerLigne(id: string, ligneId: string, body: { quantiteCommandee?: number; quantiteRecue?: number; commentaire?: string }, _userId?: string) {
+    return this.prisma.ligneLivraison.update({
+      where: { id: ligneId, livraisonId: id },
+      data: {
+        ...(body.quantiteCommandee !== undefined && { quantiteCommandee: body.quantiteCommandee }),
+        ...(body.quantiteRecue    !== undefined && { quantiteRecue:    body.quantiteRecue }),
+        ...(body.commentaire      !== undefined && { commentaire:      body.commentaire }),
+      },
+    });
+  }
+
   async updateStatut(id: string, statut: StatutLivraison, urls?: { bonLivraisonUrl?: string; bonCommandeUrl?: string }) {
     await this.findById(id);
     return this.prisma.livraison.update({
