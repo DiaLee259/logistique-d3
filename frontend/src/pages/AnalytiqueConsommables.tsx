@@ -150,7 +150,7 @@ export default function AnalytiqueConsommables() {
 
   const { data: filtersData } = useQuery({
     queryKey: ['consommables-filters'],
-    queryFn:  () => consommablesApi.filters(),
+    queryFn:  () => consommablesApi.getFilters(),
   });
 
   // ── Actions ────────────────────────────────────────────────────────────────
