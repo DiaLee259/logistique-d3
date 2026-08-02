@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ArrowLeftRight, ClipboardList,
   Truck, ChevronLeft, ChevronRight, Settings, CalendarRange,
-  ClipboardCheck, BookOpen, Trash2, UserRound,
+  ClipboardCheck, BookOpen, Trash2, UserRound, BarChart3, TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getRoleShortLabel } from '@/config/roles';
@@ -52,6 +52,18 @@ const navItems = [
     iconBg: 'bg-orange-500/15 dark:bg-orange-500/20',
     iconColor: 'text-orange-600 dark:text-orange-400',
     activeBg: 'bg-orange-500/20 dark:bg-orange-500/25',
+  },
+  {
+    path: '/consommables', icon: BarChart3, label: 'Consommables',
+    iconBg: 'bg-teal-500/15 dark:bg-teal-500/20',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    activeBg: 'bg-teal-500/20 dark:bg-teal-500/25',
+  },
+  {
+    path: '/analytique-conso', icon: TrendingUp, label: 'Analytique Conso',
+    iconBg: 'bg-indigo-500/15 dark:bg-indigo-500/20',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    activeBg: 'bg-indigo-500/20 dark:bg-indigo-500/25',
   },
   {
     path: '/intervenants', icon: UserRound, label: 'Intervenants',

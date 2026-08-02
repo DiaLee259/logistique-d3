@@ -15,6 +15,13 @@ const pageTitles: Record<string, string> = {
   '/mouvements': 'Mouvements de stock',
   '/commandes': 'Commandes',
   '/livraisons': 'Livraisons fournisseurs',
+  '/commandes-ts': 'Commandes TS',
+  '/inventaire': 'Inventaire',
+  '/consommables': 'Consommables Terrain',
+  '/analytique-conso': 'Analytique Consommables',
+  '/intervenants': 'Intervenants',
+  '/guide': 'Guide',
+  '/corbeille': 'Corbeille',
   '/parametres': 'Paramètres',
 };
 

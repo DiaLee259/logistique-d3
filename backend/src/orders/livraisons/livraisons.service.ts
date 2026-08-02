@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { StatutLivraison, TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MouvementsService } from '../../stock/mouvements/mouvements.service';
@@ -47,7 +47,6 @@ export class LivraisonsService {
   async create(data: {
     fournisseur: string;
     entrepotId: string;
-    dateLivraison?: string;
     lignes: { articleId: string; quantiteCommandee: number; quantiteRecue: number }[];
     bonLivraisonUrl?: string;
     bonCommandeUrl?: string;
@@ -62,7 +61,6 @@ export class LivraisonsService {
         numero,
         fournisseur: data.fournisseur,
         entrepotId: data.entrepotId,
-        ...(data.dateLivraison ? { dateLivraison: new Date(data.dateLivraison) } : {}),
         statut: StatutLivraison.LIVREE,
         bonLivraisonUrl: data.bonLivraisonUrl,
         bonCommandeUrl: data.bonCommandeUrl,
@@ -209,39 +207,6 @@ export class LivraisonsService {
       };
     }));
     return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
-  }
-
-  async corrigerLigne(livraisonId: string, ligneId: string, data: { quantiteNouvelle: number; commentaire: string }, userId?: string) {
-    const livraison = await this.prisma.livraison.findUnique({
-      where: { id: livraisonId },
-      include: { lignes: { include: { article: true } }, entrepot: true },
-    });
-    if (!livraison) throw new NotFoundException('Livraison introuvable');
-
-    const jours = Math.floor((Date.now() - new Date(livraison.dateLivraison).getTime()) / (24 * 60 * 60 * 1000));
-    if (jours > 3) throw new BadRequestException('Le délai de correction de 3 jours est dépassé');
-
-    const ligne = livraison.lignes.find(l => l.id === ligneId);
-    if (!ligne) throw new NotFoundException('Ligne introuvable');
-
-    const delta = data.quantiteNouvelle - ligne.quantiteRecue;
-    await this.prisma.ligneLivraison.update({
-      where: { id: ligneId },
-      data: { quantiteRecue: data.quantiteNouvelle },
-    });
-
-    if (delta !== 0) {
-      await this.mouvementsService.create({
-        articleId: ligne.articleId,
-        entrepotId: livraison.entrepotId,
-        type: delta > 0 ? TypeMouvement.ENTREE : TypeMouvement.SORTIE,
-        quantiteDemandee: Math.abs(delta),
-        quantiteFournie: Math.abs(delta),
-        sourceDestination: livraison.fournisseur,
-        commentaire: `Correction ${livraison.numero} — ${data.commentaire}`,
-      }, userId);
-    }
-    return { success: true };
   }
 
   async findCorbeille() {

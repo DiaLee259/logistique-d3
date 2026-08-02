@@ -58,8 +58,6 @@ export const dashboardApi = {
     api.get('/dashboard/top-articles', { params: { limit: 5, ...params } }).then(r => r.data),
   commandes: (params?: Record<string, string>) =>
     api.get('/dashboard/commandes', { params }).then(r => r.data),
-  bilanArticles: (params?: Record<string, string>) =>
-    api.get('/dashboard/bilan-articles', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
@@ -203,8 +201,6 @@ export const livraisonsApi = {
     api.get('/livraisons/rapport', { params, responseType: 'blob' }).then(r => r.data as Blob),
   rapportLivraisonsJson: (params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string }) =>
     api.get('/livraisons/rapport', { params: { ...params, format: 'json' } }).then(r => r.data as any[]),
-  corrigerLigne: (id: string, ligneId: string, data: { quantiteNouvelle: number; commentaire: string }) =>
-    api.patch(`/livraisons/${id}/lignes/${ligneId}`, data).then(r => r.data),
 };
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
@@ -309,6 +305,24 @@ export const notificationsApi = {
   count: () => api.get('/notifications/count').then(r => r.data),
   marquerLue: (id: string) => api.patch(`/notifications/${id}/lire`).then(r => r.data),
   marquerToutesLues: () => api.patch('/notifications/lire-toutes').then(r => r.data),
+};
+
+// ── Consommables ─────────────────────────────────────────────────────────────
+export const consommablesApi = {
+  summary: () => api.get('/consommables/summary').then(r => r.data),
+  listImports: () => api.get('/consommables/imports').then(r => r.data),
+  getFilters: () => api.get('/consommables/filters').then(r => r.data),
+  calcul: (params?: Record<string, string>) =>
+    api.get('/consommables/calcul', { params }).then(r => r.data),
+  repartition: (params?: Record<string, string>) =>
+    api.get('/consommables/repartition', { params }).then(r => r.data),
+  listFormules: () => api.get('/consommables/formules').then(r => r.data),
+  updateFormule: (id: string, data: { multiplicateur?: number; multiplicateurNok?: number; minimumQte?: number; actif?: boolean }) =>
+    api.put(`/consommables/formules/${id}`, data).then(r => r.data),
+  analyse: (params?: Record<string, string>) =>
+    api.get('/consommables/analyse', { params }).then(r => r.data),
+  commandesArticles: (params?: Record<string, string>) =>
+    api.get('/consommables/commandes-articles', { params }).then(r => r.data),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

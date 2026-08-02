@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List, BarChart2, Eye, FileDown, Loader2, AlertTriangle, Clock, Pencil } from 'lucide-react';
+import { Plus, Truck, X, CheckCircle, Info, Search, Upload, ChevronDown, ChevronRight, Trash2, LayoutGrid, List, BarChart2, Eye, FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { livraisonsApi, articlesApi, entrepotsApi, uploadsApi } from '@/lib/api';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
@@ -37,12 +37,6 @@ export default function Livraisons() {
   const [bonLivraisonUrl, setBonLivraisonUrl] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [lignes, setLignes] = useState([{ articleId: '', quantiteRecue: 1 }]);
-  const [dateLivraison, setDateLivraison] = useState(new Date().toISOString().slice(0, 10));
-
-  const [correctionLigne, setCorrectionLigne] = useState<{
-    livraisonId: string; ligneId: string; livraisonNumero: string; livraisonDate: string;
-    articleNom: string; articleRef: string; quantiteActuelle: number; newQte: number; commentaire: string;
-  } | null>(null);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -149,22 +143,10 @@ export default function Livraisons() {
     onError: () => toast.error('Erreur lors de la visualisation'),
   });
 
-  const corrigerLigneMut = useMutation({
-    mutationFn: ({ livraisonId, ligneId, quantiteNouvelle, commentaire }: { livraisonId: string; ligneId: string; quantiteNouvelle: number; commentaire: string }) =>
-      livraisonsApi.corrigerLigne(livraisonId, ligneId, { quantiteNouvelle, commentaire }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['livraisons'] });
-      toast.success('Correction enregistrée');
-      setCorrectionLigne(null);
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.message || 'Erreur lors de la correction'),
-  });
-
   const closeDialog = () => {
     setDialogOpen(false);
     setFournisseur(''); setEntrepotId(''); setCommentaire(''); setBonLivraisonUrl('');
     setLignes([{ articleId: '', quantiteRecue: 1 }]);
-    setDateLivraison(new Date().toISOString().slice(0, 10));
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,7 +169,7 @@ export default function Livraisons() {
     if (!entrepotId) { toast.error('Entrepôt requis'); return; }
     const validLignes = lignes.filter(l => l.articleId && l.quantiteRecue >= 0).map(l => ({ ...l, quantiteCommandee: l.quantiteRecue }));
     if (!validLignes.length) { toast.error('Au moins un article requis'); return; }
-    createMut.mutate({ fournisseur, entrepotId, commentaire, bonLivraisonUrl: bonLivraisonUrl || undefined, lignes: validLignes, dateLivraison });
+    createMut.mutate({ fournisseur, entrepotId, commentaire, bonLivraisonUrl: bonLivraisonUrl || undefined, lignes: validLignes });
   };
 
   return (
@@ -396,7 +378,6 @@ export default function Livraisons() {
                                 <th className="text-left py-1 font-semibold text-muted-foreground">Article</th>
                                 <th className="text-left py-1 font-semibold text-muted-foreground">Référence</th>
                                 <th className="text-right py-1 font-semibold text-green-600">Qté reçue</th>
-                                <th className="w-8"></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -405,13 +386,6 @@ export default function Livraisons() {
                                   <td className="py-1.5 font-medium">{li.article?.nom}</td>
                                   <td className="py-1.5 font-mono text-muted-foreground">{li.article?.reference}</td>
                                   <td className="py-1.5 text-right font-bold text-green-600">+{li.quantiteRecue}</td>
-                                  <td className="py-1.5 pl-2">
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setCorrectionLigne({ livraisonId: l.id, ligneId: li.id, livraisonNumero: l.numero, livraisonDate: l.dateLivraison as string, articleNom: li.article?.nom ?? '', articleRef: li.article?.reference ?? '', quantiteActuelle: li.quantiteRecue, newQte: li.quantiteRecue, commentaire: '' }); }}
-                                      className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors" title="Corriger la quantité">
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -460,16 +434,16 @@ export default function Livraisons() {
 
       {/* Dialog */}
       {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-          <div className="bg-card rounded-xl shadow-2xl border border-border flex flex-col w-[96vw] h-[92vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
                 <h2 className="text-sm font-semibold">Nouvelle livraison fournisseur</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">Le stock sera mis à jour automatiquement</p>
               </div>
               <button onClick={closeDialog} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 overflow-auto p-5 space-y-3">
+            <div className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">Fournisseur *</label>
@@ -485,11 +459,6 @@ export default function Livraisons() {
                     {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Date de réception *</label>
-                <input type="date" value={dateLivraison} onChange={e => setDateLivraison(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Commentaire / Référence BL</label>
@@ -544,89 +513,17 @@ export default function Livraisons() {
                 </div>
               </div>
 
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border flex-shrink-0">
-              <button onClick={closeDialog} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-              <button onClick={handleCreate} disabled={createMut.isPending}
-                className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
-                <CheckCircle className="w-3.5 h-3.5" /> Enregistrer
-              </button>
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={closeDialog} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
+                <button onClick={handleCreate} disabled={createMut.isPending}
+                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Enregistrer
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-      {/* ─── Dialog correction ligne ────────────────────────────────────────── */}
-      {correctionLigne && (() => {
-        const livDate = new Date(correctionLigne.livraisonDate);
-        const joursEcoules = Math.floor((Date.now() - livDate.getTime()) / (24 * 60 * 60 * 1000));
-        const joursRestants = 3 - joursEcoules;
-        const delaiDepasse = joursRestants < 0;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">Corriger une quantité</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{correctionLigne.articleNom} — <span className="font-mono">{correctionLigne.articleRef}</span></p>
-                  <p className="text-xs text-muted-foreground">{correctionLigne.livraisonNumero}</p>
-                </div>
-                <button onClick={() => setCorrectionLigne(null)} className="p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
-              </div>
-              {delaiDepasse ? (
-                <div className="flex items-start gap-2 text-xs bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2.5">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  <p>Le délai de correction de 3 jours est dépassé (livraison du {formatDate(correctionLigne.livraisonDate)}).</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs bg-primary/5 border border-primary/20 text-primary rounded-lg px-3 py-2">
-                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                  <p>Livraison du {formatDate(correctionLigne.livraisonDate)} — <strong>{joursRestants === 0 ? 'dernier jour' : `encore ${joursRestants} jour(s)`}</strong> pour corriger</p>
-                </div>
-              )}
-              {!delaiDepasse && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Nouvelle quantité reçue</label>
-                    <input type="number" min={0} value={correctionLigne.newQte}
-                      onChange={e => setCorrectionLigne(d => d ? { ...d, newQte: parseInt(e.target.value) || 0 } : d)}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    {correctionLigne.quantiteActuelle !== correctionLigne.newQte && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Avant : <span className="font-semibold">{correctionLigne.quantiteActuelle}</span>
-                        {' → '}
-                        Après : <span className={cn('font-semibold', correctionLigne.newQte > correctionLigne.quantiteActuelle ? 'text-green-600' : 'text-red-600')}>{correctionLigne.newQte}</span>
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium mb-1 block">Motif de la correction <span className="text-red-500">*</span></label>
-                    <input type="text" placeholder="Ex. : erreur de saisie, recoupage…"
-                      value={correctionLigne.commentaire}
-                      onChange={e => setCorrectionLigne(d => d ? { ...d, commentaire: e.target.value } : d)}
-                      className={cn('w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30',
-                        !correctionLigne.commentaire.trim() ? 'border-amber-300' : 'border-border')} />
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => setCorrectionLigne(null)} className="px-4 py-2 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground">Annuler</button>
-                {!delaiDepasse && (
-                  <button
-                    onClick={() => {
-                      if (!correctionLigne.commentaire.trim()) { toast.error('Le motif est obligatoire'); return; }
-                      corrigerLigneMut.mutate({ livraisonId: correctionLigne.livraisonId, ligneId: correctionLigne.ligneId, quantiteNouvelle: correctionLigne.newQte, commentaire: correctionLigne.commentaire });
-                    }}
-                    disabled={corrigerLigneMut.isPending || !correctionLigne.commentaire.trim()}
-                    className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50">
-                    {corrigerLigneMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ─── Dialog rapport livraisons ──────────────────────────────────────── */}
       {rapportDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
@@ -652,8 +549,8 @@ export default function Livraisons() {
               </div>
             </div>
 
-            {/* Contenu */}
-            <div className="flex-1 min-h-0 flex flex-col p-6">
+            {/* Contenu scrollable */}
+            <div className="flex-1 overflow-auto p-6">
 
             {rapportView === 'form' && (
               <div className="max-w-sm space-y-3">
@@ -773,8 +670,8 @@ export default function Livraisons() {
               };
 
               return (
-                <div className="flex flex-col flex-1 min-h-0 gap-3">
-                  <div className="flex items-center justify-between flex-shrink-0">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
                       {(['date', 'article', 'entrepot'] as const).map(g => (
                         <button key={g} onClick={() => { setRapportGroupBy(g); setRapportCollapsed(new Set()); }}
@@ -788,7 +685,7 @@ export default function Livraisons() {
                       {rapportMut.isPending ? <><Loader2 className="w-3 h-3 animate-spin" /> Export…</> : <><FileDown className="w-3 h-3" /> Télécharger Excel</>}
                     </button>
                   </div>
-                  <div className="overflow-auto flex-1 min-h-0 rounded-lg border border-border">
+                  <div className="overflow-auto max-h-[65vh] rounded-lg border border-border">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-muted z-10">
                         <tr>
@@ -829,8 +726,8 @@ export default function Livraisons() {
                 </div>
               );
             })()}
-            </div>
-          </div>
+            </div>{/* flex-1 overflow-auto */}
+          </div>{/* bg-card flex flex-col */}
         </div>
       )}
     </div>

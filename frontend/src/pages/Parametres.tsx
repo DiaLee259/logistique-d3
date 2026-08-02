@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff, RotateCcw, AlertTriangle, Link2, Copy, Network } from 'lucide-react';
+import { Users, BookOpen, X, Plus, Check, AlertCircle, HelpCircle, Warehouse, Pencil, Building2, UserRound, Phone, Mail, MapPin, Trash2, Upload, Download, FileSpreadsheet, ShieldCheck, Eye, EyeOff, RotateCcw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi, commandesApi } from '@/lib/api';
+import { usersApi, articlesApi, entrepotsApi, repertoireApi, adminApi } from '@/lib/api';
 import { useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, roleLabel, formatDate } from '@/lib/utils';
 import { ROLES_CONFIG, getRoleColor } from '@/config/roles';
-import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges, ManagerZone } from '@/lib/types';
+import type { User, Article, Entrepot, Societe, Intervenant, UserPrivileges } from '@/lib/types';
 import { DEFAULT_PRIVILEGES } from '@/lib/types';
 
-type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero' | 'managers-zone';
+type Tab = 'utilisateurs' | 'entrepots' | 'catalogue' | 'repertoire' | 'workflow' | 'remise-a-zero';
 
 export default function Parametres() {
   const { hasRole, user } = useAuth();
@@ -20,9 +20,8 @@ export default function Parametres() {
   // ── Utilisateurs ──────────────────────────────────────────────────────────
   const [userDialog, setUserDialog] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1', managerZoneId: '' });
+  const [userForm, setUserForm] = useState({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
   const [showUserPass, setShowUserPass] = useState(false);
-  const [userFilter, setUserFilter] = useState<'all' | 'actif' | 'inactif'>('all');
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
@@ -47,13 +46,13 @@ export default function Parametres() {
 
   const openCreateUser = () => {
     setEditUser(null);
-    setUserForm({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1', managerZoneId: '' });
+    setUserForm({ prenom: '', nom: '', email: '', password: '', role: 'LOGISTICIEN_1' });
     setUserDialog(true);
   };
 
   const openEditUser = (user: User) => {
     setEditUser(user);
-    setUserForm({ prenom: user.prenom, nom: user.nom, email: user.email, password: '', role: user.role, managerZoneId: user.managerZoneId ?? '' });
+    setUserForm({ prenom: user.prenom, nom: user.nom, email: user.email, password: '', role: user.role });
     setUserDialog(true);
   };
 
@@ -84,11 +83,11 @@ export default function Parametres() {
     if (!userForm.prenom || !userForm.nom || !userForm.email) { toast.error('Champs obligatoires manquants'); return; }
     if (!editUser && !userForm.password) { toast.error('Mot de passe requis'); return; }
     if (editUser) {
-      const updateData: any = { prenom: userForm.prenom, nom: userForm.nom, email: userForm.email, role: userForm.role, managerZoneId: userForm.managerZoneId || null };
+      const updateData: any = { prenom: userForm.prenom, nom: userForm.nom, email: userForm.email, role: userForm.role };
       if (userForm.password) updateData.password = userForm.password;
       updateUserMut.mutate({ id: editUser.id, data: updateData });
     } else {
-      createUserMut.mutate({ ...userForm, managerZoneId: userForm.managerZoneId || null } as any);
+      createUserMut.mutate(userForm);
     }
   };
 
@@ -100,7 +99,7 @@ export default function Parametres() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots-all'],
     queryFn: () => entrepotsApi.list(true),
-    enabled: tab === 'entrepots' || tab === 'managers-zone' || privilegeDialog,
+    enabled: tab === 'entrepots' || privilegeDialog,
   });
 
   const createEntrepotMut = useMutation({
@@ -179,15 +178,6 @@ export default function Parametres() {
     onError: () => toast.error('Erreur lors de la remise à zéro'),
   });
 
-  const backfillLienMut = useMutation({
-    mutationFn: commandesApi.backfillLienData,
-    onSuccess: (res: any) => {
-      qc.invalidateQueries({ queryKey: ['commandes'] });
-      toast.success(`Backfill terminé : ${res.updated} commande(s) mise(s) à jour sur ${res.total}`);
-    },
-    onError: () => toast.error('Erreur lors du backfill'),
-  });
-
   const resetMouvementsMut = useMutation(makeResetMut(adminApi.resetMouvements, 'Mouvements supprimés'));
   const resetInventairesMut = useMutation(makeResetMut(adminApi.resetInventaires, 'Inventaires supprimés'));
   const resetCommandesMut = useMutation(makeResetMut(adminApi.resetCommandes, 'Commandes supprimées'));
@@ -235,150 +225,6 @@ export default function Parametres() {
     if (catalogueFilter === 'inactif') return !a.actif;
     return true;
   });
-
-  // ── Managers de zone ─────────────────────────────────────────────────────────
-  const [managerZoneDialog, setManagerZoneDialog] = useState(false);
-  const [editManagerZone, setEditManagerZone] = useState<ManagerZone | null>(null);
-  const [managerZoneForm, setManagerZoneForm] = useState({ nom: '', departements: [] as { code: string; entrepotId: string; entrepotCode: string }[] });
-
-  const { data: managersZone = [] } = useQuery<ManagerZone[]>({
-    queryKey: ['managers-zone'],
-    queryFn: () => commandesApi.managers.list(),
-    enabled: tab === 'managers-zone' || userDialog,
-  });
-
-  const createManagerZoneMut = useMutation({
-    mutationFn: (data: any) => commandesApi.managers.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone créé'); setManagerZoneDialog(false); setEditManagerZone(null); },
-    onError: () => toast.error('Erreur lors de la création'),
-  });
-
-  const updateManagerZoneMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => commandesApi.managers.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone mis à jour'); setManagerZoneDialog(false); setEditManagerZone(null); },
-    onError: () => toast.error('Erreur lors de la mise à jour'),
-  });
-
-  const deleteManagerZoneMut = useMutation({
-    mutationFn: (id: string) => commandesApi.managers.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Manager de zone supprimé'); },
-    onError: () => toast.error('Impossible de supprimer — des liens sont peut-être rattachés'),
-  });
-
-  const openCreateManagerZone = () => {
-    setEditManagerZone(null);
-    setManagerZoneForm({ nom: '', departements: [] });
-    setManagerZoneDialog(true);
-  };
-
-  const openEditManagerZone = (mz: ManagerZone) => {
-    setEditManagerZone(mz);
-    setManagerZoneForm({ nom: mz.nom, departements: [...(mz.departements as any[])] });
-    setManagerZoneDialog(true);
-  };
-
-  const handleSaveManagerZone = () => {
-    if (!managerZoneForm.nom) { toast.error('Le nom est obligatoire'); return; }
-    if (editManagerZone) {
-      updateManagerZoneMut.mutate({ id: editManagerZone.id, data: { nom: managerZoneForm.nom, departements: managerZoneForm.departements } });
-    } else {
-      createManagerZoneMut.mutate({ nom: managerZoneForm.nom, departements: managerZoneForm.departements });
-    }
-  };
-
-  const addDeptLine = () => setManagerZoneForm(p => ({ ...p, departements: [...p.departements, { code: '', entrepotId: '', entrepotCode: '' }] }));
-  const removeDeptLine = (i: number) => setManagerZoneForm(p => ({ ...p, departements: p.departements.filter((_, j) => j !== i) }));
-  const updateDeptLine = (i: number, field: string, value: string) => setManagerZoneForm(p => ({
-    ...p,
-    departements: p.departements.map((d, j) => {
-      if (j !== i) return d;
-      const updated = { ...d, [field]: value };
-      // auto-fill entrepotCode when entrepotId changes
-      if (field === 'entrepotId') {
-        const e = entrepots.find(x => x.id === value);
-        updated.entrepotCode = e?.code ?? '';
-      }
-      return updated;
-    }),
-  }));
-
-  // ── Liens prestataires ───────────────────────────────────────────────────────
-  const [lienDialog, setLienDialog] = useState(false);
-  const [editLien, setEditLien] = useState<any | null>(null);
-  const [lienForm, setLienForm] = useState({ nom: '', managerZoneId: '', typePrestataire: '', departementsActifs: [] as string[], expiresInDays: '' });
-
-  const { data: liens = [], refetch: refetchLiens } = useQuery<any[]>({
-    queryKey: ['liens-prestataire'],
-    queryFn: () => commandesApi.liens.list(),
-    enabled: tab === 'managers-zone',
-  });
-
-  const createLienMut = useMutation({
-    mutationFn: (data: any) => commandesApi.liens.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Lien créé'); setLienDialog(false); setEditLien(null); },
-    onError: () => toast.error('Erreur lors de la création'),
-  });
-
-  const updateLienMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => commandesApi.liens.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); qc.invalidateQueries({ queryKey: ['managers-zone'] }); toast.success('Lien mis à jour'); setLienDialog(false); setEditLien(null); },
-    onError: () => toast.error('Erreur lors de la mise à jour'),
-  });
-
-  const desactiverLienMut = useMutation({
-    mutationFn: ({ id, actif }: { id: string; actif: boolean }) => commandesApi.liens.update(id, { actif }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); },
-  });
-
-  const deleteLienMut = useMutation({
-    mutationFn: (id: string) => commandesApi.liens.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['liens-prestataire'] }); toast.success('Lien supprimé'); },
-    onError: () => toast.error('Impossible de supprimer ce lien'),
-  });
-
-  const openCreateLien = () => {
-    setEditLien(null);
-    setLienForm({ nom: '', managerZoneId: '', typePrestataire: 'SOCIETE', departementsActifs: [], expiresInDays: '' });
-    setLienDialog(true);
-  };
-
-  const openEditLien = (l: any) => {
-    setEditLien(l);
-    setLienForm({
-      nom: l.nom,
-      managerZoneId: l.managerZoneId ?? '',
-      typePrestataire: l.typePrestataire ?? 'SOCIETE',
-      departementsActifs: l.departementsActifs ?? [],
-      expiresInDays: '',
-    });
-    setLienDialog(true);
-  };
-
-  const handleSaveLien = () => {
-    if (!lienForm.nom.trim()) { toast.error('Nom requis'); return; }
-    const payload: any = {
-      nom: lienForm.nom,
-      managerZoneId: lienForm.managerZoneId || null,
-      typePrestataire: lienForm.typePrestataire || null,
-      departementsActifs: lienForm.departementsActifs,
-    };
-    if (editLien) {
-      updateLienMut.mutate({ id: editLien.id, data: payload });
-    } else {
-      if (lienForm.expiresInDays) payload.expiresInDays = parseInt(lienForm.expiresInDays);
-      createLienMut.mutate(payload);
-    }
-  };
-
-  const toggleDeptActif = (code: string) =>
-    setLienForm(p => ({
-      ...p,
-      departementsActifs: p.departementsActifs.includes(code)
-        ? p.departementsActifs.filter(d => d !== code)
-        : [...p.departementsActifs, code],
-    }));
-
-  const lienUrl = (token: string) => `${window.location.origin}/commande/${token}`;
 
   // ── Répertoire Sociétés / Intervenants ───────────────────────────────────────
   const [repertoireSection, setRepertoireSection] = useState<'societes' | 'intervenants'>('societes');
@@ -526,10 +372,9 @@ export default function Parametres() {
     : entrepots;
   const canManageEntrepots = hasRole('ADMIN', 'LOGISTICIEN_1') && allowedEntrepots.length === 0;
   const canSeeRepertoire = hasRole('ADMIN') || (user?.privileges?.modules?.parametres ?? 'NONE') !== 'NONE';
-  const canManageManagersZone = hasRole('ADMIN') || (user?.privileges?.actions?.gererManagersZone ?? false);
 
   return (
-    <div className="space-y-4 max-w-7xl">
+    <div className="space-y-4 max-w-5xl">
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/30 rounded-xl p-1 w-fit">
         {[
@@ -537,7 +382,6 @@ export default function Parametres() {
           { key: 'entrepots' as Tab, label: 'Entrepôts', icon: Warehouse },
           { key: 'catalogue' as Tab, label: 'Catalogue articles', icon: BookOpen },
           ...(canSeeRepertoire ? [{ key: 'repertoire' as Tab, label: 'Sociétés & Intervenants', icon: Building2 }] : []),
-          ...(canManageManagersZone ? [{ key: 'managers-zone' as Tab, label: 'Managers de zone', icon: Network }] : []),
           { key: 'workflow' as Tab, label: 'Guide & Workflow', icon: HelpCircle },
           ...(hasRole('ADMIN') ? [{ key: 'remise-a-zero' as Tab, label: 'Remise à zéro', icon: RotateCcw }] : []),
         ].map(({ key, label, icon: Icon }) => (
@@ -559,66 +403,49 @@ export default function Parametres() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Gestion des comptes</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {users.filter(u => userFilter === 'all' ? true : userFilter === 'actif' ? u.actif : !u.actif).length} compte(s) affiché(s) · {users.filter(u => u.actif).length} actif(s) · {users.filter(u => !u.actif).length} inactif(s)
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{users.length} compte(s) enregistré(s)</p>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Filtre actif/inactif */}
-                  <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
-                    {(['all', 'actif', 'inactif'] as const).map(f => (
-                      <button key={f} onClick={() => setUserFilter(f)}
-                        className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
-                          userFilter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                        {f === 'all' ? 'Tous' : f === 'actif' ? 'Actifs' : 'Inactifs'}
-                      </button>
-                    ))}
+                {hasRole('ADMIN') && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        usersApi.export().then(blob => {
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `export-comptes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border rounded-lg bg-card hover:border-green-500 hover:text-green-700 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Exporter comptes
+                    </button>
+                    <button onClick={openCreateUser}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
+                      <Plus className="w-3.5 h-3.5" /> Nouveau compte
+                    </button>
                   </div>
-                  {hasRole('ADMIN') && (
-                    <>
-                      <button
-                        onClick={() =>
-                          usersApi.export().then(blob => {
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `export-comptes-${new Date().toISOString().slice(0, 10)}.xlsx`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          })
-                        }
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs border border-border rounded-lg bg-card hover:border-green-500 hover:text-green-700 transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" /> Exporter
-                      </button>
-                      <button onClick={openCreateUser}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-                        <Plus className="w-3.5 h-3.5" /> Nouveau compte
-                      </button>
-                    </>
-                  )}
-                </div>
+                )}
               </div>
 
               <div className="bg-card rounded-xl border border-border overflow-hidden">
-                <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       {['Utilisateur', 'Email', 'Rôle', 'Créé le', 'Statut', ''].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {users
-                      .filter(u => userFilter === 'all' ? true : userFilter === 'actif' ? u.actif : !u.actif)
-                      .map(u => (
-                      <tr key={u.id} className={cn('border-b border-border/50 hover:bg-muted/20', !u.actif && 'opacity-60')}>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                    {users.map(u => (
+                      <tr key={u.id} className="border-b border-border/50 hover:bg-muted/20">
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
                               <span className="text-xs font-bold text-primary">{u.prenom[0]}{u.nom[0]}</span>
@@ -627,19 +454,19 @@ export default function Parametres() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3">
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', roleColor(u.role))}>
                             {roleLabel(u.role)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(u.createdAt)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 text-muted-foreground">{formatDate(u.createdAt)}</td>
+                        <td className="px-4 py-3">
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                             u.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                             {u.actif ? 'Actif' : 'Inactif'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3">
                           {hasRole('ADMIN') && (
                             <div className="flex items-center gap-1.5">
                               <button onClick={() => openEditUser(u)}
@@ -662,7 +489,6 @@ export default function Parametres() {
                     ))}
                   </tbody>
                 </table>
-                </div>
               </div>
 
               {/* Explications des rôles */}
@@ -701,30 +527,29 @@ export default function Parametres() {
           </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   {['Code', 'Nom', 'Localisation', 'Gestionnaire', 'Téléphone', 'Email', 'Statut', ''].map(h => (
-                    <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {visibleEntrepots.map(e => (
                   <tr key={e.id} className="border-b border-border/50 hover:bg-muted/20">
-                    <td className="px-3 py-2.5 font-mono font-bold text-primary whitespace-nowrap">{e.code}</td>
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">{e.nom}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.localisation}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.gestionnaire ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{e.telephone ?? '—'}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-primary">{e.code}</td>
+                    <td className="px-3 py-2.5 font-medium">{e.nom}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{e.localisation}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{e.gestionnaire ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{e.telephone ?? '—'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground">{e.email ?? '—'}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
+                    <td className="px-3 py-2.5">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', e.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                         {e.actif ? 'Actif' : 'Inactif'}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
+                    <td className="px-3 py-2.5">
                       {canManageEntrepots && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => openEditEntrepot(e)}
@@ -743,7 +568,6 @@ export default function Parametres() {
                 ))}
               </tbody>
             </table>
-            </div>
           </div>
         </div>
       )}
@@ -1210,179 +1034,6 @@ export default function Parametres() {
         </div>
       )}
 
-      {/* ── TAB MANAGERS DE ZONE ── */}
-      {tab === 'managers-zone' && canManageManagersZone && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold">Managers de zone</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{managersZone.length} manager(s) configuré(s)</p>
-            </div>
-            <button onClick={openCreateManagerZone}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-              <Plus className="w-3.5 h-3.5" /> Nouveau manager
-            </button>
-          </div>
-
-          {managersZone.length === 0 ? (
-            <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-xs">
-              Aucun manager de zone. Créez-en un pour enrichir les liens prestataires.
-            </div>
-          ) : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {['Nom', 'Départements + entrepôts', 'Liens actifs', 'Statut', ''].map(h => (
-                      <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {managersZone.map(mz => (
-                    <tr key={mz.id} className={cn('border-b border-border/50 hover:bg-muted/20', !mz.actif && 'opacity-60')}>
-                      <td className="px-3 py-2.5 font-medium">{mz.nom}</td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-wrap gap-1">
-                          {(mz.departements as any[]).map((d: any, i: number) => (
-                            <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-mono">
-                              {d.code} → {d.entrepotCode || '?'}
-                            </span>
-                          ))}
-                          {(mz.departements as any[]).length === 0 && <span className="text-muted-foreground italic">Aucun département</span>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground">
-                        {(mz.liens ?? []).length > 0 ? (
-                          <span className="font-medium text-foreground">{(mz.liens ?? []).length} lien(s)</span>
-                        ) : '—'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', mz.actif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-                          {mz.actif ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEditManagerZone(mz)}
-                            className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted">
-                            Modifier
-                          </button>
-                          <button onClick={() => updateManagerZoneMut.mutate({ id: mz.id, data: { actif: !mz.actif } })}
-                            className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
-                              mz.actif ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
-                            {mz.actif ? 'Désactiver' : 'Activer'}
-                          </button>
-                          {(mz.liens ?? []).length === 0 && (
-                            <button onClick={() => { if (confirm(`Supprimer le manager "${mz.nom}" ?`)) deleteManagerZoneMut.mutate(mz.id); }}
-                              className="px-2.5 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Section Liens prestataires (dans managers-zone) ── */}
-      {tab === 'managers-zone' && canManageManagersZone && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold">Liens prestataires</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{liens.length} lien(s) · {liens.filter(l => l.actif).length} actif(s)</p>
-            </div>
-            <button onClick={openCreateLien}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90">
-              <Plus className="w-3.5 h-3.5" /> Nouveau lien
-            </button>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {['Nom du lien', 'Manager', 'Type', 'Départements actifs', 'Utilisations', 'Statut', ''].map(h => (
-                      <th key={h} className="text-left px-3 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {liens.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Aucun lien créé</td></tr>
-                  ) : liens.map((l: any) => (
-                    <tr key={l.id} className={cn('border-b border-border/50 hover:bg-muted/20', !l.actif && 'opacity-50')}>
-                      <td className="px-3 py-2.5">
-                        <div className="font-medium whitespace-nowrap">{l.nom}</div>
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(lienUrl(l.token)); toast.success('URL copiée !'); }}
-                          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-0.5"
-                          title={lienUrl(l.token)}
-                        >
-                          <Copy className="w-3 h-3" />
-                          <span className="text-xs truncate max-w-48">{lienUrl(l.token)}</span>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
-                        {l.managerZone?.nom ?? <span className="italic text-muted-foreground/50">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {l.typePrestataire === 'SOCIETE' ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">Société</span>
-                        ) : l.typePrestataire === 'AUTO' ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Auto</span>
-                        ) : <span className="text-muted-foreground/50">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {(l.departementsActifs ?? []).length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {(l.departementsActifs as string[]).map(d => (
-                              <span key={d} className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">{d}</span>
-                            ))}
-                          </div>
-                        ) : <span className="text-muted-foreground/50">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-center font-semibold">{l.utilisations}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', l.actif ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
-                          {l.actif ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEditLien(l)}
-                            className="px-2.5 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-muted transition-colors">
-                            Modifier
-                          </button>
-                          <button onClick={() => desactiverLienMut.mutate({ id: l.id, actif: !l.actif })}
-                            className={cn('px-2.5 py-1 text-xs rounded border transition-colors',
-                              l.actif ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50')}>
-                            {l.actif ? 'Désactiver' : 'Activer'}
-                          </button>
-                          {!l.actif && (
-                            <button onClick={() => { if (confirm(`Supprimer le lien "${l.nom}" ?`)) deleteLienMut.mutate(l.id); }}
-                              className="px-2.5 py-1 text-xs rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
-                              Supprimer
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── TAB REMISE À ZÉRO ── */}
       {tab === 'remise-a-zero' && hasRole('ADMIN') && (
         <div className="space-y-4 max-w-2xl">
@@ -1394,23 +1045,6 @@ export default function Parametres() {
             <p className="text-xs text-muted-foreground mt-1">
               Ces actions sont irréversibles. Utilisez-les uniquement pour repartir de zéro après la phase de test.
             </p>
-          </div>
-
-          {/* Enrichissement données */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-xs font-bold text-blue-800 mb-1">Enrichissement des commandes existantes</p>
-            <p className="text-xs text-blue-700 mb-3">
-              Pour chaque commande liée à un lien prestataire, récupère automatiquement le manager, le type
-              (auto-entrepreneur / société) et l'entrepôt source depuis ce lien. Les champs déjà renseignés
-              ne sont pas modifiés.
-            </p>
-            <button
-              onClick={() => { if (confirm('Lancer l\'enrichissement des commandes depuis les liens prestataires ?')) backfillLienMut.mutate(); }}
-              disabled={backfillLienMut.isPending}
-              className="flex items-center gap-2 px-4 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium"
-            >
-              {backfillLienMut.isPending ? 'Enrichissement en cours…' : '🔄 Enrichir les commandes depuis les liens'}
-            </button>
           </div>
 
           {/* Actions granulaires */}
@@ -1454,190 +1088,6 @@ export default function Parametres() {
               <RotateCcw className="w-3.5 h-3.5" />
               {resetCompletMut.isPending ? 'Remise à zéro en cours…' : 'Tout remettre à zéro'}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Dialog Lien prestataire */}
-      {lienDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-primary" />
-                {editLien ? `Modifier — ${editLien.nom}` : 'Nouveau lien prestataire'}
-              </h2>
-              <button onClick={() => { setLienDialog(false); setEditLien(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Nom */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Nom du lien *</label>
-                <input value={lienForm.nom} onChange={e => setLienForm(p => ({ ...p, nom: e.target.value }))}
-                  placeholder="Ex: Formulaire Dept 49 — Dupont"
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              </div>
-
-              {/* Manager de zone */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Manager de zone</label>
-                <select value={lienForm.managerZoneId}
-                  onChange={e => setLienForm(p => ({ ...p, managerZoneId: e.target.value, departementsActifs: [] }))}
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
-                  <option value="">— Sans manager —</option>
-                  {managersZone.filter(m => m.actif).map(m => (
-                    <option key={m.id} value={m.id}>{m.nom}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Type prestataire */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-2">Type de prestataire</label>
-                <div className="flex gap-3">
-                  {[{ val: 'SOCIETE', label: 'Société', color: 'bg-violet-100 text-violet-700 border-violet-300' }, { val: 'AUTO', label: 'Auto-entrepreneur', color: 'bg-orange-100 text-orange-700 border-orange-300' }].map(({ val, label, color }) => (
-                    <button key={val} type="button"
-                      onClick={() => setLienForm(p => ({ ...p, typePrestataire: val }))}
-                      className={cn('flex-1 px-3 py-2 text-xs rounded-lg border font-medium transition-colors',
-                        lienForm.typePrestataire === val ? color + ' border-2' : 'border-border text-muted-foreground hover:bg-muted')}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Départements actifs (checkboxes depuis le manager sélectionné) */}
-              {lienForm.managerZoneId && (() => {
-                const mgr = managersZone.find(m => m.id === lienForm.managerZoneId);
-                const depts = (mgr?.departements ?? []) as { code: string; entrepotId: string; entrepotCode: string }[];
-                return depts.length > 0 ? (
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-2">
-                      Départements actifs pour ce lien <span className="text-muted-foreground/60">(cocher ceux qui doivent apparaître dans le formulaire)</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {depts.map(d => {
-                        const checked = lienForm.departementsActifs.includes(d.code);
-                        return (
-                          <label key={d.code} className={cn(
-                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors',
-                            checked ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary'
-                          )}>
-                            <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleDeptActif(d.code)} />
-                            <span className="font-semibold">{d.code}</span>
-                            <span className="opacity-70">— {d.entrepotCode || 'ENT?'}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {lienForm.departementsActifs.length === 0 && (
-                      <p className="text-xs text-amber-600 mt-1">⚠ Aucun département coché — le formulaire prestataire aura un champ libre</p>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-
-              {/* Expiration (seulement à la création) */}
-              {!editLien && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Expiration (optionnel)</label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" min="1" value={lienForm.expiresInDays}
-                      onChange={e => setLienForm(p => ({ ...p, expiresInDays: e.target.value }))}
-                      placeholder="Ex: 30"
-                      className="w-24 px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    <span className="text-xs text-muted-foreground">jours (vide = pas d'expiration)</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Aperçu URL (si modification) */}
-              {editLien && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">URL du lien</p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs text-primary break-all flex-1">{lienUrl(editLien.token)}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(lienUrl(editLien.token)); toast.success('URL copiée !'); }}
-                      className="flex-shrink-0 p-1.5 hover:bg-muted rounded border border-border">
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => { setLienDialog(false); setEditLien(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-                <button onClick={handleSaveLien} disabled={createLienMut.isPending || updateLienMut.isPending}
-                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" /> {editLien ? 'Enregistrer' : 'Créer le lien'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dialog Manager de zone */}
-      {managerZoneDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold">{editManagerZone ? `Modifier — ${editManagerZone.nom}` : 'Nouveau manager de zone'}</h2>
-              <button onClick={() => { setManagerZoneDialog(false); setEditManagerZone(null); }} className="p-1 hover:bg-muted rounded"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Nom du manager *</label>
-                <input value={managerZoneForm.nom} onChange={e => setManagerZoneForm(p => ({ ...p, nom: e.target.value }))}
-                  placeholder="Ex: Manager Ouest"
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-muted-foreground">Départements et entrepôts associés</label>
-                  <button type="button" onClick={addDeptLine} className="text-xs text-primary hover:underline flex items-center gap-1">
-                    <Plus className="w-3 h-3" /> Ajouter
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {managerZoneForm.departements.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic px-1">Aucun département — cliquez sur Ajouter</p>
-                  )}
-                  {managerZoneForm.departements.map((d, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        value={d.code}
-                        onChange={e => updateDeptLine(i, 'code', e.target.value)}
-                        placeholder="Code dept (ex: 49)"
-                        className="w-28 px-2 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                      <select
-                        value={d.entrepotId}
-                        onChange={e => updateDeptLine(i, 'entrepotId', e.target.value)}
-                        className="flex-1 px-2 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card"
-                      >
-                        <option value="">— Entrepôt associé —</option>
-                        {entrepots.filter(e => e.actif).map(e => (
-                          <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => removeDeptLine(i)} className="p-1.5 text-muted-foreground hover:text-red-500 transition-colors">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => { setManagerZoneDialog(false); setEditManagerZone(null); }} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
-                <button onClick={handleSaveManagerZone} disabled={createManagerZoneMut.isPending || updateManagerZoneMut.isPending}
-                  className="px-3 py-2 text-xs bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" /> {editManagerZone ? 'Enregistrer' : 'Créer'}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1877,17 +1327,6 @@ export default function Parametres() {
                   {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Manager de zone <span className="text-muted-foreground/60">(optionnel)</span></label>
-                <select value={userForm.managerZoneId} onChange={e => setUserForm(prev => ({ ...prev, managerZoneId: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-card">
-                  <option value="">— Aucun —</option>
-                  {managersZone.filter(m => m.actif).map(m => (
-                    <option key={m.id} value={m.id}>{m.nom}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground/70 mt-1">Ce compte verra uniquement les commandes et mouvements liés à ce manager de zone.</p>
-              </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={closeUserDialog} className="px-3 py-2 text-xs border border-border rounded-lg hover:bg-muted">Annuler</button>
                 <button onClick={handleSaveUser} disabled={createUserMut.isPending || updateUserMut.isPending}
@@ -2014,8 +1453,6 @@ export default function Parametres() {
                       { key: 'creerArticle' as const, label: 'Créer des articles' },
                       { key: 'supprimerRecord' as const, label: 'Supprimer des enregistrements' },
                       { key: 'gererUtilisateurs' as const, label: 'Gérer les utilisateurs' },
-                      { key: 'voirCommandesSansEntrepot' as const, label: 'Voir les commandes sans entrepôt assigné' },
-                      { key: 'gererManagersZone' as const, label: 'Gérer les managers de zone' },
                     ] as { key: keyof UserPrivileges['actions']; label: string }[]).map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-2.5 bg-muted/20 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors">
                         <input
