@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   BarChart3, Upload, RefreshCw, CheckCircle2, XCircle,
   Settings2, ChevronDown, ChevronUp, FileSpreadsheet, Users,
-  Loader2, AlertCircle, Info,
+  Loader2, AlertCircle, Info, Plus, Trash2,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -168,6 +168,12 @@ export default function Consommables() {
   const [filtMoisFin, setFiltMoisFin] = useState('');
   const [editFormule, setEditFormule] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ multiplicateur: number; multiplicateurNok: number }>({ multiplicateur: 1, multiplicateurNok: 0 });
+  const [showCreateFormule, setShowCreateFormule] = useState(false);
+  const [newFormule, setNewFormule] = useState({
+    codeArticle: '', nomProduit: '', categorie: '', descriptionFormule: '',
+    conditionZone: '', conditionInfra: '', conditionEtat: '', conditionActivite: 'PROD',
+    multiplicateur: 1, multiplicateurNok: 0, excludePLP: false,
+  });
   const [showImport, setShowImport] = useState(false);
 
   // ── État import ──────────────────────────────────────────────────────────────
@@ -307,6 +313,35 @@ export default function Consommables() {
       setEditFormule(null);
       toast.success('Formule mise à jour');
     },
+  });
+
+  const createFormuleMut = useMutation({
+    mutationFn: (data: typeof newFormule) => consommablesApi.createFormule({
+      ...data,
+      categorie: data.categorie || undefined,
+      conditionZone: data.conditionZone || undefined,
+      conditionInfra: data.conditionInfra || undefined,
+      conditionEtat: data.conditionEtat || undefined,
+      conditionActivite: data.conditionActivite || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consommables-formules'] });
+      qc.invalidateQueries({ queryKey: ['consommables-calcul'] });
+      setShowCreateFormule(false);
+      setNewFormule({ codeArticle: '', nomProduit: '', categorie: '', descriptionFormule: '', conditionZone: '', conditionInfra: '', conditionEtat: '', conditionActivite: 'PROD', multiplicateur: 1, multiplicateurNok: 0, excludePLP: false });
+      toast.success('Formule créée');
+    },
+    onError: () => toast.error('Erreur lors de la création'),
+  });
+
+  const deleteFormuleMut = useMutation({
+    mutationFn: (id: string) => consommablesApi.deleteFormule(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consommables-formules'] });
+      qc.invalidateQueries({ queryKey: ['consommables-calcul'] });
+      toast.success('Formule supprimée');
+    },
+    onError: () => toast.error('Erreur lors de la suppression'),
   });
 
   const maxRep = Math.max(...repartition.map(r => r.countTotal), 1);
@@ -622,76 +657,199 @@ export default function Consommables() {
 
       {/* ── Tab : Formules ── */}
       {tab === 'formules' && (
-        <div className="flex-1 overflow-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
-              <tr>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Produit</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden md:table-cell">Formule</th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Coeff. OK</th>
-                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Coeff. NOK</th>
-                <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">Actif</th>
-                <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">Éditer</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formules.map((f, i) => (
-                <tr key={f.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
-                  <td className="px-4 py-2.5">
-                    <div className="font-medium">{f.nomProduit}</div>
-                    {f.categorie && <div className="text-xs text-muted-foreground">{f.categorie}</div>}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground hidden md:table-cell max-w-sm truncate" title={f.descriptionFormule}>
-                    {f.descriptionFormule}
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    {editFormule === f.id
-                      ? <input
-                          type="number" step="0.01" min="0"
-                          value={editValues.multiplicateur}
-                          onChange={e => setEditValues(v => ({ ...v, multiplicateur: parseFloat(e.target.value) }))}
-                          className="w-20 border border-border rounded px-2 py-0.5 text-right text-sm bg-background"
-                        />
-                      : <span className="font-mono">×{f.multiplicateur}</span>
-                    }
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    {editFormule === f.id
-                      ? <input
-                          type="number" step="0.01" min="0"
-                          value={editValues.multiplicateurNok}
-                          onChange={e => setEditValues(v => ({ ...v, multiplicateurNok: parseFloat(e.target.value) }))}
-                          className="w-20 border border-border rounded px-2 py-0.5 text-right text-sm bg-background"
-                        />
-                      : <span className="font-mono text-muted-foreground">×{f.multiplicateurNok}</span>
-                    }
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`inline-block w-2 h-2 rounded-full ${f.actif ? 'bg-green-500' : 'bg-muted-foreground'}`} />
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    {editFormule === f.id ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => updateFormuleMut.mutate({ id: f.id, data: editValues })}
-                          className="text-xs text-primary hover:underline font-medium"
-                        >Sauver</button>
-                        <button onClick={() => setEditFormule(null)} className="text-xs text-muted-foreground hover:underline">Annuler</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => { setEditFormule(f.id); setEditValues({ multiplicateur: f.multiplicateur, multiplicateurNok: f.multiplicateurNok }); }}
-                        className="p-1 hover:bg-muted rounded transition-colors"
-                        title="Modifier les coefficients"
-                      >
-                        <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                  </td>
+        <div className="flex flex-col gap-3 flex-1 min-h-0">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">{formules.length} formule{formules.length !== 1 ? 's' : ''} configurée{formules.length !== 1 ? 's' : ''}</p>
+            <button
+              onClick={() => setShowCreateFormule(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Ajouter une formule
+            </button>
+          </div>
+
+          {/* Dialog création */}
+          {showCreateFormule && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-card border border-border rounded-xl w-full max-w-lg flex flex-col gap-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+                <h3 className="font-semibold text-lg">Nouvelle formule de consommation</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Code article *</label>
+                    <input value={newFormule.codeArticle} onChange={e => setNewFormule(v => ({ ...v, codeArticle: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: ART-001" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Nom produit *</label>
+                    <input value={newFormule.nomProduit} onChange={e => setNewFormule(v => ({ ...v, nomProduit: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: Câble FO SC/APC" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Catégorie</label>
+                    <input value={newFormule.categorie} onChange={e => setNewFormule(v => ({ ...v, categorie: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: Fibre optique" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Activité</label>
+                    <input value={newFormule.conditionActivite} onChange={e => setNewFormule(v => ({ ...v, conditionActivite: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: PROD, SAV" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Zone</label>
+                    <input value={newFormule.conditionZone} onChange={e => setNewFormule(v => ({ ...v, conditionZone: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: FTTH, FTTB" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Infrastructure</label>
+                    <input value={newFormule.conditionInfra} onChange={e => setNewFormule(v => ({ ...v, conditionInfra: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: AERIEN, SOUTERRAIN" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">État</label>
+                    <input value={newFormule.conditionEtat} onChange={e => setNewFormule(v => ({ ...v, conditionEtat: e.target.value }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" placeholder="ex: OK, NOK" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Coeff. OK</label>
+                    <input type="number" step="0.01" min="0" value={newFormule.multiplicateur}
+                      onChange={e => setNewFormule(v => ({ ...v, multiplicateur: parseFloat(e.target.value) || 0 }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Coeff. NOK</label>
+                    <input type="number" step="0.01" min="0" value={newFormule.multiplicateurNok}
+                      onChange={e => setNewFormule(v => ({ ...v, multiplicateurNok: parseFloat(e.target.value) || 0 }))}
+                      className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm" />
+                  </div>
+                  <div className="flex items-center gap-2 col-span-2 pt-1">
+                    <input type="checkbox" id="excludePLP" checked={newFormule.excludePLP}
+                      onChange={e => setNewFormule(v => ({ ...v, excludePLP: e.target.checked }))}
+                      className="rounded" />
+                    <label htmlFor="excludePLP" className="text-xs text-muted-foreground">Exclure PLP</label>
+                  </div>
+                  <div className="flex flex-col gap-1 col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Description de la formule *</label>
+                    <textarea value={newFormule.descriptionFormule} onChange={e => setNewFormule(v => ({ ...v, descriptionFormule: e.target.value }))}
+                      rows={2} className="border border-border rounded-lg px-3 py-1.5 bg-background text-sm resize-none"
+                      placeholder="Description de la règle de calcul…" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                  <button onClick={() => setShowCreateFormule(false)}
+                    className="px-4 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors">
+                    Annuler
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!newFormule.codeArticle || !newFormule.nomProduit || !newFormule.descriptionFormule) {
+                        toast.error('Code article, nom produit et description sont obligatoires');
+                        return;
+                      }
+                      createFormuleMut.mutate(newFormule);
+                    }}
+                    disabled={createFormuleMut.isPending}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {createFormuleMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Créer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-auto rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Produit</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden md:table-cell">Formule</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Coeff. OK</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Coeff. NOK</th>
+                  <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">Actif</th>
+                  <th className="px-4 py-2.5 text-center font-medium text-muted-foreground">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {formules.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                      Aucune formule — cliquez sur "Ajouter une formule" pour commencer.
+                    </td>
+                  </tr>
+                )}
+                {formules.map((f, i) => (
+                  <tr key={f.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium">{f.nomProduit}</div>
+                      {f.categorie && <div className="text-xs text-muted-foreground">{f.categorie}</div>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground hidden md:table-cell max-w-sm truncate" title={f.descriptionFormule}>
+                      {f.descriptionFormule}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {editFormule === f.id
+                        ? <input
+                            type="number" step="0.01" min="0"
+                            value={editValues.multiplicateur}
+                            onChange={e => setEditValues(v => ({ ...v, multiplicateur: parseFloat(e.target.value) }))}
+                            className="w-20 border border-border rounded px-2 py-0.5 text-right text-sm bg-background"
+                          />
+                        : <span className="font-mono">×{f.multiplicateur}</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {editFormule === f.id
+                        ? <input
+                            type="number" step="0.01" min="0"
+                            value={editValues.multiplicateurNok}
+                            onChange={e => setEditValues(v => ({ ...v, multiplicateurNok: parseFloat(e.target.value) }))}
+                            className="w-20 border border-border rounded px-2 py-0.5 text-right text-sm bg-background"
+                          />
+                        : <span className="font-mono text-muted-foreground">×{f.multiplicateurNok}</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`inline-block w-2 h-2 rounded-full ${f.actif ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      {editFormule === f.id ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => updateFormuleMut.mutate({ id: f.id, data: editValues })}
+                            className="text-xs text-primary hover:underline font-medium"
+                          >Sauver</button>
+                          <button onClick={() => setEditFormule(null)} className="text-xs text-muted-foreground hover:underline">Annuler</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => { setEditFormule(f.id); setEditValues({ multiplicateur: f.multiplicateur, multiplicateurNok: f.multiplicateurNok }); }}
+                            className="p-1 hover:bg-muted rounded transition-colors"
+                            title="Modifier les coefficients"
+                          >
+                            <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Supprimer la formule "${f.nomProduit}" ?`)) {
+                                deleteFormuleMut.mutate(f.id);
+                              }
+                            }}
+                            className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                            title="Supprimer cette formule"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-400 hover:text-red-600" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

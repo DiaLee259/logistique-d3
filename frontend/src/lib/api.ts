@@ -317,8 +317,15 @@ export const consommablesApi = {
   repartition: (params?: Record<string, string>) =>
     api.get('/consommables/repartition', { params }).then(r => r.data),
   listFormules: () => api.get('/consommables/formules').then(r => r.data),
+  createFormule: (data: {
+    codeArticle: string; nomProduit: string; categorie?: string; descriptionFormule: string;
+    conditionZone?: string; conditionInfra?: string; conditionEtat?: string;
+    conditionActivite?: string; excludePLP?: boolean;
+    multiplicateur?: number; multiplicateurNok?: number; minimumQte?: number; ordre?: number;
+  }) => api.post('/consommables/formules', data).then(r => r.data),
   updateFormule: (id: string, data: { multiplicateur?: number; multiplicateurNok?: number; minimumQte?: number; actif?: boolean }) =>
     api.put(`/consommables/formules/${id}`, data).then(r => r.data),
+  deleteFormule: (id: string) => api.delete(`/consommables/formules/${id}`).then(r => r.data),
   analyse: (params?: Record<string, string>) =>
     api.get('/consommables/analyse', { params }).then(r => r.data),
   commandesArticles: (params?: Record<string, string>) =>
