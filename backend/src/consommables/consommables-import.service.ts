@@ -346,15 +346,18 @@ export class ConsommablesImportService {
       records.push({ idCas, nomTechnicien: nom, nomSociete: get('nomSociete') });
     }
 
-    // Upsert par idCas
-    let nb = 0;
-    for (const rec of records) {
-      await this.prisma.technicienRef.upsert({
-        where:  { idCas: rec.idCas },
-        update: { nomTechnicien: rec.nomTechnicien, nomSociete: rec.nomSociete, updatedAt: new Date() },
-        create: { id: uuidv4(), idCas: rec.idCas, nomTechnicien: rec.nomTechnicien, nomSociete: rec.nomSociete },
-      });
-      nb++;
+    // Upsert en batch (transaction unique → 1 round-trip réseau au lieu de N)
+    const nb = records.length;
+    if (nb > 0) {
+      await this.prisma.$transaction(
+        records.map(rec =>
+          this.prisma.technicienRef.upsert({
+            where:  { idCas: rec.idCas },
+            update: { nomTechnicien: rec.nomTechnicien, nomSociete: rec.nomSociete, updatedAt: new Date() },
+            create: { id: uuidv4(), idCas: rec.idCas, nomTechnicien: rec.nomTechnicien, nomSociete: rec.nomSociete },
+          }),
+        ),
+      );
     }
 
     this.logger.log(`Import techniciens : ${nb} enregistrements`);

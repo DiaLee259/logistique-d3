@@ -97,7 +97,105 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await this.$executeRaw`ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "quantiteValidee" INTEGER`;
       await this.$executeRaw`ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "manager" TEXT`;
 
-      this.logger.log('Tables societes/intervenants + colonnes vérifiées ✓');
+      // ── Consommables Terrain ──────────────────────────────────────────────────
+      await this.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "imports_consommable_log" (
+          "id"                TEXT NOT NULL,
+          "nomFichier"        TEXT NOT NULL,
+          "dateImport"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "nbLignesTotal"     INTEGER NOT NULL DEFAULT 0,
+          "nbLignesImportees" INTEGER NOT NULL DEFAULT 0,
+          "nbErreurs"         INTEGER NOT NULL DEFAULT 0,
+          "dureeSecondes"     DOUBLE PRECISION,
+          "statut"            TEXT NOT NULL,
+          "erreurs"           JSONB,
+          "periodeDebut"      TIMESTAMP(3),
+          "periodeFin"        TIMESTAMP(3),
+          "createdAt"         TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "imports_consommable_log_pkey" PRIMARY KEY ("id")
+        )
+      `;
+
+      await this.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "interventions_terrain" (
+          "id"                  TEXT NOT NULL,
+          "idInterventionIw"    BIGINT,
+          "idInterventionGrdv"  BIGINT,
+          "idTechnicienCas"     BIGINT,
+          "nomTechnicien"       TEXT,
+          "nomSociete"          TEXT,
+          "codeDepartement"     TEXT,
+          "departement"         TEXT,
+          "dateIntervention"    TIMESTAMP(3),
+          "moisIntervention"    TIMESTAMP(3),
+          "semaineIntervention" TEXT,
+          "technologie"         TEXT,
+          "infrastructure"      TEXT,
+          "operateur"           TEXT,
+          "typeAbonne"          TEXT,
+          "modeleModem"         TEXT,
+          "typezone"            TEXT,
+          "activites"           TEXT,
+          "typePresta"          TEXT,
+          "etat"                TEXT,
+          "codeCloture"         TEXT,
+          "categorieEchec"      TEXT,
+          "aboRacco110"         TEXT,
+          "aboRacco120"         TEXT,
+          "sourceImportId"      TEXT,
+          "createdAt"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "interventions_terrain_pkey" PRIMARY KEY ("id")
+        )
+      `;
+
+      await this.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "formules_consommable" (
+          "id"                   TEXT NOT NULL,
+          "ordre"                INTEGER NOT NULL DEFAULT 0,
+          "actif"                BOOLEAN NOT NULL DEFAULT true,
+          "codeArticle"          TEXT NOT NULL,
+          "nomProduit"           TEXT NOT NULL,
+          "categorie"            TEXT,
+          "descriptionFormule"   TEXT NOT NULL,
+          "conditionZone"        TEXT,
+          "conditionInfra"       TEXT,
+          "conditionInfraMode"   TEXT NOT NULL DEFAULT 'EQ',
+          "conditionEtat"        TEXT,
+          "conditionActivite"    TEXT NOT NULL DEFAULT 'PROD',
+          "conditionTechnologie" TEXT,
+          "conditionTypeAbonne"  TEXT,
+          "excludePLP"           BOOLEAN NOT NULL DEFAULT false,
+          "multiplicateur"       DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+          "multiplicateurNok"    DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+          "minimumQte"           INTEGER,
+          "createdAt"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "formules_consommable_pkey" PRIMARY KEY ("id")
+        )
+      `;
+
+      await this.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "formules_consommable_codeArticle_key"
+          ON "formules_consommable"("codeArticle")
+      `;
+
+      await this.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "techniciens_ref" (
+          "id"            TEXT NOT NULL,
+          "idCas"         BIGINT NOT NULL,
+          "nomTechnicien" TEXT NOT NULL,
+          "nomSociete"    TEXT,
+          "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "techniciens_ref_pkey" PRIMARY KEY ("id")
+        )
+      `;
+
+      await this.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "techniciens_ref_idCas_key" ON "techniciens_ref"("idCas")
+      `;
+
+      this.logger.log('Tables societes/intervenants/consommables + colonnes vérifiées ✓');
     } catch (err: any) {
       this.logger.warn(`ensureTables: ${err?.message ?? err}`);
     }
