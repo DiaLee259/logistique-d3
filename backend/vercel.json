@@ -6,7 +6,7 @@
     "api/index.js": {
       "memory": 512,
       "maxDuration": 30,
-      "includeFiles": "dist/**,node_modules/.prisma/**,node_modules/@prisma/client/**"
+      "includeFiles": "backend/dist/**,backend/node_modules/.prisma/**,backend/node_modules/@prisma/client/**"
     }
   },
   "rewrites": [
