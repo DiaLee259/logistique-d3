@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npx prisma migrate resolve --applied 20260429000000_add_societes_intervenants; npx prisma migrate resolve --applied 20260505000001_role_string_manager_zone; npx prisma migrate resolve --applied 20260731000001_correction_inventaire; npx prisma migrate deploy || true; npx prisma generate && npm run build",
+  "buildCommand": "npm install && npm run build:vercel",
   "installCommand": "npm install",
   "functions": {
     "api/index.js": {

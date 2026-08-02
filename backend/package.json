@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "prisma generate && nest build",
+    "build:vercel": "npx prisma migrate resolve --applied 20260429000000_add_societes_intervenants; npx prisma migrate resolve --applied 20260505000001_role_string_manager_zone; npx prisma migrate resolve --applied 20260731000001_correction_inventaire; npx prisma migrate deploy || true; npm run build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
