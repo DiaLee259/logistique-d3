@@ -97,6 +97,32 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await this.$executeRaw`ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "quantiteValidee" INTEGER`;
       await this.$executeRaw`ALTER TABLE "mouvements" ADD COLUMN IF NOT EXISTS "manager" TEXT`;
 
+      // ── Corrections d'inventaire ─────────────────────────────────────────────
+      await this.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "corrections_inventaire" (
+          "id"              TEXT NOT NULL,
+          "inventaireId"    TEXT NOT NULL,
+          "quantiteAvant"   INTEGER NOT NULL,
+          "quantiteApres"   INTEGER NOT NULL,
+          "commentaire"     TEXT NOT NULL,
+          "correctedById"   TEXT,
+          "correctedByName" TEXT NOT NULL,
+          "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "corrections_inventaire_pkey" PRIMARY KEY ("id")
+        )
+      `;
+
+      await this.$executeRaw`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'corrections_inventaire_inventaireId_fkey') THEN
+            ALTER TABLE "corrections_inventaire"
+              ADD CONSTRAINT "corrections_inventaire_inventaireId_fkey"
+              FOREIGN KEY ("inventaireId") REFERENCES "inventaires_physiques"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+          END IF;
+        END $$
+      `;
+
       // ── Consommables Terrain ──────────────────────────────────────────────────
       await this.$executeRaw`
         CREATE TABLE IF NOT EXISTS "imports_consommable_log" (
