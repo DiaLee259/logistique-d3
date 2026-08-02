@@ -206,6 +206,15 @@ export default function Consommables() {
   }, [intResult?.importId, intResult?.statut, qc]);
 
   const handleIntFile = useCallback(async (file: File, force = false) => {
+    // Vercel serverless : limite de corps de requête ~4,5 MB
+    const MAX_MB = 4;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setIntError(
+        `Fichier trop volumineux : ${(file.size / 1024 / 1024).toFixed(1)} MB (limite ${MAX_MB} MB sur Vercel). ` +
+        `Créez un nouveau fichier Excel avec uniquement les lignes nécessaires (pas de "Supprimer les lignes" sur le fichier original, les styles restent).`
+      );
+      return;
+    }
     setUploadingInt(true); setIntError(null); setIntResult(null); setIntConflict(false);
     try {
       const r = await consommablesApi.importInterventions(file, force);
