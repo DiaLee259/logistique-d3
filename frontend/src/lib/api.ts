@@ -323,6 +323,24 @@ export const consommablesApi = {
     api.get('/consommables/analyse', { params }).then(r => r.data),
   commandesArticles: (params?: Record<string, string>) =>
     api.get('/consommables/commandes-articles', { params }).then(r => r.data),
+  getImportStatus: (importId: string) =>
+    api.get(`/consommables/imports/${importId}/status`).then(r => r.data),
+  importInterventions: (file: File, force = false) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/consommables/import/interventions${force ? '?force=true' : ''}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    }).then(r => r.data);
+  },
+  importTechniciens: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/consommables/import/techniciens', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    }).then(r => r.data);
+  },
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

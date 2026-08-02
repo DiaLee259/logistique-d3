@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { consommablesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   BarChart3, Upload, RefreshCw, CheckCircle2, XCircle,
-  Settings2, ChevronDown, ChevronUp,
+  Settings2, ChevronDown, ChevronUp, FileSpreadsheet, Users,
+  Loader2, AlertCircle, Info,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -48,6 +49,97 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
   );
 }
 
+// ── Composant zone d'import ───────────────────────────────────────────────────
+
+function ImportZone({
+  label, description, icon: Icon, uploading, result, error,
+  onFile, onForce, isConflict,
+}: {
+  label: string; description: string; icon: React.ElementType;
+  uploading: boolean; result: any; error: string | null;
+  onFile: (f: File) => void; onForce?: () => void; isConflict?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const pick = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    const f = e.dataTransfer.files[0]; if (f) onFile(f);
+  }, [onFile]);
+
+  const pending = result?.statut === 'EN_COURS';
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 min-w-0">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-teal-500" />
+        <span className="font-semibold text-sm text-foreground">{label}</span>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+
+      <div
+        onClick={() => !uploading && inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={pick}
+        className={`border-2 border-dashed rounded-lg p-5 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
+          dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/20'
+        } ${uploading ? 'opacity-60 cursor-not-allowed' : ''}`}
+      >
+        {uploading ? (
+          <>
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            <p className="text-xs text-muted-foreground">Envoi en cours…</p>
+          </>
+        ) : (
+          <>
+            <Upload className="w-5 h-5 text-muted-foreground" />
+            <p className="text-xs text-center text-muted-foreground">
+              Glisser un fichier <span className="font-mono">.xlsx</span> ici<br />
+              ou <span className="text-primary font-medium">cliquer pour choisir</span>
+            </p>
+          </>
+        )}
+        <input
+          ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
+        />
+      </div>
+
+      {pending && (
+        <div className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-lg px-3 py-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+          Import en cours — traitement en arrière-plan…
+        </div>
+      )}
+
+      {result && !pending && (
+        <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg px-3 py-2">
+          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+          {result.nb !== undefined
+            ? `${(result.nb as number).toLocaleString('fr-FR')} techniciens enregistrés`
+            : `Import terminé — ${(result.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes`
+          }
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg px-3 py-2">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="break-words">{error}</p>
+            {isConflict && onForce && (
+              <button onClick={onForce} className="mt-1 underline font-medium">
+                Forcer le ré-import quand même
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
 export default function Consommables() {
@@ -59,7 +151,65 @@ export default function Consommables() {
   const [filtMoisFin, setFiltMoisFin] = useState('');
   const [editFormule, setEditFormule] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ multiplicateur: number; multiplicateurNok: number }>({ multiplicateur: 1, multiplicateurNok: 0 });
-  const [showImports, setShowImports] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+
+  // ── État import ──────────────────────────────────────────────────────────────
+  const [uploadingInt,   setUploadingInt]   = useState(false);
+  const [intResult,      setIntResult]      = useState<any>(null);
+  const [intError,       setIntError]       = useState<string | null>(null);
+  const [intConflict,    setIntConflict]    = useState(false);
+  const [pendingIntFile, setPendingIntFile] = useState<File | null>(null);
+  const [uploadingTech,  setUploadingTech]  = useState(false);
+  const [techResult,     setTechResult]     = useState<any>(null);
+  const [techError,      setTechError]      = useState<string | null>(null);
+
+  // Polling statut import asynchrone
+  useEffect(() => {
+    if (!intResult?.importId || intResult?.statut !== 'EN_COURS') return;
+    const iv = setInterval(async () => {
+      try {
+        const s = await consommablesApi.getImportStatus(intResult.importId);
+        if (s?.statut && s.statut !== 'EN_COURS') {
+          setIntResult(s);
+          clearInterval(iv);
+          if (s.statut === 'SUCCES' || s.statut === 'PARTIEL') {
+            toast.success(`Import terminé — ${(s.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes`);
+            qc.invalidateQueries({ queryKey: ['consommables-summary'] });
+            qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+          } else {
+            toast.error('Import échoué — voir l\'historique pour les détails');
+          }
+        }
+      } catch {}
+    }, 4000);
+    return () => clearInterval(iv);
+  }, [intResult?.importId, intResult?.statut, qc]);
+
+  const handleIntFile = useCallback(async (file: File, force = false) => {
+    setUploadingInt(true); setIntError(null); setIntResult(null); setIntConflict(false);
+    try {
+      const r = await consommablesApi.importInterventions(file, force);
+      setIntResult(r);
+      setPendingIntFile(null);
+      toast.success('Import démarré — traitement en arrière-plan');
+      qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+    } catch (err: any) {
+      const msg: string = err?.response?.data?.message ?? err?.message ?? 'Erreur inconnue';
+      setIntError(msg);
+      if (err?.response?.status === 409) { setIntConflict(true); setPendingIntFile(file); }
+    } finally { setUploadingInt(false); }
+  }, [qc]);
+
+  const handleTechFile = useCallback(async (file: File) => {
+    setUploadingTech(true); setTechError(null); setTechResult(null);
+    try {
+      const r = await consommablesApi.importTechniciens(file);
+      setTechResult(r);
+      toast.success(`${r.nb} techniciens enregistrés`);
+    } catch (err: any) {
+      setTechError(err?.response?.data?.message ?? err?.message ?? 'Erreur inconnue');
+    } finally { setUploadingTech(false); }
+  }, []);
 
   const params: Record<string, string> = {};
   if (filtDept) params.codeDepartement = filtDept;
@@ -97,7 +247,8 @@ export default function Consommables() {
   const { data: imports = [] } = useQuery<any[]>({
     queryKey: ['consommables-imports'],
     queryFn: () => consommablesApi.listImports(),
-    enabled: showImports,
+    enabled: showImport,
+    refetchInterval: intResult?.statut === 'EN_COURS' ? 5000 : false,
   });
 
   const updateFormuleMut = useMutation({
@@ -127,14 +278,105 @@ export default function Consommables() {
           </div>
         </div>
         <button
-          onClick={() => setShowImports(v => !v)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border rounded-lg px-3 py-1.5"
+          onClick={() => setShowImport(v => !v)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border border-border rounded-lg px-3 py-1.5 hover:bg-muted"
         >
           <Upload className="w-3.5 h-3.5" />
-          Historique imports
-          {showImports ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          Import de données
+          {showImport ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
       </div>
+
+      {/* ── Panneau Import ── */}
+      {showImport && (
+        <div className="border border-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center gap-2">
+            <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Import de données</span>
+            <span className="ml-1 text-xs text-muted-foreground/60">— Glissez un fichier Excel ou cliquez pour choisir</span>
+          </div>
+
+          {/* Info */}
+          <div className="px-4 pt-3 pb-1">
+            <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2.5">
+              <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <p>
+                <strong>Ordre recommandé :</strong> importer d'abord le <em>référentiel techniciens</em>, puis le fichier <em>interventions</em>.
+                Les noms de techniciens seront automatiquement enrichis lors de l'import interventions.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ImportZone
+              label="1. Référentiel Techniciens"
+              description="Fichier Excel avec les colonnes : ID technicien, Nom, Société. Sera utilisé pour enrichir les imports d'interventions."
+              icon={Users}
+              uploading={uploadingTech}
+              result={techResult}
+              error={techError}
+              onFile={handleTechFile}
+            />
+            <ImportZone
+              label="2. Interventions Terrain"
+              description='Fichier Excel "INTERVENTION TECHNO SMART". Les techniciens seront automatiquement réconciliés avec le référentiel importé.'
+              icon={FileSpreadsheet}
+              uploading={uploadingInt}
+              result={intResult}
+              error={intError}
+              isConflict={intConflict}
+              onFile={handleIntFile}
+              onForce={() => pendingIntFile && handleIntFile(pendingIntFile, true)}
+            />
+          </div>
+
+          {/* Historique */}
+          <div className="border-t border-border">
+            <div className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide bg-muted/20 flex items-center gap-2">
+              <RefreshCw className="w-3 h-3" />
+              Historique des imports
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/10">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Fichier</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Date</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Lignes</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Durée</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {imports.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-5 text-center text-xs text-muted-foreground">Aucun import</td></tr>
+                  ) : imports.map((imp: any) => (
+                    <tr key={imp.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground truncate max-w-xs">{imp.nomFichier}</td>
+                      <td className="px-4 py-2.5 text-xs">{formatDate(imp.dateImport)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-xs">{(imp.nbLignesImportees ?? 0).toLocaleString('fr-FR')}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-xs">{imp.dureeSecondes ? `${imp.dureeSecondes.toFixed(1)} s` : '—'}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                          imp.statut === 'SUCCES'    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          imp.statut === 'EN_COURS'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                          imp.statut === 'ECHEC'     ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                        }`}>
+                          {imp.statut === 'SUCCES'   ? <CheckCircle2 className="w-3 h-3" /> :
+                           imp.statut === 'EN_COURS' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                           <XCircle className="w-3 h-3" />}
+                          {imp.statut}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── KPI cards ── */}
       {loadingSummary ? (
@@ -156,51 +398,6 @@ export default function Consommables() {
           />
         </div>
       ) : null}
-
-      {/* ── Historique imports ── */}
-      {showImports && (
-        <div className="border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Historique des imports Excel
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/20">
-                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Fichier</th>
-                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Date</th>
-                  <th className="px-4 py-2 text-right font-medium text-muted-foreground">Lignes</th>
-                  <th className="px-4 py-2 text-right font-medium text-muted-foreground">Durée</th>
-                  <th className="px-4 py-2 text-center font-medium text-muted-foreground">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {imports.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun import</td></tr>
-                )}
-                {imports.map((imp: any) => (
-                  <tr key={imp.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground truncate max-w-xs">{imp.nomFichier}</td>
-                    <td className="px-4 py-2.5 text-xs">{formatDate(imp.dateImport)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">{fmt(imp.nbLignesImportees)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-xs">{imp.dureeSecondes ? `${imp.dureeSecondes.toFixed(1)} s` : '—'}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                        imp.statut === 'SUCCES' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        imp.statut === 'ECHEC'  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      }`}>
-                        {imp.statut === 'SUCCES' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                        {imp.statut}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* ── Filtres ── */}
       <div className="flex flex-wrap items-center gap-3">

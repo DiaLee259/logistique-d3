@@ -602,6 +602,21 @@ model FormuleConsommable {
   @@map("formules_consommable")
 }
 
+// ─── RÉFÉRENTIEL TECHNICIENS ─────────────────────────────────────────────────
+// Importé depuis le fichier de référence. Permet d'enrichir les interventions
+// terrain dont les colonnes nomTechnicien / nomSociete sont vides.
+
+model TechnicienRef {
+  id            String   @id @default(uuid())
+  idCas         BigInt   @unique
+  nomTechnicien String
+  nomSociete    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("techniciens_ref")
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 model Notification {
