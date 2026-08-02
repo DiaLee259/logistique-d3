@@ -325,6 +325,8 @@ export const consommablesApi = {
     api.get('/consommables/commandes-articles', { params }).then(r => r.data),
   getImportStatus: (importId: string) =>
     api.get(`/consommables/imports/${importId}/status`).then(r => r.data),
+  annulerImport: (importId: string) =>
+    api.post(`/consommables/imports/${importId}/annuler`).then(r => r.data),
   importInterventions: (file: File, force = false) => {
     const fd = new FormData();
     fd.append('file', file);

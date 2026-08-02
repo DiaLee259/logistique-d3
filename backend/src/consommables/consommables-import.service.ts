@@ -29,16 +29,22 @@ const INTERVENTION_COLS: Record<string, string[]> = {
   categorieEchec:      ["Catégorie d'échec", "Categorie d'echec"],
   aboRacco110:         ['AboRacco – 110 - Statut PTO et CAB avant travaux ?', 'AboRacco – 110', 'AboRacco - 110'],
   aboRacco120:         ['AboRacco – 120 - Blocage lors travaux PTO et CAB ?', 'AboRacco – 120', 'AboRacco - 120'],
+  // Colonnes de filtrage — seules les lignes éch ues et non annulées sont importées
+  estEchu:             ['Est échue ?', 'Est echu ?', 'Est échue', 'Est echou', 'Echue'],
+  estAnnule:           ['Est annulée ?', 'Est annule ?', 'Est annulée', 'Annulee'],
 };
 
 const TECH_COLS: Record<string, string[]> = {
-  idCas:         ['ID technicien CAS', 'Id technicien CAS', 'ID technicien', 'Id technicien',
-                  'idCas', 'ID_TECH', 'id_tech', 'Identifiant technicien', 'ID'],
-  nomTechnicien: ['Nom technicien', 'Nom', 'Technicien', 'Paramètre.Tech',
+  // Paramètre.xlsx: colonne "ID CAS" (17e col)
+  idCas:         ['ID CAS', 'ID technicien CAS', 'Id technicien CAS', 'ID technicien',
+                  'Id technicien', 'idCas', 'ID_TECH', 'id_tech', 'Identifiant technicien'],
+  // Paramètre.xlsx: colonne "Tech" (2e col)
+  nomTechnicien: ['Tech', 'Nom technicien', 'Nom', 'Technicien', 'Paramètre.Tech',
                   'NOM_TECH', 'nom_tech', 'Prénom et nom', 'Prenom et nom', 'Nom complet'],
-  nomSociete:    ['Société', 'Societe', 'Nom société', 'Nom societe',
-                  'NOM_SOC', 'nom_soc', 'Entreprise', 'Company', 'Nom de la société',
-                  'Paramètre.Nom de la société'],
+  // Paramètre.xlsx: colonne "Nom de la sociètèe" (14e col, typo volontaire du fichier source)
+  nomSociete:    ['Nom de la sociètèe', 'Nom de la société', 'Société', 'Societe',
+                  'Nom société', 'Nom societe', 'NOM_SOC', 'nom_soc', 'Entreprise',
+                  'Paramètre.Nom de la société', 'Paramètre.Nom de la sociètèe'],
 };
 
 const NULL_STRINGS = new Set([
@@ -47,6 +53,9 @@ const NULL_STRINGS = new Set([
 ]);
 
 const CHUNK_SIZE = 500;
+
+// IDs d'imports dont l'annulation a été demandée
+const pendingCancels = new Set<string>();
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -98,6 +107,14 @@ export class ConsommablesImportService {
       return isNaN(d.getTime()) ? null : d;
     }
     return this.parseDate(s);
+  }
+
+  private parseBoolean(s: string | null): boolean | null {
+    if (!s) return null;
+    const l = s.toLowerCase().trim();
+    if (['1', 'true', 'vrai', 'oui', 'yes'].includes(l)) return true;
+    if (['0', 'false', 'faux', 'non', 'no'].includes(l)) return false;
+    return null;
   }
 
   private findCols(headers: string[], map: Record<string, string[]>): Record<string, number> {
@@ -166,7 +183,9 @@ export class ConsommablesImportService {
 
     // Charger la feuille
     const wb = await this.loadWb(buffer);
-    const sheet = wb.getWorksheet('INTERVENTION TECHNO SMART') ?? wb.worksheets[0];
+    const sheet = wb.getWorksheet('INTERVENTIONS TECHNO SMART')
+               ?? wb.getWorksheet('INTERVENTION TECHNO SMART')
+               ?? wb.worksheets[0];
     if (!sheet) throw new Error('Aucune feuille trouvée dans le fichier');
 
     // En-têtes
@@ -186,8 +205,8 @@ export class ConsommablesImportService {
     // Traitement ligne par ligne
     let batch: any[] = [];
 
-    const flush = async () => {
-      if (!batch.length) return;
+    const flush = async (): Promise<boolean> => {
+      if (!batch.length) return false;
       try {
         await this.prisma.interventionTerrain.createMany({ data: batch });
         nbImportees += batch.length;
@@ -196,6 +215,12 @@ export class ConsommablesImportService {
         if (errors.length < 50) errors.push({ ligne: nbTotal, message: String(err?.message ?? err).slice(0, 200) });
       }
       batch = [];
+      // Vérifier si l'annulation a été demandée
+      if (pendingCancels.has(importId)) {
+        pendingCancels.delete(importId);
+        return true; // signal d'arrêt
+      }
+      return false;
     };
 
     const totalRows = sheet.rowCount;
@@ -204,6 +229,12 @@ export class ConsommablesImportService {
       nbTotal++;
 
       const get = (f: string) => colIdx[f] !== undefined ? this.cellStr(row.getCell(colIdx[f] + 1)) : null;
+
+      // ── Filtres obligatoires ─────────────────────────────────────────────────
+      const estEchu   = this.parseBoolean(get('estEchu'));
+      const estAnnule = this.parseBoolean(get('estAnnule'));
+      if (estEchu !== true) continue;    // ne garder que les interventions échues
+      if (estAnnule === true) continue;  // exclure les annulées
 
       const typezone  = get('typezone');
       const activites = get('activites');
@@ -255,7 +286,18 @@ export class ConsommablesImportService {
         sourceImportId:      importId,
       });
 
-      if (batch.length >= CHUNK_SIZE) await flush();
+      if (batch.length >= CHUNK_SIZE) {
+        const cancelled = await flush();
+        if (cancelled) {
+          const duree = (Date.now() - t0) / 1000;
+          await this.prisma.importConsommableLog.update({
+            where: { id: importId },
+            data: { statut: 'ANNULE', nbLignesTotal: nbTotal, nbLignesImportees: nbImportees, nbErreurs, dureeSecondes: duree, erreurs: [{ message: "Import annulé par l'utilisateur" }] as any },
+          });
+          this.logger.log(`Import ${filename} annulé après ${nbImportees} lignes importées`);
+          return;
+        }
+      }
     }
     await flush();
 
@@ -317,6 +359,18 @@ export class ConsommablesImportService {
 
     this.logger.log(`Import techniciens : ${nb} enregistrements`);
     return { nb, colonnesDetectees: Object.keys(colIdx) };
+  }
+
+  // ── Annulation d'un import ────────────────────────────────────────────────────
+
+  async cancelImport(importId: string) {
+    const log = await this.prisma.importConsommableLog.findUnique({
+      where: { id: importId }, select: { id: true, statut: true },
+    });
+    if (!log) throw new Error('Import introuvable');
+    if (log.statut !== 'EN_COURS') throw new Error(`Impossible d'annuler : statut = ${log.statut}`);
+    pendingCancels.add(importId);
+    return { message: 'Annulation demandée — l\'import s\'arrêtera au prochain lot' };
   }
 
   // ── Statut d'un import ────────────────────────────────────────────────────────

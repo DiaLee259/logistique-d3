@@ -53,11 +53,11 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 
 function ImportZone({
   label, description, icon: Icon, uploading, result, error,
-  onFile, onForce, isConflict,
+  onFile, onForce, onCancel, isConflict,
 }: {
   label: string; description: string; icon: React.ElementType;
   uploading: boolean; result: any; error: string | null;
-  onFile: (f: File) => void; onForce?: () => void; isConflict?: boolean;
+  onFile: (f: File) => void; onForce?: () => void; onCancel?: () => void; isConflict?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -107,13 +107,30 @@ function ImportZone({
       </div>
 
       {pending && (
-        <div className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-lg px-3 py-2">
-          <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-          Import en cours — traitement en arrière-plan…
+        <div className="flex items-center justify-between gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+            Import en cours — traitement en arrière-plan…
+          </div>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="ml-2 flex-shrink-0 text-red-600 dark:text-red-400 hover:underline font-medium"
+            >
+              Annuler
+            </button>
+          )}
         </div>
       )}
 
-      {result && !pending && (
+      {result?.statut === 'ANNULE' && (
+        <div className="flex items-center gap-2 text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-lg px-3 py-2">
+          <XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          Import annulé — {(result.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes importées avant l'arrêt
+        </div>
+      )}
+
+      {result && !pending && result.statut !== 'ANNULE' && (
         <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg px-3 py-2">
           <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
           {result.nb !== undefined
@@ -176,6 +193,9 @@ export default function Consommables() {
             toast.success(`Import terminé — ${(s.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes`);
             qc.invalidateQueries({ queryKey: ['consommables-summary'] });
             qc.invalidateQueries({ queryKey: ['consommables-imports'] });
+          } else if (s.statut === 'ANNULE') {
+            toast.warning(`Import annulé — ${(s.nbLignesImportees ?? 0).toLocaleString('fr-FR')} lignes importées`);
+            qc.invalidateQueries({ queryKey: ['consommables-imports'] });
           } else {
             toast.error('Import échoué — voir l\'historique pour les détails');
           }
@@ -199,6 +219,16 @@ export default function Consommables() {
       if (err?.response?.status === 409) { setIntConflict(true); setPendingIntFile(file); }
     } finally { setUploadingInt(false); }
   }, [qc]);
+
+  const handleCancelInt = useCallback(async () => {
+    if (!intResult?.importId) return;
+    try {
+      await consommablesApi.annulerImport(intResult.importId);
+      toast.info('Annulation demandée — l\'import s\'arrêtera au prochain lot');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Impossible d\'annuler');
+    }
+  }, [intResult?.importId]);
 
   const handleTechFile = useCallback(async (file: File) => {
     setUploadingTech(true); setTechError(null); setTechResult(null);
@@ -319,7 +349,7 @@ export default function Consommables() {
             />
             <ImportZone
               label="2. Interventions Terrain"
-              description='Fichier Excel "INTERVENTION TECHNO SMART". Les techniciens seront automatiquement réconciliés avec le référentiel importé.'
+              description='Fichier Excel "INTERVENTIONS TECHNO SMART". Seules les lignes Est échue=1 et Est annulée=0 sont importées. Les techniciens sont réconciliés avec le référentiel.'
               icon={FileSpreadsheet}
               uploading={uploadingInt}
               result={intResult}
@@ -327,6 +357,7 @@ export default function Consommables() {
               isConflict={intConflict}
               onFile={handleIntFile}
               onForce={() => pendingIntFile && handleIntFile(pendingIntFile, true)}
+              onCancel={handleCancelInt}
             />
           </div>
 

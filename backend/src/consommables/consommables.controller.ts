@@ -36,6 +36,9 @@ export class ConsommablesController {
   @Get('imports/:id/status')
   getImportStatus(@Param('id') id: string) { return this.importService.getImportStatus(id); }
 
+  @Post('imports/:id/annuler')
+  cancelImport(@Param('id') id: string) { return this.importService.cancelImport(id); }
+
   @Get('filters')
   getFilters() { return this.service.getFilters(); }
 
