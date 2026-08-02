@@ -30,25 +30,6 @@ export class QueryConsommablesDto {
   groupBy?: 'mois' | 'semaine' | 'departement' | 'technicien';
 }
 
-export class CreateFormuleDto {
-  codeArticle!: string;
-  nomProduit!: string;
-  categorie?: string;
-  descriptionFormule!: string;
-  conditionZone?: string;
-  conditionInfra?: string;
-  conditionInfraMode?: string;
-  conditionEtat?: string;
-  conditionActivite?: string;
-  conditionTechnologie?: string;
-  conditionTypeAbonne?: string;
-  excludePLP?: boolean;
-  multiplicateur?: number;
-  multiplicateurNok?: number;
-  minimumQte?: number;
-  ordre?: number;
-}
-
 export class UpdateFormuleDto {
   @IsOptional()
   multiplicateur?: number;

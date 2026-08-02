@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { QueryConsommablesDto, UpdateFormuleDto, CreateFormuleDto, AnalyseConsommablesDto } from './dto/query-consommables.dto';
-import { v4 as uuidv4 } from 'uuid';
+import { QueryConsommablesDto, UpdateFormuleDto, AnalyseConsommablesDto } from './dto/query-consommables.dto';
 
 @Injectable()
 export class ConsommablesService {
@@ -31,34 +30,6 @@ export class ConsommablesService {
     return this.prisma.formuleConsommable.findMany({
       orderBy: [{ ordre: 'asc' }, { nomProduit: 'asc' }],
     });
-  }
-
-  async createFormule(dto: CreateFormuleDto) {
-    return this.prisma.formuleConsommable.create({
-      data: {
-        id: uuidv4(),
-        codeArticle: dto.codeArticle,
-        nomProduit: dto.nomProduit,
-        categorie: dto.categorie ?? null,
-        descriptionFormule: dto.descriptionFormule,
-        conditionZone: dto.conditionZone ?? null,
-        conditionInfra: dto.conditionInfra ?? null,
-        conditionInfraMode: dto.conditionInfraMode ?? 'EQ',
-        conditionEtat: dto.conditionEtat ?? null,
-        conditionActivite: dto.conditionActivite ?? 'PROD',
-        conditionTechnologie: dto.conditionTechnologie ?? null,
-        conditionTypeAbonne: dto.conditionTypeAbonne ?? null,
-        excludePLP: dto.excludePLP ?? false,
-        multiplicateur: dto.multiplicateur ?? 1.0,
-        multiplicateurNok: dto.multiplicateurNok ?? 0.0,
-        minimumQte: dto.minimumQte ?? null,
-        ordre: dto.ordre ?? 0,
-      },
-    });
-  }
-
-  async deleteFormule(id: string) {
-    return this.prisma.formuleConsommable.delete({ where: { id } });
   }
 
   async updateFormule(id: string, dto: UpdateFormuleDto) {

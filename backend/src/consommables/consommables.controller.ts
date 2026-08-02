@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, Query,
+  Controller, Get, Post, Put, Param, Body, Query,
   UseGuards, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -7,7 +7,7 @@ import { memoryStorage } from 'multer';
 import { ConsommablesService } from './consommables.service';
 import { ConsommablesImportService } from './consommables-import.service';
 import {
-  QueryConsommablesDto, UpdateFormuleDto, CreateFormuleDto,
+  QueryConsommablesDto, UpdateFormuleDto,
   AnalyseConsommablesDto, CommandesArticlesDto,
 } from './dto/query-consommables.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -61,19 +61,9 @@ export class ConsommablesController {
 
   // ── Édition ─────────────────────────────────────────────────────────────────
 
-  @Post('formules')
-  createFormule(@Body() dto: CreateFormuleDto) {
-    return this.service.createFormule(dto);
-  }
-
   @Put('formules/:id')
   updateFormule(@Param('id') id: string, @Body() dto: UpdateFormuleDto) {
     return this.service.updateFormule(id, dto);
-  }
-
-  @Delete('formules/:id')
-  deleteFormule(@Param('id') id: string) {
-    return this.service.deleteFormule(id);
   }
 
   // ── Import ──────────────────────────────────────────────────────────────────
