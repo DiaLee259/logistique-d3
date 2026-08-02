@@ -257,6 +257,33 @@ export const notificationsApi = {
   marquerToutesLues: () => api.patch('/notifications/lire-toutes').then(r => r.data),
 };
 
+// ── Consommables ──────────────────────────────────────────────────────────────
+export const consommablesApi = {
+  summary:    () => api.get('/consommables/summary').then(r => r.data),
+  listImports: () => api.get('/consommables/imports').then(r => r.data),
+  getImportStatus: (id: string) => api.get(`/consommables/imports/${id}/status`).then(r => r.data),
+  annulerImport:   (id: string) => api.post(`/consommables/imports/${id}/annuler`).then(r => r.data),
+  getFilters:  () => api.get('/consommables/filters').then(r => r.data),
+  calcul:      (params?: Record<string, string>) => api.get('/consommables/calcul', { params }).then(r => r.data),
+  repartition: (params?: Record<string, string>) => api.get('/consommables/repartition', { params }).then(r => r.data),
+  listFormules: () => api.get('/consommables/formules').then(r => r.data),
+  updateFormule: (id: string, data: any) => api.put(`/consommables/formules/${id}`, data).then(r => r.data),
+  analyse:     (params?: Record<string, string>) => api.get('/consommables/analyse', { params }).then(r => r.data),
+  commandesArticles: (params?: Record<string, string>) => api.get('/consommables/commandes-articles', { params }).then(r => r.data),
+  importInterventions: (file: File, force = false) => {
+    const fd = new FormData(); fd.append('file', file);
+    return api.post(`/consommables/import/interventions${force ? '?force=true' : ''}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+  importTechniciens: (file: File) => {
+    const fd = new FormData(); fd.append('file', file);
+    return api.post('/consommables/import/techniciens', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+};
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminApi = {
   resetMouvements: () => api.post('/admin/reset/mouvements').then(r => r.data),
