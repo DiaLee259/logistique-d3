@@ -41,6 +41,8 @@ export const DEFAULT_PRIVILEGES: UserPrivileges = {
 const SELECT_USER = {
   id: true, email: true, nom: true, prenom: true,
   role: true, actif: true, createdAt: true, privileges: true,
+  managerZoneId: true,
+  managerZone: { select: { id: true, nom: true, departements: true } },
 } as const;
 
 @Injectable()

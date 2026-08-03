@@ -1,7 +1,7 @@
-export type Role = 'ADMIN' | 'LOGISTICIEN_1' | 'LOGISTICIEN_2' | 'CHEF_PROJET';
+export type Role = string;
 export type TypeMouvement = 'ENTREE' | 'SORTIE';
 export type ProdSav = 'PROD' | 'SAV' | 'MALFACON' | 'AUTRE';
-export type StatutCommande = 'EN_ATTENTE' | 'EN_VALIDATION' | 'VALIDEE' | 'EN_ATTENTE_LOG2' | 'EXPEDIEE' | 'LIVREE' | 'ANNULEE';
+export type StatutCommande = 'EN_ATTENTE' | 'EN_VALIDATION' | 'VALIDEE' | 'EN_ATTENTE_LOG2' | 'EXPEDIEE' | 'LIVREE' | 'ANNULEE' | 'REFUSEE';
 export type StatutLivraison = 'EN_ATTENTE' | 'EN_COURS' | 'LIVREE' | 'INCIDENT';
 
 export type PrivilegeLevel = 'NONE' | 'LECTURE' | 'EDITEUR' | 'ADMIN';
@@ -19,11 +19,13 @@ export interface UserPrivileges {
   };
   entrepots: string[];   // [] = tous visibles, sinon liste d'IDs
   actions: {
-    importExcel:       boolean;
-    exportExcel:       boolean;
-    creerArticle:      boolean;
-    supprimerRecord:   boolean;
-    gererUtilisateurs: boolean;
+    importExcel:                boolean;
+    exportExcel:                boolean;
+    creerArticle:               boolean;
+    supprimerRecord:            boolean;
+    gererUtilisateurs:          boolean;
+    voirCommandesSansEntrepot:  boolean;  // voir les commandes sans entrepôt assigné
+    gererManagersZone:          boolean;
   };
 }
 
@@ -40,11 +42,13 @@ export const DEFAULT_PRIVILEGES: UserPrivileges = {
   },
   entrepots: [],
   actions: {
-    importExcel:       true,
-    exportExcel:       true,
-    creerArticle:      false,
-    supprimerRecord:   false,
-    gererUtilisateurs: false,
+    importExcel:                true,
+    exportExcel:                true,
+    creerArticle:               false,
+    supprimerRecord:            false,
+    gererUtilisateurs:          false,
+    voirCommandesSansEntrepot:  false,
+    gererManagersZone:          false,
   },
 };
 
@@ -57,6 +61,8 @@ export interface User {
   actif: boolean;
   createdAt: string;
   privileges?: UserPrivileges;
+  managerZoneId?: string | null;
+  managerZone?: { id: string; nom: string; departements: ManagerZoneDept[] } | null;
 }
 
 export interface Entrepot {
@@ -117,6 +123,7 @@ export interface Mouvement {
   cout?: number;
   envoye: boolean;
   recu: boolean;
+  transfertId?: string | null;  // présent si c'est un transfert inter-entrepôt
   article?: Article;
   entrepot?: Entrepot;
   user?: User;
@@ -132,6 +139,36 @@ export interface LigneCommande {
   commentaire?: string;
   stockDisponible?: number;
   article?: Article;
+}
+
+export interface ManagerZoneDept {
+  code: string;
+  entrepotId: string;
+  entrepotCode: string;
+}
+
+export interface ManagerZone {
+  id: string;
+  nom: string;
+  departements: ManagerZoneDept[];
+  actif: boolean;
+  createdAt: string;
+  liens?: { id: string; nom: string }[];
+}
+
+export interface LienPrestataire {
+  id: string;
+  token: string;
+  nom: string;
+  actif: boolean;
+  expiresAt?: string | null;
+  createdBy?: string | null;
+  utilisations: number;
+  createdAt: string;
+  managerZoneId?: string | null;
+  typePrestataire?: string | null;
+  departementsActifs: string[];
+  managerZone?: { id: string; nom: string; departements: ManagerZoneDept[] } | null;
 }
 
 export interface Commande {
@@ -165,6 +202,8 @@ export interface Commande {
   expediteurId?: string;
   intervenantId?: string;
   entrepotSource?: string;    // entrepôt choisi par Log1 pour l'expédition
+  lienId?: string | null;
+  typePrestataire?: string | null;
   dateValidation?: string;
   telephoneDestinataire?: string;
   adresseLivraison?: string;

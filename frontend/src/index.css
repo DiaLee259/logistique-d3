@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── THEME CLAIR (défaut) ─────────────────────────────────────────── */
   :root {
     --background: 220 20% 97%;
     --foreground: 220 25% 10%;
@@ -26,36 +27,431 @@
     --input: 220 13% 88%;
     --ring: 217 71% 45%;
     --radius: 0.5rem;
-    --sidebar-background: 220 25% 12%;
+    /* Sidebar sombre contrastée */
+    --sidebar-background: 220 28% 13%;
     --sidebar-foreground: 220 20% 85%;
-    --sidebar-primary: 217 71% 55%;
+    --sidebar-primary: 217 71% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 25% 18%;
+    --sidebar-accent: 220 28% 20%;
     --sidebar-accent-foreground: 220 20% 90%;
-    --sidebar-border: 220 25% 18%;
-    --sidebar-ring: 217 71% 55%;
+    --sidebar-border: 220 28% 20%;
+    --sidebar-ring: 217 71% 58%;
   }
 
+  /* ── THEME SOMBRE ─────────────────────────────────────────────────── */
   .dark {
-    --background: 220 18% 16%;
+    --background: 222 20% 14%;
     --foreground: 220 15% 90%;
-    --card: 220 18% 21%;
+    --card: 222 20% 19%;
     --card-foreground: 220 15% 90%;
-    --popover: 220 18% 21%;
+    --popover: 222 20% 19%;
     --popover-foreground: 220 15% 90%;
-    --primary: 217 71% 58%;
+    --primary: 217 71% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 18% 27%;
+    --secondary: 222 20% 25%;
     --secondary-foreground: 220 15% 82%;
-    --muted: 220 18% 25%;
-    --muted-foreground: 220 10% 75%;
-    --accent: 38 92% 55%;
+    --muted: 222 20% 23%;
+    --muted-foreground: 220 10% 58%;
+    --accent: 38 85% 58%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 18% 30%;
-    --input: 220 18% 30%;
-    --ring: 217 71% 58%;
+    --border: 222 20% 28%;
+    --input: 222 20% 28%;
+    --ring: 217 71% 60%;
+    /* Sidebar légèrement distincte (plus claire) */
+    --sidebar-background: 222 22% 10%;
+    --sidebar-foreground: 220 15% 82%;
+    --sidebar-primary: 217 71% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 22% 16%;
+    --sidebar-accent-foreground: 220 15% 88%;
+    --sidebar-border: 222 22% 18%;
+    --sidebar-ring: 217 71% 62%;
+  }
+
+  /* ── THEME OCÉAN ──────────────────────────────────────────────────── */
+  .dark.theme-ocean {
+    --background: 200 45% 11%;
+    --foreground: 195 25% 88%;
+    --card: 200 45% 16%;
+    --card-foreground: 195 25% 88%;
+    --popover: 200 45% 16%;
+    --popover-foreground: 195 25% 88%;
+    --primary: 178 60% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 200 40% 22%;
+    --secondary-foreground: 195 20% 80%;
+    --muted: 200 40% 20%;
+    --muted-foreground: 195 15% 58%;
+    --accent: 35 85% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 200 40% 25%;
+    --input: 200 40% 25%;
+    --ring: 178 60% 42%;
+    /* Sidebar bleu marine profond — contraste avec teal */
+    --sidebar-background: 215 55% 8%;
+    --sidebar-foreground: 210 25% 80%;
+    --sidebar-primary: 178 60% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 50% 14%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 215 50% 16%;
+    --sidebar-ring: 178 60% 48%;
+  }
+
+  /* ── THEME FORÊT ──────────────────────────────────────────────────── */
+  .dark.theme-foret {
+    --background: 140 30% 10%;
+    --foreground: 140 20% 88%;
+    --card: 140 30% 15%;
+    --card-foreground: 140 20% 88%;
+    --popover: 140 30% 15%;
+    --popover-foreground: 140 20% 88%;
+    --primary: 148 58% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 25% 20%;
+    --secondary-foreground: 140 15% 80%;
+    --muted: 140 25% 18%;
+    --muted-foreground: 140 12% 55%;
+    --accent: 38 85% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 25% 23%;
+    --input: 140 25% 23%;
+    --ring: 148 58% 40%;
+    /* Sidebar indigo foncé — contraste avec vert */
+    --sidebar-background: 245 40% 9%;
+    --sidebar-foreground: 245 20% 82%;
+    --sidebar-primary: 148 58% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 245 38% 15%;
+    --sidebar-accent-foreground: 245 18% 88%;
+    --sidebar-border: 245 38% 17%;
+    --sidebar-ring: 148 58% 48%;
+  }
+
+  /* ── THEME ARDOISE ────────────────────────────────────────────────── */
+  .dark.theme-ardoise {
+    --background: 210 22% 15%;
+    --foreground: 210 15% 88%;
+    --card: 210 22% 20%;
+    --card-foreground: 210 15% 88%;
+    --popover: 210 22% 20%;
+    --popover-foreground: 210 15% 88%;
+    --primary: 205 65% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 18% 26%;
+    --secondary-foreground: 210 12% 80%;
+    --muted: 210 18% 24%;
+    --muted-foreground: 210 10% 55%;
+    --accent: 38 85% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 18% 28%;
+    --input: 210 18% 28%;
+    --ring: 205 65% 52%;
+    /* Sidebar brun chaud — contraste avec bleu ardoise */
+    --sidebar-background: 25 32% 9%;
+    --sidebar-foreground: 25 20% 80%;
+    --sidebar-primary: 205 65% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 25 28% 15%;
+    --sidebar-accent-foreground: 25 18% 85%;
+    --sidebar-border: 25 28% 17%;
+    --sidebar-ring: 205 65% 58%;
+  }
+
+  /* ── THEME AMÉTHYSTE ──────────────────────────────────────────────── */
+  .dark.theme-amethyste {
+    --background: 270 28% 12%;
+    --foreground: 265 20% 90%;
+    --card: 270 28% 17%;
+    --card-foreground: 265 20% 90%;
+    --popover: 270 28% 17%;
+    --popover-foreground: 265 20% 90%;
+    --primary: 262 72% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 270 24% 23%;
+    --secondary-foreground: 265 15% 82%;
+    --muted: 270 24% 21%;
+    --muted-foreground: 265 12% 58%;
+    --accent: 38 85% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 270 24% 26%;
+    --input: 270 24% 26%;
+    --ring: 262 72% 68%;
+    /* Sidebar teal sombre — contraste avec violet */
+    --sidebar-background: 178 40% 7%;
+    --sidebar-foreground: 178 20% 80%;
+    --sidebar-primary: 262 72% 72%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 178 35% 12%;
+    --sidebar-accent-foreground: 178 18% 85%;
+    --sidebar-border: 178 35% 14%;
+    --sidebar-ring: 262 72% 72%;
+  }
+
+  /* ── THEME AURORE ─────────────────────────────────────────────────── */
+  .dark.theme-aurore {
+    --background: 28 32% 12%;
+    --foreground: 35 20% 88%;
+    --card: 28 32% 17%;
+    --card-foreground: 35 20% 88%;
+    --popover: 28 32% 17%;
+    --popover-foreground: 35 20% 88%;
+    --primary: 38 88% 55%;
+    --primary-foreground: 0 0% 8%;
+    --secondary: 28 28% 22%;
+    --secondary-foreground: 35 15% 80%;
+    --muted: 28 28% 20%;
+    --muted-foreground: 35 10% 55%;
+    --accent: 15 80% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 28 28% 25%;
+    --input: 28 28% 25%;
+    --ring: 38 88% 55%;
+    /* Sidebar vert forêt — contraste avec amber chaud */
+    --sidebar-background: 148 38% 7%;
+    --sidebar-foreground: 148 20% 80%;
+    --sidebar-primary: 38 88% 60%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 148 32% 12%;
+    --sidebar-accent-foreground: 148 18% 85%;
+    --sidebar-border: 148 32% 14%;
+    --sidebar-ring: 38 88% 60%;
+  }
+
+  /* ── THEME CORAIL (clair) ─────────────────────────────────────────── */
+  .theme-corail {
+    --background: 30 35% 96%;
+    --foreground: 20 35% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 35% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 35% 12%;
+    --primary: 12 80% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 25% 90%;
+    --secondary-foreground: 20 30% 20%;
+    --muted: 30 25% 93%;
+    --muted-foreground: 20 15% 42%;
+    --accent: 178 55% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 20% 87%;
+    --input: 30 20% 87%;
+    --ring: 12 80% 52%;
+    /* Sidebar teal sombre — contraste avec crème corail */
+    --sidebar-background: 178 50% 12%;
+    --sidebar-foreground: 178 25% 82%;
+    --sidebar-primary: 12 80% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 178 45% 18%;
+    --sidebar-accent-foreground: 178 22% 88%;
+    --sidebar-border: 178 45% 20%;
+    --sidebar-ring: 12 80% 60%;
+  }
+
+  /* ── THEME LAVANDE (clair) ────────────────────────────────────────── */
+  .theme-lavande {
+    --background: 255 30% 97%;
+    --foreground: 250 35% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 250 35% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 250 35% 12%;
+    --primary: 258 68% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 255 20% 91%;
+    --secondary-foreground: 250 30% 22%;
+    --muted: 255 20% 94%;
+    --muted-foreground: 250 12% 42%;
+    --accent: 325 65% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 255 15% 87%;
+    --input: 255 15% 87%;
+    --ring: 258 68% 58%;
+    /* Sidebar indigo marine — contraste avec lavande clair */
+    --sidebar-background: 230 48% 11%;
+    --sidebar-foreground: 230 22% 83%;
+    --sidebar-primary: 258 68% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 42% 17%;
+    --sidebar-accent-foreground: 230 20% 88%;
+    --sidebar-border: 230 42% 19%;
+    --sidebar-ring: 258 68% 68%;
+  }
+
+  /* ── THEME MENTHE (clair) ─────────────────────────────────────────── */
+  .theme-menthe {
+    --background: 150 25% 96%;
+    --foreground: 160 35% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 160 35% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 35% 10%;
+    --primary: 155 60% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 18% 90%;
+    --secondary-foreground: 160 28% 20%;
+    --muted: 150 18% 93%;
+    --muted-foreground: 160 10% 42%;
+    --accent: 28 80% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 15% 86%;
+    --input: 150 15% 86%;
+    --ring: 155 60% 38%;
+    /* Sidebar bordeaux — contraste avec menthe vert */
+    --sidebar-background: 340 42% 11%;
+    --sidebar-foreground: 340 22% 83%;
+    --sidebar-primary: 155 60% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 36% 17%;
+    --sidebar-accent-foreground: 340 20% 88%;
+    --sidebar-border: 340 36% 19%;
+    --sidebar-ring: 155 60% 48%;
+  }
+
+  /* ── THEME CIEL (clair) ───────────────────────────────────────────── */
+  .theme-ciel {
+    --background: 210 38% 96%;
+    --foreground: 215 40% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 40% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 40% 12%;
+    --primary: 212 82% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 25% 90%;
+    --secondary-foreground: 215 35% 22%;
+    --muted: 210 25% 93%;
+    --muted-foreground: 215 12% 42%;
+    --accent: 265 65% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 20% 86%;
+    --input: 210 20% 86%;
+    --ring: 212 82% 48%;
+    /* Sidebar violet profond — contraste avec bleu ciel */
+    --sidebar-background: 258 48% 11%;
+    --sidebar-foreground: 258 22% 83%;
+    --sidebar-primary: 212 82% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 258 42% 17%;
+    --sidebar-accent-foreground: 258 20% 88%;
+    --sidebar-border: 258 42% 19%;
+    --sidebar-ring: 212 82% 58%;
+  }
+
+  /* ── THEME BORDEAUX (sombre) ──────────────────────────────────────── */
+  .dark.theme-bordeaux {
+    --background: 348 30% 11%;
+    --foreground: 345 20% 90%;
+    --card: 348 30% 16%;
+    --card-foreground: 345 20% 90%;
+    --popover: 348 30% 16%;
+    --popover-foreground: 345 20% 90%;
+    --primary: 340 72% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 348 25% 22%;
+    --secondary-foreground: 345 15% 82%;
+    --muted: 348 25% 20%;
+    --muted-foreground: 345 10% 58%;
+    --accent: 38 82% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 348 25% 25%;
+    --input: 348 25% 25%;
+    --ring: 340 72% 62%;
+    /* Sidebar kaki olive — contraste avec bordeaux rosé */
+    --sidebar-background: 42 30% 9%;
+    --sidebar-foreground: 42 20% 80%;
+    --sidebar-primary: 340 72% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 42 25% 14%;
+    --sidebar-accent-foreground: 42 18% 85%;
+    --sidebar-border: 42 25% 16%;
+    --sidebar-ring: 340 72% 68%;
+  }
+
+  /* ── THEME PIVOINE (clair pastel) ────────────────────────────────── */
+  .theme-pivoine {
+    --background: 340 30% 97%;
+    --foreground: 340 30% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 340 30% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 340 30% 14%;
+    --primary: 340 55% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 20% 92%;
+    --secondary-foreground: 340 25% 22%;
+    --muted: 340 18% 94%;
+    --muted-foreground: 340 12% 45%;
+    --accent: 195 48% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 340 16% 88%;
+    --input: 340 16% 88%;
+    --ring: 340 55% 58%;
+    /* Sidebar vieux rose profond — reste dans la palette mais plus soutenu */
+    --sidebar-background: 340 35% 14%;
+    --sidebar-foreground: 340 22% 85%;
+    --sidebar-primary: 340 55% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 30% 20%;
+    --sidebar-accent-foreground: 340 20% 90%;
+    --sidebar-border: 340 30% 22%;
+    --sidebar-ring: 340 55% 65%;
+  }
+
+  /* ── THEME DRAGON BALL Z ──────────────────────────────────────────── */
+  .dark.theme-dbz {
+    --background: 222 55% 8%;
+    --foreground: 40 25% 92%;
+    --card: 222 50% 12%;
+    --card-foreground: 40 25% 92%;
+    --popover: 222 50% 12%;
+    --popover-foreground: 40 25% 92%;
+    --primary: 24 98% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 45% 18%;
+    --secondary-foreground: 40 20% 82%;
+    --muted: 222 45% 16%;
+    --muted-foreground: 222 15% 58%;
+    --accent: 46 98% 52%;
+    --accent-foreground: 222 55% 8%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 45% 20%;
+    --input: 222 45% 20%;
+    --ring: 24 98% 52%;
+    /* Sidebar bleu espace profond — contraste avec orange Goku */
+    --sidebar-background: 230 70% 5%;
+    --sidebar-foreground: 40 22% 85%;
+    --sidebar-primary: 24 98% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 60% 10%;
+    --sidebar-accent-foreground: 40 20% 88%;
+    --sidebar-border: 230 60% 12%;
+    --sidebar-ring: 24 98% 58%;
   }
 
   * { @apply border-border; }
@@ -64,7 +460,6 @@
     font-size: 13px;
     line-height: 1.5;
   }
-  /* Uniformisation des tailles de police */
   h1 { font-size: 1.1rem; }
   h2 { font-size: 1rem; }
   h3 { font-size: 0.875rem; }

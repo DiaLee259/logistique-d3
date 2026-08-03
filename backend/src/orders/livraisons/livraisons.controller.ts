@@ -47,6 +47,29 @@ export class LivraisonsController {
     return this.service.findAll({ ...filters, userEntrepots });
   }
 
+  // ── Rapport livraisons (avant :id) ───────────────────────────────────────
+
+  @Get('rapport')
+  async getRapport(@Query() params: any, @Res() res: Response) {
+    if (!params.dateDebut || !params.dateFin) {
+      res.status(400).json({ message: 'dateDebut et dateFin sont requis' });
+      return;
+    }
+    const format = params.format || 'excel';
+    const data = await this.service.getRapportLivraisons({
+      dateDebut: params.dateDebut,
+      dateFin: params.dateFin,
+      articleId: params.articleId || undefined,
+      entrepotId: params.entrepotId || undefined,
+      format,
+    });
+    if (format === 'json') { res.json(data); return; }
+    const filename = `rapport-livraisons-${params.dateDebut}-au-${params.dateFin}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(data);
+  }
+
   // ── Corbeille — AVANT :id ─────────────────────────────────────────────────
 
   @Get('corbeille')
@@ -66,6 +89,11 @@ export class LivraisonsController {
   @Post()
   create(@Body() body: any, @Request() req) {
     return this.service.create(body, req.user?.id);
+  }
+
+  @Patch(':id/lignes/:ligneId')
+  corrigerLigne(@Param('id') id: string, @Param('ligneId') ligneId: string, @Body() body: any, @Request() req: any) {
+    return this.service.corrigerLigne(id, ligneId, body, req.user?.id);
   }
 
   @Patch(':id/statut')

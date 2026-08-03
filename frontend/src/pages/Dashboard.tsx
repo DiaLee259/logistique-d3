@@ -83,8 +83,8 @@ export default function Dashboard() {
   });
 
   const { data: demandeurs = [] } = useQuery<{ demandeur: string; commandes: number }[]>({
-    queryKey: ['dashboard-demandeurs', filterMois],
-    queryFn: () => dashboardApi.demandeurs(filterMois ? { mois: filterMois } : {}),
+    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot],
+    queryFn: () => dashboardApi.demandeurs({ ...(filterMois ? { mois: filterMois } : {}), ...(filterEntrepot ? { entrepotId: filterEntrepot } : {}) }),
     enabled: visible.demandeurs,
   });
 
@@ -94,21 +94,21 @@ export default function Dashboard() {
     expeditionToLivraison: number | null;
     totalCommandesAnalysees?: number;
   }>({
-    queryKey: ['dashboard-delais'],
-    queryFn: dashboardApi.delais,
+    queryKey: ['dashboard-delais', filterEntrepot],
+    queryFn: () => dashboardApi.delais(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
     refetchInterval: 60_000,
     enabled: visible.delais,
   });
 
   const { data: topArticles = [] } = useQuery<{ nom: string; reference: string; volume: number }[]>({
-    queryKey: ['dashboard-top-articles'],
-    queryFn: () => dashboardApi.topArticles(),
+    queryKey: ['dashboard-top-articles', filterEntrepot],
+    queryFn: () => dashboardApi.topArticles(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
     enabled: visible.topArticles,
   });
 
   const { data: commandesStats = [] } = useQuery<{ statut: string; count: number }[]>({
-    queryKey: ['dashboard-commandes'],
-    queryFn: () => dashboardApi.commandes(),
+    queryKey: ['dashboard-commandes', filterEntrepot],
+    queryFn: () => dashboardApi.commandes(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
     refetchInterval: 15_000,
     enabled: visible.statuts,
   });

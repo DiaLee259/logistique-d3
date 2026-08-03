@@ -10,12 +10,6 @@ datasource db {
 
 // ─── ENUMS ────────────────────────────────────────────────────────────────────
 
-enum Role {
-  ADMIN
-  LOGISTICIEN_1
-  LOGISTICIEN_2
-  CHEF_PROJET
-}
 
 enum TypeMouvement {
   ENTREE
@@ -30,7 +24,7 @@ enum StatutCommande {
   EXPEDIEE             // Expédiée par Log2
   LIVREE               // Confirmée reçue par le prestataire
   ANNULEE
-  REFUSEE              // Valeur présente en base (prod) — requise pour la désérialisation Prisma
+  REFUSEE              // Refusée par Log1 avec motif
 }
 
 enum StatutLivraison {
@@ -50,21 +44,23 @@ enum ProdSav {
 // ─── UTILISATEURS ─────────────────────────────────────────────────────────────
 
 model User {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  password   String
-  nom        String
-  prenom     String
-  role       Role     @default(LOGISTICIEN_2)
-  actif      Boolean  @default(true)
-  privileges Json?    // UserPrivileges JSON object
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  nom            String
+  prenom         String
+  role           String   @default("LOGISTICIEN_2")
+  actif          Boolean  @default(true)
+  privileges     Json?    // UserPrivileges JSON object
+  managerZoneId  String?  // liaison optionnelle à un ManagerZone
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   commandesValidees  Commande[] @relation("ValideurLog1")
   commandesExpediees Commande[] @relation("ExpediteurLog2")
   mouvements         Mouvement[]
   commandesTS        CommandeTS[]
+  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -160,13 +156,19 @@ model Mouvement {
   recu               Boolean       @default(false)
   userId             String?
   commandeId         String?
+  livraisonId        String?       // livraison fournisseur qui a généré ce mouvement
+  transfertId        String?       // UUID liant les 2 mouvements d'un transfert inter-entrepôt
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+  deletedById        String?
+  deletedByName      String?
 
-  article  Article   @relation(fields: [articleId], references: [id])
-  entrepot Entrepot  @relation(fields: [entrepotId], references: [id])
-  user     User?     @relation(fields: [userId], references: [id])
-  commande Commande? @relation(fields: [commandeId], references: [id])
+  article   Article    @relation(fields: [articleId], references: [id])
+  entrepot  Entrepot   @relation(fields: [entrepotId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
+  commande  Commande?  @relation(fields: [commandeId], references: [id])
+  livraison Livraison? @relation(fields: [livraisonId], references: [id], onDelete: SetNull)
 
   @@map("mouvements")
 }
@@ -193,6 +195,7 @@ model Commande {
   statut               StatutCommande @default(EN_ATTENTE)
   commentaire          String?
   commentaireLog2      String?
+  commentaireRefus     String?   // motif de refus Log1
   fichierExcelUrl      String?
   fichierPerceptionUrl String?
   bonRetourUrl         String?
@@ -211,6 +214,12 @@ model Commande {
   intervenantId            String?
 
   entrepotSource           String?        // entrepôt choisi par Log1 à la validation
+  entrepotDestinationId    String?        // entrepôt destination (commandes de type TRANSFERT)
+  typeCommande             String?        @default("STANDARD") // STANDARD | TRANSFERT
+
+  lienId           String?
+  typePrestataire  String?
+  lien             LienPrestataire? @relation(fields: [lienId], references: [id])
 
   valideur     User?        @relation("ValideurLog1", fields: [valideurId], references: [id])
   expediteur   User?        @relation("ExpediteurLog2", fields: [expediteurId], references: [id])
@@ -243,17 +252,38 @@ model LigneCommande {
   @@map("lignes_commande")
 }
 
+// ─── MANAGER DE ZONE ──────────────────────────────────────────────────────────
+
+model ManagerZone {
+  id           String              @id @default(uuid())
+  nom          String
+  departements Json                @default("[]")
+  actif        Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  liens        LienPrestataire[]
+  users        User[]
+
+  @@map("managers_zone")
+}
+
 // ─── LIEN PRESTATAIRE ─────────────────────────────────────────────────────────
 
 model LienPrestataire {
-  id          String    @id @default(uuid())
-  token       String    @unique @default(uuid())
-  nom         String    // libellé du lien ex: "Formulaire commande Dept 49"
-  actif       Boolean   @default(true)
-  expiresAt   DateTime?
-  createdBy   String?
-  utilisations Int      @default(0)
-  createdAt   DateTime  @default(now())
+  id                 String       @id @default(uuid())
+  token              String       @unique @default(uuid())
+  nom                String
+  actif              Boolean      @default(true)
+  expiresAt          DateTime?
+  createdBy          String?
+  utilisations       Int          @default(0)
+  createdAt          DateTime     @default(now())
+
+  managerZoneId      String?
+  typePrestataire    String?
+  departementsActifs String[]     @default([])
+
+  managerZone        ManagerZone? @relation(fields: [managerZoneId], references: [id])
+  commandes          Commande[]
 
   @@map("liens_prestataire")
 }
@@ -277,9 +307,10 @@ model Livraison {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  entrepot Entrepot         @relation(fields: [entrepotId], references: [id])
-  commande Commande?        @relation(fields: [commandeId], references: [id])
-  lignes   LigneLivraison[]
+  entrepot   Entrepot         @relation(fields: [entrepotId], references: [id])
+  commande   Commande?        @relation(fields: [commandeId], references: [id])
+  lignes     LigneLivraison[]
+  mouvements Mouvement[]
 
   @@map("livraisons")
 }
@@ -320,17 +351,36 @@ model Consommation {
 // ─── INVENTAIRE PHYSIQUE ──────────────────────────────────────────────────────
 
 model InventairePhysique {
-  id          String   @id @default(uuid())
-  articleId   String
-  entrepotId  String
-  quantite    Int
-  date        DateTime @default(now())
-  userId      String?
-  commentaire String?
+  id            String    @id @default(uuid())
+  articleId     String
+  entrepotId    String
+  quantite      Int
+  date          DateTime  @default(now())
+  userId        String?
+  commentaire   String?
+  deletedAt     DateTime?
+  deletedById   String?
+  deletedByName String?
 
-  article Article @relation(fields: [articleId], references: [id])
+  article      Article                @relation(fields: [articleId], references: [id])
+  corrections  CorrectionInventaire[]
 
   @@map("inventaires_physiques")
+}
+
+model CorrectionInventaire {
+  id              String   @id @default(uuid())
+  inventaireId    String
+  quantiteAvant   Int
+  quantiteApres   Int
+  commentaire     String
+  correctedById   String?
+  correctedByName String
+  createdAt       DateTime @default(now())
+
+  inventaire InventairePhysique @relation(fields: [inventaireId], references: [id], onDelete: Cascade)
+
+  @@map("corrections_inventaire")
 }
 
 // ─── COMMANDES TS (APPROVISIONNEMENT PÉRIODIQUE) ──────────────────────────────
@@ -435,103 +485,4 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@map("notifications")
-}
-
-// ─── CONSOMMABLES TERRAIN ─────────────────────────────────────────────────────
-
-model ImportConsommableLog {
-  id                String    @id @default(cuid())
-  nomFichier        String
-  dateImport        DateTime  @default(now())
-  nbLignesTotal     Int       @default(0)
-  nbLignesImportees Int       @default(0)
-  nbErreurs         Int       @default(0)
-  dureeSecondes     Float?
-  statut            String
-  erreurs           Json?
-  periodeDebut      DateTime?
-  periodeFin        DateTime?
-  createdAt         DateTime  @default(now())
-
-  interventions InterventionTerrain[]
-
-  @@map("imports_consommable_log")
-}
-
-model InterventionTerrain {
-  id                  String    @id @default(cuid())
-  idInterventionIw    BigInt?
-  idInterventionGrdv  BigInt?
-  idTechnicienCas     BigInt?
-  nomTechnicien       String?
-  nomSociete          String?
-  codeDepartement     String?
-  departement         String?
-  dateIntervention    DateTime?
-  moisIntervention    DateTime?
-  semaineIntervention String?
-  technologie         String?
-  infrastructure      String?
-  operateur           String?
-  typeAbonne          String?
-  modeleModem         String?
-  typezone            String?
-  activites           String?
-  typePresta          String?
-  etat                String?
-  codeCloture         String?
-  categorieEchec      String?
-  aboRacco110         String?
-  aboRacco120         String?
-  sourceImportId      String?
-  createdAt           DateTime  @default(now())
-
-  sourceImport ImportConsommableLog? @relation(fields: [sourceImportId], references: [id], onDelete: SetNull)
-
-  @@index([typezone, activites, etat])
-  @@index([typezone, activites, etat, infrastructure])
-  @@index([technologie, activites, typeAbonne, etat])
-  @@index([codeDepartement])
-  @@index([moisIntervention])
-  @@index([semaineIntervention])
-  @@index([nomTechnicien])
-  @@index([nomSociete])
-  @@index([sourceImportId])
-  @@map("interventions_terrain")
-}
-
-model FormuleConsommable {
-  id                   String   @id @default(cuid())
-  ordre                Int      @default(0)
-  actif                Boolean  @default(true)
-  codeArticle          String   @unique
-  nomProduit           String
-  categorie            String?
-  descriptionFormule   String
-  conditionZone        String?
-  conditionInfra       String?
-  conditionInfraMode   String   @default("EQ")
-  conditionEtat        String?
-  conditionActivite    String   @default("PROD")
-  conditionTechnologie String?
-  conditionTypeAbonne  String?
-  excludePLP           Boolean  @default(false)
-  multiplicateur       Float    @default(1.0)
-  multiplicateurNok    Float    @default(0.0)
-  minimumQte           Int?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @default(now())
-
-  @@map("formules_consommable")
-}
-
-model TechnicienRef {
-  id            String   @id @default(cuid())
-  idCas         BigInt   @unique
-  nomTechnicien String
-  nomSociete    String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now())
-
-  @@map("techniciens_ref")
 }

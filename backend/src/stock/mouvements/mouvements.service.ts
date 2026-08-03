@@ -5,6 +5,7 @@ import { StockCalculatorService } from '../stock-calculator.service';
 import { CreateMouvementDto } from './dto/create-mouvement.dto';
 import { FilterMouvementsDto } from './dto/filter-mouvements.dto';
 import * as ExcelJS from 'exceljs';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MouvementsService {
@@ -15,6 +16,7 @@ export class MouvementsService {
 
   async findAll(filters: FilterMouvementsDto) {
     const where: any = {};
+    where.deletedAt = null;
 
     if (filters.mois) {
       const [year, month] = filters.mois.split('-');
@@ -34,9 +36,23 @@ export class MouvementsService {
     if (filters.type) where.type = filters.type;
     if (filters.envoye !== undefined) where.envoye = filters.envoye === 'true';
     if (filters.recu !== undefined) where.recu = filters.recu === 'true';
-    if ((filters as any).userEntrepots?.length) {
+    // Filtrage selon le rôle : manager de zone ou privilèges entrepôt
+    if ((filters as any).managerZone) {
+      const mz = (filters as any).managerZone as { id: string; nom: string; departements: any[] };
+      const entrepotIds = [...new Set(
+        (mz.departements as any[]).map((d: any) => d.entrepotId).filter(Boolean)
+      )] as string[];
+      if (entrepotIds.length) {
+        where.entrepotId = { in: entrepotIds };
+      }
+    } else if ((filters as any).userEntrepots?.length) {
       where.entrepotId = { in: (filters as any).userEntrepots };
     }
+    // Filtre transferts uniquement
+    if ((filters as any).transfert === 'true') {
+      where.transfertId = { not: null };
+    }
+
     if (filters.search) {
       where.OR = [
         { article: { nom: { contains: filters.search, mode: 'insensitive' } } },
@@ -76,7 +92,7 @@ export class MouvementsService {
       where: { id },
       include: { article: true, entrepot: true, user: true },
     });
-    if (!m) throw new NotFoundException('Mouvement introuvable');
+    if (!m || m.deletedAt !== null) throw new NotFoundException('Mouvement introuvable');
     return m;
   }
 
@@ -119,11 +135,118 @@ export class MouvementsService {
     return updated;
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     const m = await this.findById(id);
-    await this.prisma.mouvement.delete({ where: { id } });
-    await this.calculator.sync(m.articleId, m.entrepotId);
-    return m;
+    let deletedByName = 'Inconnu';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
+      if (user) deletedByName = `${user.prenom} ${user.nom}`;
+    }
+    if (m.transfertId) {
+      // Soft delete les deux legs du transfert
+      const legs = await this.prisma.mouvement.findMany({
+        where: { transfertId: m.transfertId },
+        select: { id: true },
+      });
+      await this.prisma.mouvement.updateMany({
+        where: { transfertId: m.transfertId },
+        data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+      });
+      return m;
+    }
+    return this.prisma.mouvement.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: userId ?? null, deletedByName },
+    });
+  }
+
+  /** Génère un numéro de transfert unique : TRF-YYYY-XXXX */
+  private async genNumeroTransfert(): Promise<string> {
+    const count = await this.prisma.mouvement.count({
+      where: { transfertId: { not: null }, type: TypeMouvement.SORTIE },
+    });
+    return `TRF-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+  }
+
+  /** Transfert inter-entrepôt : accepte plusieurs articles en une seule opération */
+  async transferer(dto: {
+    entrepotSourceId: string;
+    entrepotDestinationId: string;
+    lignes: { articleId: string; quantite: number }[];
+    commentaire?: string;
+    userId?: string;
+  }) {
+    if (dto.entrepotSourceId === dto.entrepotDestinationId) {
+      throw new BadRequestException('Source et destination doivent être différentes');
+    }
+    if (!dto.lignes?.length) {
+      throw new BadRequestException('Au moins un article requis');
+    }
+
+    const [entrepotSrc, entrepotDst] = await Promise.all([
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotSourceId } }),
+      this.prisma.entrepot.findUnique({ where: { id: dto.entrepotDestinationId } }),
+    ]);
+    if (!entrepotSrc || !entrepotDst) throw new BadRequestException('Entrepôt introuvable');
+
+    // Valider le stock pour chaque article
+    for (const ligne of dto.lignes) {
+      await this.validateStockSuffisant(ligne.articleId, dto.entrepotSourceId, ligne.quantite);
+    }
+
+    const transfertId = uuidv4();
+    const numeroOperation = await this.genNumeroTransfert();
+    const now = new Date();
+    const results: any[] = [];
+
+    for (const ligne of dto.lignes) {
+      // SORTIE sur l'entrepôt source
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: ligne.articleId,
+          entrepotId: dto.entrepotSourceId,
+          type: TypeMouvement.SORTIE,
+          quantiteDemandee: ligne.quantite,
+          quantiteFournie: ligne.quantite,
+          sourceDestination: `→ ${entrepotDst.code}`,
+          numeroOperation,
+          commentaire: dto.commentaire ?? null,
+          userId: dto.userId ?? null,
+          transfertId,
+          date: now,
+        },
+      });
+
+      // ENTREE sur l'entrepôt destination
+      await this.prisma.mouvement.create({
+        data: {
+          articleId: ligne.articleId,
+          entrepotId: dto.entrepotDestinationId,
+          type: TypeMouvement.ENTREE,
+          quantiteDemandee: ligne.quantite,
+          quantiteFournie: ligne.quantite,
+          sourceDestination: `← ${entrepotSrc.code}`,
+          numeroOperation,
+          commentaire: dto.commentaire ?? null,
+          userId: dto.userId ?? null,
+          transfertId,
+          date: now,
+        },
+      });
+
+      // Recalcul des deux entrepôts
+      await this.calculator.sync(ligne.articleId, dto.entrepotSourceId);
+      await this.calculator.sync(ligne.articleId, dto.entrepotDestinationId);
+      results.push(ligne);
+    }
+
+    return {
+      transfertId,
+      numeroOperation,
+      from: entrepotSrc.code,
+      to: entrepotDst.code,
+      lignes: results,
+    };
   }
 
   async toggleField(id: string, field: 'envoye' | 'recu') {
@@ -196,5 +319,62 @@ export class MouvementsService {
     if (stockActuel < quantite) {
       throw new BadRequestException(`Stock insuffisant : disponible ${stockActuel}, demandé ${quantite}`);
     }
+  }
+
+  async findCorbeille() {
+    return this.prisma.mouvement.findMany({
+      where: { NOT: { deletedAt: null } },
+      include: {
+        article: { select: { id: true, nom: true, reference: true, unite: true } },
+        entrepot: { select: { id: true, code: true, nom: true } },
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
+  }
+
+  async restore(id: string) {
+    const m = await this.prisma.mouvement.findUnique({ where: { id } });
+    if (!m) throw new Error('Mouvement introuvable');
+    if (m.transfertId) {
+      await this.prisma.mouvement.updateMany({
+        where: { transfertId: m.transfertId },
+        data: { deletedAt: null, deletedById: null, deletedByName: null },
+      });
+      return m;
+    }
+    return this.prisma.mouvement.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null, deletedByName: null },
+    });
+  }
+
+  async supprimerDefinitivement(id: string) {
+    const m = await this.prisma.mouvement.findUnique({ where: { id }, select: { articleId: true, entrepotId: true, transfertId: true } });
+    if (!m) throw new Error('Mouvement introuvable');
+    if (m.transfertId) {
+      const legs = await this.prisma.mouvement.findMany({
+        where: { transfertId: m.transfertId },
+        select: { articleId: true, entrepotId: true },
+      });
+      await this.prisma.mouvement.deleteMany({ where: { transfertId: m.transfertId } });
+      for (const leg of legs) await this.calculator.sync(leg.articleId, leg.entrepotId);
+      return { deleted: true };
+    }
+    await this.prisma.mouvement.delete({ where: { id } });
+    await this.calculator.sync(m.articleId, m.entrepotId);
+    return { deleted: true };
+  }
+
+  async viderCorbeille() {
+    const items = await this.prisma.mouvement.findMany({
+      where: { NOT: { deletedAt: null } },
+      select: { id: true, articleId: true, entrepotId: true },
+    });
+    if (!items.length) return { count: 0 };
+    await this.prisma.mouvement.deleteMany({ where: { id: { in: items.map(i => i.id) } } });
+    const pairs = new Map<string, { articleId: string; entrepotId: string }>();
+    for (const m of items) pairs.set(`${m.articleId}:${m.entrepotId}`, m);
+    for (const p of pairs.values()) await this.calculator.sync(p.articleId, p.entrepotId);
+    return { count: items.length };
   }
 }

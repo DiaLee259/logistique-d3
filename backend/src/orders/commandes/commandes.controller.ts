@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, Res, UseGuards, UseInterceptors, UploadedFile, HttpCode, HttpStatus } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -87,7 +87,10 @@ export class CommandesController {
   findAll(@Query() filters: any, @Request() req: any) {
     const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
     const userRole: string = req.user?.role ?? '';
-    return this.service.findAll({ ...filters, userEntrepots, userRole });
+    const voirSansEntrepot: boolean = req.user?.privileges?.actions?.voirCommandesSansEntrepot ?? true;
+    // Filtre manager de zone : le user voit uniquement les commandes de son manager
+    const managerZone = req.user?.managerZone ?? null;
+    return this.service.findAll({ ...filters, userEntrepots, userRole, voirSansEntrepot, managerZone });
   }
 
   @UseGuards(JwtAuthGuard)
@@ -98,8 +101,14 @@ export class CommandesController {
 
   @UseGuards(JwtAuthGuard)
   @Post('liens')
-  genererLien(@Body() body: { nom: string; expiresInDays?: number }, @Request() req: any) {
-    return this.service.genererLienPrestataire(body.nom, req.user.id, body.expiresInDays);
+  genererLien(@Body() body: any, @Request() req: any) {
+    return this.service.genererLienPrestataire(body, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('liens/:id')
+  updateLien(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateLienPrestataire(id, body);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -108,10 +117,50 @@ export class CommandesController {
     return this.service.desactiverLien(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Delete('liens/:id')
+  deleteLien(@Param('id') id: string) {
+    return this.service.deleteLienPrestataire(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('managers-zone')
+  listManagersZone() {
+    return this.service.listManagersZone();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('managers-zone')
+  createManagerZone(@Body() body: any) {
+    return this.service.createManagerZone(body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('managers-zone/:id')
+  updateManagerZone(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateManagerZone(id, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('managers-zone/:id')
+  deleteManagerZone(@Param('id') id: string) {
+    return this.service.deleteManagerZone(id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Patch('bulk-entrepot')
   bulkEntrepot(@Body() body: { commandeIds: string[]; entrepotId: string }) {
     return this.service.bulkSetEntrepot(body.commandeIds, body.entrepotId);
+  }
+
+  // ── Backfill one-shot ────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Patch('backfill-lien-data')
+  backfillLienData() {
+    return this.service.backfillLienData();
   }
 
   // ── Corbeille — toutes ces routes AVANT @Get(':id') ──────────────────────
@@ -140,6 +189,21 @@ export class CommandesController {
   @Post()
   create(@Body() dto: CreateCommandeDto) {
     return this.service.create(dto);
+  }
+
+  /** Commande de type transfert interne — réservée aux rôles internes */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET', 'LOGISTICIEN_1', 'LOGISTICIEN_2')
+  @Post('transfert-interne')
+  createTransfertInterne(@Body() body: any) {
+    return this.service.createTransfertInterne(body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'LOGISTICIEN_1')
+  @Patch(':id/refuser')
+  refuser(@Param('id') id: string, @Body() body: { motif: string }) {
+    return this.service.refuser(id, body.motif);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -192,8 +256,8 @@ export class CommandesController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/annuler')
-  annuler(@Param('id') id: string) {
-    return this.service.annuler(id);
+  annuler(@Param('id') id: string, @Body() body: { motif?: string }) {
+    return this.service.annuler(id, body?.motif);
   }
 
   @UseGuards(JwtAuthGuard)

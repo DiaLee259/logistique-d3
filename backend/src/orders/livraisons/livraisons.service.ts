@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { StatutLivraison, TypeMouvement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MouvementsService } from '../../stock/mouvements/mouvements.service';
@@ -47,6 +47,7 @@ export class LivraisonsService {
   async create(data: {
     fournisseur: string;
     entrepotId: string;
+    dateLivraison?: string;
     lignes: { articleId: string; quantiteCommandee: number; quantiteRecue: number }[];
     bonLivraisonUrl?: string;
     bonCommandeUrl?: string;
@@ -61,6 +62,7 @@ export class LivraisonsService {
         numero,
         fournisseur: data.fournisseur,
         entrepotId: data.entrepotId,
+        ...(data.dateLivraison ? { dateLivraison: new Date(data.dateLivraison) } : {}),
         statut: StatutLivraison.LIVREE,
         bonLivraisonUrl: data.bonLivraisonUrl,
         bonCommandeUrl: data.bonCommandeUrl,
@@ -130,6 +132,116 @@ export class LivraisonsService {
 
   async viderCorbeille() {
     return this.prisma.livraison.deleteMany({ where: { NOT: { deletedAt: null } } });
+  }
+
+  async getRapportLivraisons(params: { dateDebut: string; dateFin: string; articleId?: string; entrepotId?: string; format?: string }): Promise<Buffer | any[]> {
+    const dateDebutSOD = new Date(params.dateDebut);
+    dateDebutSOD.setHours(0, 0, 0, 0);
+    const dateFinEOD = new Date(params.dateFin);
+    dateFinEOD.setHours(23, 59, 59, 999);
+
+    const livraisons = await this.prisma.livraison.findMany({
+      where: {
+        deletedAt: null,
+        dateLivraison: { gte: dateDebutSOD, lte: dateFinEOD },
+        ...(params.entrepotId ? { entrepotId: params.entrepotId } : {}),
+      },
+      include: {
+        lignes: {
+          include: { article: true },
+          ...(params.articleId ? { where: { articleId: params.articleId } } : {}),
+        },
+        entrepot: true,
+      },
+      orderBy: { dateLivraison: 'asc' },
+    });
+
+    const rows: { date: string; numero: string; entrepot: string; fournisseur: string; article: string; reference: string; unite: string; quantiteRecue: number; commentaire: string }[] = [];
+    for (const liv of livraisons) {
+      for (const ligne of liv.lignes) {
+        if (ligne.quantiteRecue > 0) {
+          rows.push({
+            date: liv.dateLivraison.toISOString().slice(0, 10),
+            numero: liv.numero,
+            entrepot: liv.entrepot.code,
+            fournisseur: liv.fournisseur,
+            article: ligne.article.nom,
+            reference: ligne.article.reference,
+            unite: ligne.article.unite,
+            quantiteRecue: ligne.quantiteRecue,
+            commentaire: liv.commentaire ?? '',
+          });
+        }
+      }
+    }
+
+    if (params.format === 'json') return rows;
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Rapport livraisons');
+    ws.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'N° Livraison', key: 'numero', width: 18 },
+      { header: 'Entrepôt', key: 'entrepot', width: 12 },
+      { header: 'Fournisseur', key: 'fournisseur', width: 25 },
+      { header: 'Article', key: 'article', width: 40 },
+      { header: 'Référence', key: 'reference', width: 18 },
+      { header: 'Unité', key: 'unite', width: 8 },
+      { header: 'Qté reçue', key: 'quantiteRecue', width: 12 },
+      { header: 'Commentaire', key: 'commentaire', width: 35 },
+    ];
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 40;
+    let rowNum = 1;
+    for (const row of rows) {
+      rowNum++;
+      const r = ws.addRow(row);
+      r.alignment = { vertical: 'middle' };
+      if (rowNum % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+    }
+    ws.eachRow(r => r.eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+      };
+    }));
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
+  }
+
+  async corrigerLigne(livraisonId: string, ligneId: string, data: { quantiteNouvelle: number; commentaire: string }, userId?: string) {
+    const livraison = await this.prisma.livraison.findUnique({
+      where: { id: livraisonId },
+      include: { lignes: { include: { article: true } }, entrepot: true },
+    });
+    if (!livraison) throw new NotFoundException('Livraison introuvable');
+
+    const jours = Math.floor((Date.now() - new Date(livraison.dateLivraison).getTime()) / (24 * 60 * 60 * 1000));
+    if (jours > 3) throw new BadRequestException('Le délai de correction de 3 jours est dépassé');
+
+    const ligne = livraison.lignes.find(l => l.id === ligneId);
+    if (!ligne) throw new NotFoundException('Ligne introuvable');
+
+    const delta = data.quantiteNouvelle - ligne.quantiteRecue;
+    await this.prisma.ligneLivraison.update({
+      where: { id: ligneId },
+      data: { quantiteRecue: data.quantiteNouvelle },
+    });
+
+    if (delta !== 0) {
+      await this.mouvementsService.create({
+        articleId: ligne.articleId,
+        entrepotId: livraison.entrepotId,
+        type: delta > 0 ? TypeMouvement.ENTREE : TypeMouvement.SORTIE,
+        quantiteDemandee: Math.abs(delta),
+        quantiteFournie: Math.abs(delta),
+        sourceDestination: livraison.fournisseur,
+        commentaire: `Correction ${livraison.numero} — ${data.commentaire}`,
+      }, userId);
+    }
+    return { success: true };
   }
 
   async findCorbeille() {

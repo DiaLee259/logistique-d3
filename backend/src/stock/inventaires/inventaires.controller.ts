@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Request, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
 import { InventairesService } from './inventaires.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { RolesGuard } from '../../auth/roles.guard';
+import { Roles } from '../../auth/roles.decorator';
 
 @Controller('inventaires')
 @UseGuards(JwtAuthGuard)
@@ -35,22 +37,18 @@ export class InventairesController {
         quantite: null,
         commentaire: '',
       });
-      // Griser les articles inactifs
       if (!article.actif) {
         row.getCell('refArticle').font = { color: { argb: 'FF999999' }, italic: true };
         row.getCell('nomArticle').font = { color: { argb: 'FF999999' }, italic: true };
       }
     }
 
-    // Onglet d'aide
     const help = wb.addWorksheet('📋 Instructions');
     help.getCell('A1').value = 'Remplissez la colonne "Code entrepôt *" avec le code de votre entrepôt (ex: ENT01) et la colonne "Quantité comptée *" pour chaque article.';
     help.getCell('A2').value = 'Les articles en gris/italique sont inactifs — vous pouvez les ignorer ou les inclure si besoin.';
     help.getCell('A3').value = 'La colonne "Nom article" est informative — elle est ignorée à l\'import.';
     help.getCell('A1').font = { bold: true };
-    ['A1', 'A2', 'A3'].forEach(c => {
-      help.getCell(c).alignment = { wrapText: true };
-    });
+    ['A1', 'A2', 'A3'].forEach(c => { help.getCell(c).alignment = { wrapText: true }; });
     help.getColumn('A').width = 120;
 
     const buffer = await wb.xlsx.writeBuffer();
@@ -59,11 +57,58 @@ export class InventairesController {
     res.send(buffer);
   }
 
+  // ── Corbeille (statiques avant /:id) ──────────────────────────────────────
+
+  @Get('corbeille')
+  findCorbeille() { return this.service.findCorbeille(); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Delete('corbeille/vider')
+  viderCorbeille() { return this.service.viderCorbeille(); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Delete('corbeille/:id')
+  supprimerDefinitivement(@Param('id') id: string) { return this.service.supprimerDefinitivement(id); }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CHEF_PROJET')
+  @Patch('corbeille/:id/restaurer')
+  restaurer(@Param('id') id: string) { return this.service.restore(id); }
+
+  // ── Import / template ────────────────────────────────────────────────────
+
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async importInventaire(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
     return this.service.importInventaire(file.buffer, req.user?.id);
   }
+
+  // ── Rapport de stock (avant :id pour éviter conflits) ────────────────────
+
+  @Get('rapport-stock')
+  async getRapportStock(@Query() params: any, @Res() res: Response) {
+    if (!params.dateDebut || !params.dateFin) {
+      res.status(400).json({ message: 'dateDebut et dateFin sont requis' });
+      return;
+    }
+    const format = params.format || 'excel';
+    const data = await this.service.getRapportStock({
+      dateDebut: params.dateDebut,
+      dateFin: params.dateFin,
+      entrepotId: params.entrepotId || undefined,
+      articleId: params.articleId || undefined,
+      format,
+    });
+    if (format === 'json') { res.json(data); return; }
+    const filename = `rapport-stock-${params.dateDebut}-au-${params.dateFin}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(data);
+  }
+
+  // ── Listes / états ────────────────────────────────────────────────────────
 
   @Get()
   findAll(@Query() filters: any, @Request() req: any) {
@@ -82,20 +127,43 @@ export class InventairesController {
     return this.service.getEtatParEntrepot(entrepotId);
   }
 
+  // ── Création ─────────────────────────────────────────────────────────────
+
   @Post()
   create(@Body() body: any, @Request() req: any) {
-    return this.service.create(body, req.user?.userId);
+    return this.service.create(body, req.user?.id);
   }
 
-  // Suppression d'une liste d'IDs (session entière)
+  /** Mise à jour d'un seul article (sans toucher les autres) */
+  @Post('update-article')
+  updateArticle(@Body() body: any, @Request() req: any) {
+    return this.service.updateArticle(body, req.user?.id);
+  }
+
+  // ── Suppression (bulk avant :id) ──────────────────────────────────────────
+
   @Delete('bulk')
-  deleteBulk(@Body() body: { ids: string[] }) {
-    return this.service.deleteBulk(body.ids);
+  deleteBulk(@Body() body: { ids: string[] }, @Request() req: any) {
+    return this.service.deleteBulk(body.ids, req.user?.id);
   }
 
-  // Suppression d'un seul enregistrement
   @Delete(':id')
-  deleteOne(@Param('id') id: string) {
-    return this.service.deleteOne(id);
+  deleteOne(@Param('id') id: string, @Request() req: any) {
+    return this.service.deleteOne(id, req.user?.id);
+  }
+
+  // ── Corrections d'inventaire ──────────────────────────────────────────────
+
+  @Get(':id/corrections')
+  getCorrections(@Param('id') id: string) {
+    return this.service.getCorrections(id);
+  }
+
+  @Post(':id/corriger')
+  corrigerInventaire(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.service.corrigerInventaire(id, {
+      quantiteNouvelle: body.quantiteNouvelle,
+      commentaire: body.commentaire,
+    }, req.user?.id);
   }
 }

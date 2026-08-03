@@ -15,15 +15,17 @@ export class StockCalculatorService {
   constructor(private prisma: PrismaService) {}
 
   async calcule(articleId: string, entrepotId: string): Promise<number> {
+    // On ignore les inventaires physiques soft-deletés (mis en corbeille)
     const dernierInventaire = await this.prisma.inventairePhysique.findFirst({
-      where: { articleId, entrepotId },
+      where: { articleId, entrepotId, deletedAt: null },
       orderBy: { date: 'desc' },
     });
 
     const qteBase = dernierInventaire?.quantite ?? 0;
     const dateFilter = dernierInventaire ? { gt: dernierInventaire.date } : undefined;
 
-    const whereBase = { articleId, entrepotId, ...(dateFilter ? { date: dateFilter } : {}) };
+    // On ignore aussi les mouvements soft-deletés dans les agrégats
+    const whereBase = { articleId, entrepotId, deletedAt: null, ...(dateFilter ? { date: dateFilter } : {}) };
 
     const [entrees, sorties] = await Promise.all([
       this.prisma.mouvement.aggregate({ where: { ...whereBase, type: 'ENTREE' as any }, _sum: { quantiteFournie: true } }),
