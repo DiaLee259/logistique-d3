@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npx prisma generate && npm run build && npx esbuild api/index.js --bundle --platform=node --target=node18 --outfile=api/index-bundle.js --external:@prisma/client --external:.prisma/client --log-level=error && mv api/index-bundle.js api/index.js",
+  "buildCommand": "npm install && npx prisma generate && npm run build && npx esbuild api/index.js --bundle --platform=node --outfile=api/b.js --external:@prisma/client --external:.prisma/client && mv api/b.js api/index.js",
   "installCommand": "npm install",
   "functions": {
     "api/index.js": {
