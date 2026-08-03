@@ -30,6 +30,7 @@ enum StatutCommande {
   EXPEDIEE             // Expédiée par Log2
   LIVREE               // Confirmée reçue par le prestataire
   ANNULEE
+  REFUSEE              // Valeur présente en base (prod) — requise pour la désérialisation Prisma
 }
 
 enum StatutLivraison {
