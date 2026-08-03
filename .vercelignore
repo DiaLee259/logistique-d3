@@ -1,0 +1,13 @@
+node_modules/
+build/
+frontend/dist/
+backend/frontend/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+Thumbs.db
+coverage/
+.nyc_output/
+backend/uploads/
