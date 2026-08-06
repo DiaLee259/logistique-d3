@@ -60,8 +60,18 @@ export class CommandesTSService {
   }
 
   async create(dto: any, userId: string) {
-    const count = await this.prisma.commandeTS.count();
-    const numero = `CTS-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    // Numéro basé sur le MAX existant (et non sur count) : la corbeille permet
+    // une suppression définitive, et count() rejouerait alors un numéro déjà pris.
+    const year = new Date().getFullYear();
+    const lastCommande = await this.prisma.commandeTS.findFirst({
+      where: { numero: { startsWith: `CTS-${year}-` } },
+      orderBy: { numero: 'desc' },
+      select: { numero: true },
+    });
+    const lastNum = lastCommande
+      ? parseInt(lastCommande.numero.split('-')[2] ?? '0', 10)
+      : 0;
+    const numero = `CTS-${year}-${String(lastNum + 1).padStart(4, '0')}`;
 
     return this.prisma.commandeTS.create({
       data: {
