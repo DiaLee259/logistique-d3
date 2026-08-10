@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Eye, X,
   Link2, Copy, Check, ChevronDown, ChevronUp, ChevronRight, Calendar, Trash2, CheckSquare, ArrowLeftRight,
+  FileDown, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/api';
@@ -175,6 +176,22 @@ export default function Commandes() {
 
   // Réinitialiser la page quand un filtre change
   const resetPage = () => setPage(1);
+
+  // L'export reprend les filtres à l'écran mais sans pagination : on exporte
+  // tout le périmètre filtré, pas seulement la page affichée.
+  const [exportEnCours, setExportEnCours] = useState(false);
+  const exporterExcel = async () => {
+    setExportEnCours(true);
+    try {
+      const { page: _ignore, ...params } = buildParams();
+      const blob = await commandesApi.export(params);
+      downloadBlob(blob, `commandes-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch {
+      toast.error("L'export a échoué");
+    } finally {
+      setExportEnCours(false);
+    }
+  };
 
   const { data: result, isLoading } = useQuery({
     queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterDateTraitementDebut, filterDateTraitementFin, filterDateLivraisonDebut, filterDateLivraisonFin, filterEntrepot, filterDepartement, filterManager, filterTypePrestataire, page],
@@ -367,6 +384,17 @@ export default function Commandes() {
           <Calendar className="w-3.5 h-3.5" />
           Filtres {hasActiveFilters && '●'}
           {showFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+
+        {/* Export : accessible à tous, il ne sort que ce que l'utilisateur voit déjà */}
+        <button
+          onClick={exporterExcel}
+          disabled={exportEnCours}
+          title="Exporter les commandes filtrées au format Excel"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card disabled:opacity-50">
+          {exportEnCours
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Export…</>
+            : <><FileDown className="w-3.5 h-3.5" /> Exporter Excel</>}
         </button>
 
         {/* Import lot template */}

@@ -58,6 +58,8 @@ export const dashboardApi = {
     api.get('/dashboard/top-articles', { params: { limit: 5, ...params } }).then(r => r.data),
   commandes: (params?: Record<string, string>) =>
     api.get('/dashboard/commandes', { params }).then(r => r.data),
+  pilotage: (params?: Record<string, string>) =>
+    api.get('/dashboard/pilotage', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
@@ -123,6 +125,8 @@ export const mouvementsApi = {
 export const commandesApi = {
   list: (params?: Record<string, string>) =>
     api.get('/commandes', { params }).then(r => r.data),
+  export: (params?: Record<string, string>) =>
+    api.get('/commandes/export', { params, responseType: 'blob' }).then(r => r.data as Blob),
   corbeille: () => api.get('/commandes/corbeille').then(r => r.data),
   restaurer: (id: string) => api.patch(`/commandes/${id}/restaurer`).then(r => r.data),
   supprimerDefinitivement: (id: string) => api.delete(`/commandes/corbeille/${id}`).then(r => r.data),

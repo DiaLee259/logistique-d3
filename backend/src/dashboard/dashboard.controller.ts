@@ -48,4 +48,10 @@ export class DashboardController {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
     return this.service.getResumeCommandes(filters, ue);
   }
+
+  @Get('pilotage')
+  getPilotage(@Query() filters: Record<string, string>, @Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getPilotage(filters, ue);
+  }
 }

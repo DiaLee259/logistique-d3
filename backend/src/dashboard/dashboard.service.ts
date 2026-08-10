@@ -258,4 +258,119 @@ export class DashboardService {
     });
     return par_statut.map(s => ({ statut: s.statut, count: s._count.id }));
   }
+
+  /**
+   * Vue de pilotage : état du flux de commandes ventilé par dimension
+   * (département, demandeur, société, manager).
+   *
+   * On récupère les commandes du périmètre en une seule requête plutôt qu'un
+   * groupBy par statut : il faut aussi les délais moyens et l'ancienneté du
+   * backlog, qui ne s'obtiennent pas par agrégat SQL simple. Le volume de
+   * commandes reste modeste (quelques milliers), donc l'agrégation en mémoire
+   * est adaptée et évite une dizaine d'allers-retours en base.
+   */
+  async getPilotage(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const parsed = filters.mois ? parseMois(filters.mois) : {};
+    const debut = parsed.dateDebut ?? filters.dateDebut;
+    const fin = parsed.dateFin ?? filters.dateFin;
+
+    const where: any = { deletedAt: null };
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotSource');
+    applyDateRange(where, 'dateReception', debut, fin);
+    applyDateRange(where, 'dateTraitement', filters.dateTraitementDebut, filters.dateTraitementFin);
+    applyDateRange(where, 'dateLivraison', filters.dateLivraisonDebut, filters.dateLivraisonFin);
+
+    const commandes = await this.prisma.commande.findMany({
+      where,
+      select: {
+        statut: true,
+        departement: true,
+        demandeur: true,
+        societe: true,
+        manager: true,
+        dateReception: true,
+        dateTraitement: true,
+        dateExpedition: true,
+        dateLivraison: true,
+        nombreGrilles: true,
+      },
+    });
+
+    const maintenant = Date.now();
+    const EN_COURS = ['EN_VALIDATION', 'VALIDEE', 'EN_ATTENTE_LOG2', 'EXPEDIEE'];
+
+    const ventile = (cle: (c: (typeof commandes)[number]) => string) => {
+      const groupes = new Map<string, typeof commandes>();
+      for (const c of commandes) {
+        const k = cle(c) || 'Non défini';
+        if (!groupes.has(k)) groupes.set(k, []);
+        groupes.get(k)!.push(c);
+      }
+
+      const moyenne = (valeurs: number[]) =>
+        valeurs.length ? Math.round((valeurs.reduce((s, v) => s + v, 0) / valeurs.length) * 10) / 10 : null;
+      const ecart = (a?: Date | null, b?: Date | null) =>
+        a && b ? (b.getTime() - a.getTime()) / 86400000 : null;
+
+      const lignes = [...groupes.entries()].map(([libelle, cs]) => {
+        const compte = (s: string) => cs.filter(c => c.statut === s).length;
+        const livrees = compte('LIVREE');
+        const annulees = compte('ANNULEE');
+        const refusees = compte('REFUSEE');
+        const enAttente = compte('EN_ATTENTE');
+        const enCours = cs.filter(c => EN_COURS.includes(c.statut)).length;
+
+        // Le taux de livraison exclut annulées et refusées : elles n'ont jamais
+        // eu vocation à être livrées, les compter fausserait la performance.
+        const base = cs.length - annulees - refusees;
+
+        // Ancienneté du plus vieux dossier encore ouvert : signale un blocage
+        // qu'une moyenne lisserait.
+        const ouvertes = cs.filter(c => c.statut === 'EN_ATTENTE' || EN_COURS.includes(c.statut));
+        const attenteMax = ouvertes.length
+          ? Math.round(Math.max(...ouvertes.map(c => (maintenant - c.dateReception.getTime()) / 86400000)) * 10) / 10
+          : null;
+
+        return {
+          libelle,
+          total: cs.length,
+          enAttente,
+          enCours,
+          livrees,
+          refusees,
+          annulees,
+          grilles: cs.reduce((s, c) => s + (c.nombreGrilles ?? 0), 0),
+          tauxLivraison: base > 0 ? Math.round((livrees / base) * 100) : null,
+          delaiTraitement: moyenne(cs.map(c => ecart(c.dateReception, c.dateTraitement)).filter((v): v is number => v !== null)),
+          delaiExpedition: moyenne(cs.map(c => ecart(c.dateTraitement, c.dateExpedition)).filter((v): v is number => v !== null)),
+          delaiLivraison: moyenne(cs.map(c => ecart(c.dateExpedition, c.dateLivraison)).filter((v): v is number => v !== null)),
+          delaiTotal: moyenne(cs.map(c => ecart(c.dateReception, c.dateLivraison)).filter((v): v is number => v !== null)),
+          attenteMax,
+        };
+      });
+
+      return lignes.sort((a, b) => b.total - a.total);
+    };
+
+    const totalAnnulees = commandes.filter(c => c.statut === 'ANNULEE').length;
+    const totalRefusees = commandes.filter(c => c.statut === 'REFUSEE').length;
+    const totalLivrees = commandes.filter(c => c.statut === 'LIVREE').length;
+    const baseGlobale = commandes.length - totalAnnulees - totalRefusees;
+
+    return {
+      totaux: {
+        total: commandes.length,
+        enAttente: commandes.filter(c => c.statut === 'EN_ATTENTE').length,
+        enCours: commandes.filter(c => EN_COURS.includes(c.statut)).length,
+        livrees: totalLivrees,
+        refusees: totalRefusees,
+        annulees: totalAnnulees,
+        tauxLivraison: baseGlobale > 0 ? Math.round((totalLivrees / baseGlobale) * 100) : null,
+      },
+      parDepartement: ventile(c => c.departement),
+      parDemandeur: ventile(c => c.demandeur ?? ''),
+      parSociete: ventile(c => c.societe ?? ''),
+      parManager: ventile(c => c.manager ?? ''),
+    };
+  }
 }

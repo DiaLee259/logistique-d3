@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { dashboardApi, entrepotsApi, articlesApi, inventairesApi, commandesApi } from '@/lib/api';
 import KpiCard from '@/components/KpiCard';
+import PilotageCommandes from '@/components/PilotageCommandes';
 import { cn, formatDate, formatNumber, statutCommandeLabel } from '@/lib/utils';
 import type { DashboardKpis, Entrepot, Article, ManagerZone } from '@/lib/types';
 
@@ -36,6 +37,7 @@ function loadVisible(): Record<SectionId, boolean> {
 }
 
 export default function Dashboard() {
+  const [ongletActif, setOngletActif] = useState<'general' | 'pilotage'>('general');
   const [filterMois, setFilterMois] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterArticle, setFilterArticle] = useState('');
@@ -165,6 +167,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
+      {/* Onglets — les filtres ci-dessous s'appliquent aux deux vues */}
+      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 w-fit">
+        {([
+          { id: 'general', label: 'Vue générale' },
+          { id: 'pilotage', label: 'Pilotage commandes' },
+        ] as const).map(o => (
+          <button
+            key={o.id}
+            onClick={() => setOngletActif(o.id)}
+            className={cn(
+              'px-4 py-1.5 text-xs rounded font-medium transition-colors',
+              ongletActif === o.id ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       {/* Barre filtres + personnalisation */}
       <div className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5">
         <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
@@ -321,6 +341,9 @@ export default function Dashboard() {
         </div>
       )}
 
+      {ongletActif === 'pilotage' && <PilotageCommandes params={params} />}
+
+      {ongletActif === 'general' && (<>
       {/* Alerte inventaire */}
       {alertesInvActives.length > 0 && (
         <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl">
@@ -565,6 +588,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 }

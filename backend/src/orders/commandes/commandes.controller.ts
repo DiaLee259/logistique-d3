@@ -74,6 +74,20 @@ export class CommandesController {
     res.send(buffer);
   }
 
+  // Doit rester avant @Get(':id') : sinon 'export' serait capté comme un id.
+  @UseGuards(JwtAuthGuard)
+  @Get('export')
+  async exportCommandes(@Query() filters: any, @Request() req: any, @Res() res: Response) {
+    const userEntrepots: string[] = req.user?.privileges?.entrepots ?? [];
+    const voirSansEntrepot: boolean = req.user?.privileges?.actions?.voirCommandesSansEntrepot ?? true;
+    const managerZone = req.user?.managerZone ?? null;
+    const buffer = await this.service.exportExcel({ ...filters, userEntrepots, voirSansEntrepot, managerZone });
+    const jour = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="commandes-${jour}.xlsx"`);
+    res.send(buffer);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'LOGISTICIEN_1')
   @Post('import')

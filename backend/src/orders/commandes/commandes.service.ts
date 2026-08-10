@@ -15,7 +15,12 @@ export class CommandesService {
     private calculator: StockCalculatorService,
   ) {}
 
-  async findAll(filters: any) {
+  /**
+   * Construit le filtre Prisma commun à la liste et à l'export.
+   * Les deux doivent voir exactement le même périmètre : un export qui
+   * ne correspond pas aux filtres affichés à l'écran est un piège.
+   */
+  private buildWhere(filters: any) {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
@@ -74,6 +79,12 @@ export class CommandesService {
     }
     if (andClauses.length) where.AND = andClauses;
 
+    return where;
+  }
+
+  async findAll(filters: any) {
+    const where = this.buildWhere(filters);
+
     const page = parseInt(filters.page || '1');
     const limit = parseInt(filters.limit || '20');
 
@@ -94,6 +105,108 @@ export class CommandesService {
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /**
+   * Export Excel des commandes, sur le même périmètre que la liste affichée.
+   * Une ligne par commande, avec les 6 jalons du cycle et les délais calculés
+   * en jours — ce sont eux qui permettent de voir où le flux se bloque.
+   */
+  async exportExcel(filters: any) {
+    const where = this.buildWhere(filters);
+
+    const commandes = await this.prisma.commande.findMany({
+      where,
+      include: {
+        lignes: { select: { quantiteDemandee: true, quantiteFournie: true } },
+        valideur: { select: { nom: true, prenom: true } },
+        expediteur: { select: { nom: true, prenom: true } },
+      },
+      orderBy: { dateReception: 'desc' },
+    });
+
+    const jours = (a?: Date | null, b?: Date | null) =>
+      a && b ? Math.round(((b.getTime() - a.getTime()) / 86400000) * 10) / 10 : null;
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Commandes');
+    ws.columns = [
+      { header: 'N° Commande', key: 'numero', width: 22 },
+      { header: 'Statut', key: 'statut', width: 18 },
+      { header: 'Département', key: 'departement', width: 14 },
+      { header: 'Demandeur', key: 'demandeur', width: 24 },
+      { header: 'Société', key: 'societe', width: 24 },
+      { header: 'Manager', key: 'manager', width: 20 },
+      { header: 'Type presta', key: 'typePrestataire', width: 14 },
+      { header: 'Nb grilles', key: 'nombreGrilles', width: 11 },
+      { header: 'Nb lignes', key: 'nbLignes', width: 10 },
+      { header: 'Qté demandée', key: 'qteDemandee', width: 14 },
+      { header: 'Qté fournie', key: 'qteFournie', width: 13 },
+      { header: 'Réception', key: 'dateReception', width: 13 },
+      { header: 'Traitement', key: 'dateTraitement', width: 13 },
+      { header: 'Transmission Log2', key: 'dateTransmissionLog2', width: 17 },
+      { header: 'Expédition', key: 'dateExpedition', width: 13 },
+      { header: 'Livraison', key: 'dateLivraison', width: 13 },
+      { header: 'Délai réception→traitement (j)', key: 'delaiTraitement', width: 17 },
+      { header: 'Délai traitement→expédition (j)', key: 'delaiExpedition', width: 17 },
+      { header: 'Délai expédition→livraison (j)', key: 'delaiLivraison', width: 17 },
+      { header: 'Délai total (j)', key: 'delaiTotal', width: 14 },
+      { header: 'Validé par', key: 'valideur', width: 20 },
+      { header: 'Expédié par', key: 'expediteur', width: 20 },
+      { header: 'Motif refus', key: 'commentaireRefus', width: 30 },
+      { header: 'Commentaire', key: 'commentaire', width: 34 },
+    ];
+
+    const fmt = (d?: Date | null) => (d ? d.toISOString().split('T')[0] : '');
+
+    for (const c of commandes) {
+      ws.addRow({
+        numero: c.numero,
+        statut: c.statut,
+        departement: c.departement,
+        demandeur: c.demandeur ?? '',
+        societe: c.societe ?? '',
+        manager: c.manager ?? '',
+        typePrestataire: c.typePrestataire ?? '',
+        nombreGrilles: c.nombreGrilles ?? '',
+        nbLignes: c.lignes.length,
+        qteDemandee: c.lignes.reduce((s, l) => s + (l.quantiteDemandee ?? 0), 0),
+        qteFournie: c.lignes.reduce((s, l) => s + (l.quantiteFournie ?? 0), 0),
+        dateReception: fmt(c.dateReception),
+        dateTraitement: fmt(c.dateTraitement),
+        dateTransmissionLog2: fmt(c.dateTransmissionLog2),
+        dateExpedition: fmt(c.dateExpedition),
+        dateLivraison: fmt(c.dateLivraison),
+        delaiTraitement: jours(c.dateReception, c.dateTraitement) ?? '',
+        delaiExpedition: jours(c.dateTraitement, c.dateExpedition) ?? '',
+        delaiLivraison: jours(c.dateExpedition, c.dateLivraison) ?? '',
+        delaiTotal: jours(c.dateReception, c.dateLivraison) ?? '',
+        valideur: c.valideur ? `${c.valideur.prenom} ${c.valideur.nom}` : '',
+        expediteur: c.expediteur ? `${c.expediteur.prenom} ${c.expediteur.nom}` : '',
+        commentaireRefus: c.commentaireRefus ?? '',
+        commentaire: c.commentaire ?? '',
+      });
+    }
+
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 40;
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+
+    ws.eachRow((r, i) => {
+      if (i > 1 && i % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+      r.eachCell(cell => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+          left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+        };
+      });
+    });
+
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 
   async findById(id: string) {
