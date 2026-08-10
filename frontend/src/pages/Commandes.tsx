@@ -10,7 +10,7 @@ import { commandesApi, articlesApi, repertoireApi, entrepotsApi } from '@/lib/ap
 import { cn, formatDate, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
 import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Commande, Article, Entrepot, Intervenant } from '@/lib/types';
+import type { Commande, Article, Entrepot, Intervenant, ManagerZone } from '@/lib/types';
 
 // ── Combobox article avec recherche ──────────────────────────────────────────
 function ArticleCombobox({
@@ -107,6 +107,10 @@ export default function Commandes() {
   const [filterMois, setFilterMois] = useState('');
   const [filterDateDebut, setFilterDateDebut] = useState('');
   const [filterDateFin, setFilterDateFin] = useState('');
+  const [filterDateTraitementDebut, setFilterDateTraitementDebut] = useState('');
+  const [filterDateTraitementFin, setFilterDateTraitementFin] = useState('');
+  const [filterDateLivraisonDebut, setFilterDateLivraisonDebut] = useState('');
+  const [filterDateLivraisonFin, setFilterDateLivraisonFin] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterDepartement, setFilterDepartement] = useState('');
   const [filterManager, setFilterManager] = useState('');
@@ -157,6 +161,10 @@ export default function Commandes() {
     if (filterMois) p.mois = filterMois;
     if (filterDateDebut) p.dateDebut = filterDateDebut;
     if (filterDateFin) p.dateFin = filterDateFin;
+    if (filterDateTraitementDebut) p.dateTraitementDebut = filterDateTraitementDebut;
+    if (filterDateTraitementFin) p.dateTraitementFin = filterDateTraitementFin;
+    if (filterDateLivraisonDebut) p.dateLivraisonDebut = filterDateLivraisonDebut;
+    if (filterDateLivraisonFin) p.dateLivraisonFin = filterDateLivraisonFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
     if (filterDepartement) p.departement = filterDepartement;
     if (filterManager) p.manager = filterManager;
@@ -169,7 +177,7 @@ export default function Commandes() {
   const resetPage = () => setPage(1);
 
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterDepartement, filterManager, filterTypePrestataire, page],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterDateTraitementDebut, filterDateTraitementFin, filterDateLivraisonDebut, filterDateLivraisonFin, filterEntrepot, filterDepartement, filterManager, filterTypePrestataire, page],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
@@ -179,6 +187,11 @@ export default function Commandes() {
   const { data: entrepots = [] } = useQuery<Entrepot[]>({
     queryKey: ['entrepots'],
     queryFn: () => entrepotsApi.list(),
+  });
+
+  const { data: managersZone = [] } = useQuery<ManagerZone[]>({
+    queryKey: ['managers-zone'],
+    queryFn: () => commandesApi.managers.list(),
   });
 
   const { data: articles = [] } = useQuery<Article[]>({
@@ -300,7 +313,8 @@ export default function Commandes() {
 
   const statuts = ['EN_ATTENTE', 'EN_ATTENTE_LOG2', 'VALIDEE', 'EXPEDIEE', 'LIVREE', 'ANNULEE'];
 
-  const hasActiveFilters = filterMois || filterDateDebut || filterDateFin;
+  const hasActiveFilters = filterMois || filterDateDebut || filterDateFin
+    || filterDateTraitementDebut || filterDateTraitementFin || filterDateLivraisonDebut || filterDateLivraisonFin;
 
   return (
     <div className="space-y-3">
@@ -334,15 +348,11 @@ export default function Commandes() {
           )}
         </div>
 
-        <div className="relative min-w-32">
-          <input value={filterManager} onChange={e => { setFilterManager(e.target.value); resetPage(); }} placeholder="Filtrer manager…"
-            className="w-full px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20" />
-          {filterManager && (
-            <button onClick={() => { setFilterManager(''); resetPage(); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+        <select value={filterManager} onChange={e => { setFilterManager(e.target.value); resetPage(); }}
+          className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">Tous managers</option>
+          {managersZone.map(m => <option key={m.id} value={m.nom}>{m.nom}</option>)}
+        </select>
 
         <select value={filterTypePrestataire} onChange={e => { setFilterTypePrestataire(e.target.value); resetPage(); }}
           className="px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20">
@@ -394,27 +404,54 @@ export default function Commandes() {
 
       {/* Filtres date */}
       {showFilters && (
-        <div className="bg-card border border-border rounded-lg p-3 flex flex-wrap gap-3">
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Mois (YYYY-MM)</label>
-            <input type="month" value={filterMois} onChange={e => setFilterMois(e.target.value)}
-              className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Du</label>
-            <input type="date" value={filterDateDebut} onChange={e => setFilterDateDebut(e.target.value)}
-              className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Au</label>
-            <input type="date" value={filterDateFin} onChange={e => setFilterDateFin(e.target.value)}
-              className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
-          </div>
-          <div className="flex items-end">
-            <button onClick={() => { setFilterMois(''); setFilterDateDebut(''); setFilterDateFin(''); resetPage(); }}
-              className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
-              Réinitialiser
-            </button>
+        <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Mois (YYYY-MM)</label>
+              <input type="month" value={filterMois} onChange={e => setFilterMois(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Réception — Du</label>
+              <input type="date" value={filterDateDebut} onChange={e => setFilterDateDebut(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Réception — Au</label>
+              <input type="date" value={filterDateFin} onChange={e => setFilterDateFin(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Traitement — Du</label>
+              <input type="date" value={filterDateTraitementDebut} onChange={e => setFilterDateTraitementDebut(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Traitement — Au</label>
+              <input type="date" value={filterDateTraitementFin} onChange={e => setFilterDateTraitementFin(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Livraison — Du</label>
+              <input type="date" value={filterDateLivraisonDebut} onChange={e => setFilterDateLivraisonDebut(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Livraison — Au</label>
+              <input type="date" value={filterDateLivraisonFin} onChange={e => setFilterDateLivraisonFin(e.target.value)}
+                className="px-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div className="flex items-end">
+              <button onClick={() => {
+                setFilterMois(''); setFilterDateDebut(''); setFilterDateFin('');
+                setFilterDateTraitementDebut(''); setFilterDateTraitementFin('');
+                setFilterDateLivraisonDebut(''); setFilterDateLivraisonFin('');
+                resetPage();
+              }}
+                className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
+                Réinitialiser
+              </button>
+            </div>
           </div>
         </div>
       )}

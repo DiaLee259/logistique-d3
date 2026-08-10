@@ -9,10 +9,10 @@ import {
   ClipboardList, Truck, CheckCircle, Activity, Calendar, Clock,
   Settings2, Eye, EyeOff, X,
 } from 'lucide-react';
-import { dashboardApi, entrepotsApi, articlesApi, inventairesApi } from '@/lib/api';
+import { dashboardApi, entrepotsApi, articlesApi, inventairesApi, commandesApi } from '@/lib/api';
 import KpiCard from '@/components/KpiCard';
-import { formatDate, formatNumber, statutCommandeLabel } from '@/lib/utils';
-import type { DashboardKpis, Entrepot, Article } from '@/lib/types';
+import { cn, formatDate, formatNumber, statutCommandeLabel } from '@/lib/utils';
+import type { DashboardKpis, Entrepot, Article, ManagerZone } from '@/lib/types';
 
 const PIE_COLORS = ['#f59e0b', '#f97316', '#10b981', '#1a56db', '#8b5cf6', '#ef4444'];
 
@@ -40,6 +40,12 @@ export default function Dashboard() {
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterArticle, setFilterArticle] = useState('');
   const [filterDepartement, setFilterDepartement] = useState('');
+  const [filterManager, setFilterManager] = useState('');
+  const [filterDateTraitementDebut, setFilterDateTraitementDebut] = useState('');
+  const [filterDateTraitementFin, setFilterDateTraitementFin] = useState('');
+  const [filterDateLivraisonDebut, setFilterDateLivraisonDebut] = useState('');
+  const [filterDateLivraisonFin, setFilterDateLivraisonFin] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [visible, setVisible] = useState<Record<SectionId, boolean>>(loadVisible);
   const [showCustomize, setShowCustomize] = useState(false);
   const customizeRef = useRef<HTMLDivElement>(null);
@@ -65,32 +71,38 @@ export default function Dashboard() {
   if (filterEntrepot) params.entrepotId = filterEntrepot;
   if (filterArticle) params.articleId = filterArticle;
   if (filterDepartement) params.departement = filterDepartement;
+  if (filterManager) params.manager = filterManager;
+  if (filterDateTraitementDebut) params.dateTraitementDebut = filterDateTraitementDebut;
+  if (filterDateTraitementFin) params.dateTraitementFin = filterDateTraitementFin;
+  if (filterDateLivraisonDebut) params.dateLivraisonDebut = filterDateLivraisonDebut;
+  if (filterDateLivraisonFin) params.dateLivraisonFin = filterDateLivraisonFin;
 
-  const entrepotDeptParams: Record<string, string> = {};
-  if (filterEntrepot) entrepotDeptParams.entrepotId = filterEntrepot;
-  if (filterDepartement) entrepotDeptParams.departement = filterDepartement;
+  const filterKey = [
+    filterMois, filterEntrepot, filterArticle, filterDepartement, filterManager,
+    filterDateTraitementDebut, filterDateTraitementFin, filterDateLivraisonDebut, filterDateLivraisonFin,
+  ];
 
   const { data: kpis } = useQuery<DashboardKpis>({
-    queryKey: ['dashboard-kpis', filterMois, filterEntrepot, filterArticle, filterDepartement],
+    queryKey: ['dashboard-kpis', ...filterKey],
     queryFn: () => dashboardApi.kpis(params),
     refetchInterval: 30_000,
   });
 
   const { data: evolution = [] } = useQuery<{ date: string; entrees: number; sorties: number }[]>({
-    queryKey: ['dashboard-evolution', filterMois, filterEntrepot, filterArticle, filterDepartement],
+    queryKey: ['dashboard-evolution', ...filterKey],
     queryFn: () => dashboardApi.evolution(params),
     enabled: visible.evolution,
   });
 
   const { data: departements = [] } = useQuery<{ departement: string; volume: number }[]>({
-    queryKey: ['dashboard-departements', filterMois, filterEntrepot, filterDepartement],
+    queryKey: ['dashboard-departements', ...filterKey],
     queryFn: () => dashboardApi.departements(params),
     enabled: visible.departements,
   });
 
   const { data: demandeurs = [] } = useQuery<{ demandeur: string; commandes: number }[]>({
-    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot, filterDepartement],
-    queryFn: () => dashboardApi.demandeurs({ ...(filterMois ? { mois: filterMois } : {}), ...entrepotDeptParams }),
+    queryKey: ['dashboard-demandeurs', ...filterKey],
+    queryFn: () => dashboardApi.demandeurs(params),
     enabled: visible.demandeurs,
   });
 
@@ -100,21 +112,21 @@ export default function Dashboard() {
     expeditionToLivraison: number | null;
     totalCommandesAnalysees?: number;
   }>({
-    queryKey: ['dashboard-delais', filterEntrepot, filterDepartement],
-    queryFn: () => dashboardApi.delais(entrepotDeptParams),
+    queryKey: ['dashboard-delais', ...filterKey],
+    queryFn: () => dashboardApi.delais(params),
     refetchInterval: 60_000,
     enabled: visible.delais,
   });
 
   const { data: topArticles = [] } = useQuery<{ nom: string; reference: string; volume: number }[]>({
-    queryKey: ['dashboard-top-articles', filterEntrepot, filterDepartement],
-    queryFn: () => dashboardApi.topArticles(entrepotDeptParams),
+    queryKey: ['dashboard-top-articles', ...filterKey],
+    queryFn: () => dashboardApi.topArticles(params),
     enabled: visible.topArticles,
   });
 
   const { data: commandesStats = [] } = useQuery<{ statut: string; count: number }[]>({
-    queryKey: ['dashboard-commandes', filterEntrepot, filterDepartement],
-    queryFn: () => dashboardApi.commandes(entrepotDeptParams),
+    queryKey: ['dashboard-commandes', ...filterKey],
+    queryFn: () => dashboardApi.commandes(params),
     refetchInterval: 15_000,
     enabled: visible.statuts,
   });
@@ -127,6 +139,11 @@ export default function Dashboard() {
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ['articles'],
     queryFn: () => articlesApi.list(),
+  });
+
+  const { data: managersZone = [] } = useQuery<ManagerZone[]>({
+    queryKey: ['managers-zone'],
+    queryFn: () => commandesApi.managers.list(),
   });
 
   const { data: alertesInventaire = [] } = useQuery<any[]>({
@@ -143,7 +160,8 @@ export default function Dashboard() {
     setVisible(prev => ({ ...prev, [id]: !prev[id] }));
 
   const commandesEnCours = (kpis?.commandesValidees ?? 0) + (kpis?.commandesExpediees ?? 0);
-  const anyFilter = filterMois || filterEntrepot || filterArticle || filterDepartement;
+  const hasDateAvanceeFilter = filterDateTraitementDebut || filterDateTraitementFin || filterDateLivraisonDebut || filterDateLivraisonFin;
+  const anyFilter = filterMois || filterEntrepot || filterArticle || filterDepartement || filterManager || hasDateAvanceeFilter;
 
   return (
     <div className="space-y-4">
@@ -189,9 +207,27 @@ export default function Dashboard() {
             </button>
           )}
         </div>
+        <select
+          value={filterManager}
+          onChange={e => setFilterManager(e.target.value)}
+          className="px-3 py-1 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">Tous managers</option>
+          {managersZone.map(m => <option key={m.id} value={m.nom}>{m.nom}</option>)}
+        </select>
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          className={cn('flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg transition-colors',
+            hasDateAvanceeFilter ? 'bg-primary text-white border-primary' : 'border-border hover:bg-muted text-muted-foreground')}
+        >
+          Traitement / Livraison {hasDateAvanceeFilter && '●'}
+        </button>
         {anyFilter && (
           <button
-            onClick={() => { setFilterMois(''); setFilterEntrepot(''); setFilterArticle(''); setFilterDepartement(''); }}
+            onClick={() => {
+              setFilterMois(''); setFilterEntrepot(''); setFilterArticle(''); setFilterDepartement(''); setFilterManager('');
+              setFilterDateTraitementDebut(''); setFilterDateTraitementFin(''); setFilterDateLivraisonDebut(''); setFilterDateLivraisonFin('');
+            }}
             className="px-2.5 py-1 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted flex items-center gap-1"
           >
             <X className="w-3 h-3" /> Réinitialiser
@@ -210,6 +246,11 @@ export default function Dashboard() {
         {filterDepartement && (
           <span className="text-xs text-primary font-medium ml-1">
             🗺️ Dép. {filterDepartement}
+          </span>
+        )}
+        {filterManager && (
+          <span className="text-xs text-primary font-medium ml-1">
+            👤 {filterManager}
           </span>
         )}
 
@@ -246,6 +287,39 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {showFilters && (
+        <div className="bg-card border border-border rounded-xl p-3 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Traitement — Du</label>
+            <input type="date" value={filterDateTraitementDebut} onChange={e => setFilterDateTraitementDebut(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Traitement — Au</label>
+            <input type="date" value={filterDateTraitementFin} onChange={e => setFilterDateTraitementFin(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Livraison — Du</label>
+            <input type="date" value={filterDateLivraisonDebut} onChange={e => setFilterDateLivraisonDebut(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Livraison — Au</label>
+            <input type="date" value={filterDateLivraisonFin} onChange={e => setFilterDateLivraisonFin(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
+          </div>
+          {hasDateAvanceeFilter && (
+            <button
+              onClick={() => { setFilterDateTraitementDebut(''); setFilterDateTraitementFin(''); setFilterDateLivraisonDebut(''); setFilterDateLivraisonFin(''); }}
+              className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Alerte inventaire */}
       {alertesInvActives.length > 0 && (
@@ -359,7 +433,7 @@ export default function Dashboard() {
             <div className={`bg-card rounded-xl border border-border p-4 ${visible.statuts ? 'lg:col-span-2' : ''}`}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Évolution entrées / sorties
-                {(filterEntrepot || filterArticle || filterDepartement) && (
+                {(filterEntrepot || filterArticle || filterDepartement || filterManager) && (
                   <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>
@@ -417,7 +491,7 @@ export default function Dashboard() {
             <div className="bg-card rounded-xl border border-border p-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Volume sorties par département
-                {(filterEntrepot || filterMois || filterDepartement) && (
+                {(filterEntrepot || filterMois || filterDepartement || filterManager) && (
                   <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>

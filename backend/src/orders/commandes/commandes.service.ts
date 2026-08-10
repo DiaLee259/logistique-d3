@@ -19,7 +19,7 @@ export class CommandesService {
     const where: any = { deletedAt: null };
     if (filters.statut) where.statut = filters.statut;
     if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
-    if (filters.manager) where.manager = { contains: filters.manager, mode: 'insensitive' };
+    if (filters.manager) where.manager = { equals: filters.manager, mode: 'insensitive' };
     if (filters.entrepotSource) where.entrepotSource = filters.entrepotSource;
 
     const andClauses: any[] = [];
@@ -52,6 +52,16 @@ export class CommandesService {
         gte: new Date(parseInt(year), parseInt(month) - 1, 1),
         lt: new Date(parseInt(year), parseInt(month), 1),
       };
+    }
+    if (filters.dateTraitementDebut || filters.dateTraitementFin) {
+      where.dateTraitement = {};
+      if (filters.dateTraitementDebut) where.dateTraitement.gte = new Date(filters.dateTraitementDebut);
+      if (filters.dateTraitementFin) where.dateTraitement.lte = new Date(filters.dateTraitementFin + 'T23:59:59');
+    }
+    if (filters.dateLivraisonDebut || filters.dateLivraisonFin) {
+      where.dateLivraison = {};
+      if (filters.dateLivraisonDebut) where.dateLivraison.gte = new Date(filters.dateLivraisonDebut);
+      if (filters.dateLivraisonFin) where.dateLivraison.lte = new Date(filters.dateLivraisonFin + 'T23:59:59');
     }
     if (filters.search) {
       andClauses.push({ OR: [

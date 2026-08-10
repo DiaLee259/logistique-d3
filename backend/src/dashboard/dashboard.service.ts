@@ -13,35 +13,40 @@ function parseMois(mois?: string): { dateDebut?: string; dateFin?: string } {
   };
 }
 
+function applyDateRange(where: any, field: string, debut?: string, fin?: string) {
+  if (!debut && !fin) return;
+  where[field] = {};
+  if (debut) where[field].gte = new Date(debut);
+  if (fin) where[field].lte = new Date(fin + 'T23:59:59');
+}
+
+// Champs communs à Commande ET Mouvement (entrepôt, département, manager)
+function applyCommonFilters(where: any, filters: Record<string, string>, userEntrepots: string[], entrepotField: string) {
+  if (filters.entrepotId) where[entrepotField] = filters.entrepotId;
+  else if (userEntrepots.length) where[entrepotField] = { in: userEntrepots };
+  if (filters.departement) where.departement = { contains: filters.departement, mode: 'insensitive' };
+  if (filters.manager) where.manager = { equals: filters.manager, mode: 'insensitive' };
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getKpis(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string, userEntrepots: string[] = [], departement?: string) {
-    const parsed = mois ? parseMois(mois) : {};
-    const debut = parsed.dateDebut ?? dateDebut;
-    const fin = parsed.dateFin ?? dateFin;
-
-    const dateFilter: any = {};
-    if (debut) dateFilter.gte = new Date(debut);
-    if (fin) dateFilter.lte = new Date(fin + 'T23:59:59');
+  async getKpis(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const parsed = filters.mois ? parseMois(filters.mois) : {};
+    const debut = parsed.dateDebut ?? filters.dateDebut;
+    const fin = parsed.dateFin ?? filters.dateFin;
 
     const mouvFilter: any = {};
-    if (entrepotId) mouvFilter.entrepotId = entrepotId;
-    else if (userEntrepots.length) mouvFilter.entrepotId = { in: userEntrepots };
-    if (articleId) mouvFilter.articleId = articleId;
-    if (departement) mouvFilter.departement = { contains: departement, mode: 'insensitive' };
-    if (debut || fin) mouvFilter.date = dateFilter;
+    applyCommonFilters(mouvFilter, filters, userEntrepots, 'entrepotId');
+    if (filters.articleId) mouvFilter.articleId = filters.articleId;
+    applyDateRange(mouvFilter, 'date', debut, fin);
 
     const cmdDateFilter: any = { deletedAt: null };
-    if (entrepotId) cmdDateFilter.entrepotSource = entrepotId;
-    else if (userEntrepots.length) cmdDateFilter.entrepotSource = { in: userEntrepots };
-    if (departement) cmdDateFilter.departement = { contains: departement, mode: 'insensitive' };
-    if (debut || fin) {
-      cmdDateFilter.dateReception = {};
-      if (debut) cmdDateFilter.dateReception.gte = new Date(debut);
-      if (fin) cmdDateFilter.dateReception.lte = new Date(fin + 'T23:59:59');
-    }
+    applyCommonFilters(cmdDateFilter, filters, userEntrepots, 'entrepotSource');
+    applyDateRange(cmdDateFilter, 'dateReception', debut, fin);
+    applyDateRange(cmdDateFilter, 'dateTraitement', filters.dateTraitementDebut, filters.dateTraitementFin);
+    applyDateRange(cmdDateFilter, 'dateLivraison', filters.dateLivraisonDebut, filters.dateLivraisonFin);
 
     const [
       totalEntrees,
@@ -95,21 +100,15 @@ export class DashboardService {
     };
   }
 
-  async getEvolutionStock(entrepotId?: string, dateDebut?: string, dateFin?: string, mois?: string, articleId?: string, userEntrepots: string[] = [], departement?: string) {
-    const parsed = mois ? parseMois(mois) : {};
-    const debut = parsed.dateDebut ?? dateDebut;
-    const fin = parsed.dateFin ?? dateFin;
+  async getEvolutionStock(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const parsed = filters.mois ? parseMois(filters.mois) : {};
+    const debut = parsed.dateDebut ?? filters.dateDebut;
+    const fin = parsed.dateFin ?? filters.dateFin;
 
     const where: any = {};
-    if (entrepotId) where.entrepotId = entrepotId;
-    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
-    if (articleId) where.articleId = articleId;
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
-    if (debut || fin) {
-      where.date = {};
-      if (debut) where.date.gte = new Date(debut);
-      if (fin) where.date.lte = new Date(fin + 'T23:59:59');
-    }
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotId');
+    if (filters.articleId) where.articleId = filters.articleId;
+    applyDateRange(where, 'date', debut, fin);
 
     const mouvements = await this.prisma.mouvement.findMany({
       where,
@@ -128,17 +127,11 @@ export class DashboardService {
     return Object.entries(byDay).map(([date, v]) => ({ date, ...v }));
   }
 
-  async getVolumeParDepartement(entrepotId?: string, mois?: string, userEntrepots: string[] = [], departement?: string) {
-    const parsed = mois ? parseMois(mois) : {};
+  async getVolumeParDepartement(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const parsed = filters.mois ? parseMois(filters.mois) : {};
     const where: any = { type: TypeMouvement.SORTIE };
-    if (entrepotId) where.entrepotId = entrepotId;
-    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
-    if (parsed.dateDebut || parsed.dateFin) {
-      where.date = {};
-      if (parsed.dateDebut) where.date.gte = new Date(parsed.dateDebut);
-      if (parsed.dateFin) where.date.lte = new Date(parsed.dateFin + 'T23:59:59');
-    }
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotId');
+    applyDateRange(where, 'date', parsed.dateDebut, parsed.dateFin);
 
     const data = await this.prisma.mouvement.groupBy({
       by: ['departement'],
@@ -153,17 +146,13 @@ export class DashboardService {
     }));
   }
 
-  async getVolumeParDemandeur(mois?: string, userEntrepots: string[] = [], entrepotId?: string, departement?: string) {
-    const parsed = mois ? parseMois(mois) : {};
+  async getVolumeParDemandeur(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const parsed = filters.mois ? parseMois(filters.mois) : {};
     const where: any = { statut: { not: 'ANNULEE' }, deletedAt: null };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
-    if (parsed.dateDebut || parsed.dateFin) {
-      where.dateReception = {};
-      if (parsed.dateDebut) where.dateReception.gte = new Date(parsed.dateDebut);
-      if (parsed.dateFin) where.dateReception.lte = new Date(parsed.dateFin + 'T23:59:59');
-    }
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotSource');
+    applyDateRange(where, 'dateReception', parsed.dateDebut, parsed.dateFin);
+    applyDateRange(where, 'dateTraitement', filters.dateTraitementDebut, filters.dateTraitementFin);
+    applyDateRange(where, 'dateLivraison', filters.dateLivraisonDebut, filters.dateLivraisonFin);
 
     const data = await this.prisma.commande.groupBy({
       by: ['demandeur'],
@@ -179,14 +168,15 @@ export class DashboardService {
     }));
   }
 
-  async getDelaisMoyens(userEntrepots: string[] = [], entrepotId?: string, departement?: string) {
+  async getDelaisMoyens(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
     const where: any = {
       deletedAt: null,
       statut: { notIn: ['ANNULEE', 'EN_ATTENTE'] },
     };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotSource');
+    applyDateRange(where, 'dateReception', filters.dateDebut, filters.dateFin);
+    applyDateRange(where, 'dateTraitement', filters.dateTraitementDebut, filters.dateTraitementFin);
+    applyDateRange(where, 'dateLivraison', filters.dateLivraisonDebut, filters.dateLivraisonFin);
 
     const commandes = await this.prisma.commande.findMany({
       where,
@@ -230,11 +220,10 @@ export class DashboardService {
     };
   }
 
-  async getTopArticles(limit = 5, userEntrepots: string[] = [], entrepotId?: string, departement?: string) {
+  async getTopArticles(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const limit = filters.limit ? parseInt(filters.limit) : 5;
     const where: any = { type: TypeMouvement.SORTIE };
-    if (entrepotId) where.entrepotId = entrepotId;
-    else if (userEntrepots.length) where.entrepotId = { in: userEntrepots };
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotId');
 
     const data = await this.prisma.mouvement.groupBy({
       by: ['articleId'],
@@ -255,11 +244,12 @@ export class DashboardService {
     }));
   }
 
-  async getResumeCommandes(userEntrepots: string[] = [], entrepotId?: string, departement?: string) {
+  async getResumeCommandes(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
     const where: any = { deletedAt: null };
-    if (entrepotId) where.entrepotSource = entrepotId;
-    else if (userEntrepots.length) where.entrepotSource = { in: userEntrepots };
-    if (departement) where.departement = { contains: departement, mode: 'insensitive' };
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotSource');
+    applyDateRange(where, 'dateReception', filters.dateDebut, filters.dateFin);
+    applyDateRange(where, 'dateTraitement', filters.dateTraitementDebut, filters.dateTraitementFin);
+    applyDateRange(where, 'dateLivraison', filters.dateLivraisonDebut, filters.dateLivraisonFin);
 
     const par_statut = await this.prisma.commande.groupBy({
       by: ['statut'],

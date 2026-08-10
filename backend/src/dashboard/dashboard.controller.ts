@@ -8,83 +8,44 @@ export class DashboardController {
   constructor(private service: DashboardService) {}
 
   @Get('kpis')
-  getKpis(
-    @Query('entrepotId') entrepotId?: string,
-    @Query('dateDebut') dateDebut?: string,
-    @Query('dateFin') dateFin?: string,
-    @Query('mois') mois?: string,
-    @Query('articleId') articleId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getKpis(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getKpis(entrepotId, dateDebut, dateFin, mois, articleId, ue, departement);
+    return this.service.getKpis(filters, ue);
   }
 
   @Get('evolution')
-  getEvolution(
-    @Query('entrepotId') entrepotId?: string,
-    @Query('dateDebut') dateDebut?: string,
-    @Query('dateFin') dateFin?: string,
-    @Query('mois') mois?: string,
-    @Query('articleId') articleId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getEvolution(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getEvolutionStock(entrepotId, dateDebut, dateFin, mois, articleId, ue, departement);
+    return this.service.getEvolutionStock(filters, ue);
   }
 
   @Get('departements')
-  getVolumeParDepartement(
-    @Query('entrepotId') entrepotId?: string,
-    @Query('mois') mois?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getVolumeParDepartement(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getVolumeParDepartement(entrepotId, mois, ue, departement);
+    return this.service.getVolumeParDepartement(filters, ue);
   }
 
   @Get('demandeurs')
-  getVolumeParDemandeur(
-    @Query('mois') mois?: string,
-    @Query('entrepotId') entrepotId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getVolumeParDemandeur(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getVolumeParDemandeur(mois, ue, entrepotId, departement);
+    return this.service.getVolumeParDemandeur(filters, ue);
   }
 
   @Get('delais')
-  getDelaisMoyens(
-    @Query('entrepotId') entrepotId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getDelaisMoyens(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getDelaisMoyens(ue, entrepotId, departement);
+    return this.service.getDelaisMoyens(filters, ue);
   }
 
   @Get('top-articles')
-  getTopArticles(
-    @Query('limit') limit?: string,
-    @Query('entrepotId') entrepotId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getTopArticles(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getTopArticles(limit ? parseInt(limit) : 5, ue, entrepotId, departement);
+    return this.service.getTopArticles(filters, ue);
   }
 
   @Get('commandes')
-  getResumeCommandes(
-    @Query('entrepotId') entrepotId?: string,
-    @Query('departement') departement?: string,
-    @Request() req?: any,
-  ) {
+  getResumeCommandes(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
-    return this.service.getResumeCommandes(ue, entrepotId, departement);
+    return this.service.getResumeCommandes(filters, ue);
   }
 }
