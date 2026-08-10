@@ -108,6 +108,7 @@ export default function Commandes() {
   const [filterDateDebut, setFilterDateDebut] = useState('');
   const [filterDateFin, setFilterDateFin] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
+  const [filterDepartement, setFilterDepartement] = useState('');
   const [filterManager, setFilterManager] = useState('');
   const [filterTypePrestataire, setFilterTypePrestataire] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -157,6 +158,7 @@ export default function Commandes() {
     if (filterDateDebut) p.dateDebut = filterDateDebut;
     if (filterDateFin) p.dateFin = filterDateFin;
     if (filterEntrepot) p.entrepotSource = filterEntrepot;
+    if (filterDepartement) p.departement = filterDepartement;
     if (filterManager) p.manager = filterManager;
     if (filterTypePrestataire) p.typePrestataire = filterTypePrestataire;
     p.page = String(page);
@@ -167,7 +169,7 @@ export default function Commandes() {
   const resetPage = () => setPage(1);
 
   const { data: result, isLoading } = useQuery({
-    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterManager, filterTypePrestataire, page],
+    queryKey: ['commandes', search, filterStatut, filterMois, filterDateDebut, filterDateFin, filterEntrepot, filterDepartement, filterManager, filterTypePrestataire, page],
     queryFn: () => commandesApi.list(buildParams()),
     refetchInterval: 15_000,
   });
@@ -321,6 +323,16 @@ export default function Commandes() {
           <option value="">Tous entrepôts</option>
           {entrepots.map(e => <option key={e.id} value={e.id}>{e.code} — {e.nom}</option>)}
         </select>
+
+        <div className="relative min-w-28">
+          <input value={filterDepartement} onChange={e => { setFilterDepartement(e.target.value); resetPage(); }} placeholder="Département…"
+            className="w-full px-3 py-2 text-xs bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20" />
+          {filterDepartement && (
+            <button onClick={() => { setFilterDepartement(''); resetPage(); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
 
         <div className="relative min-w-32">
           <input value={filterManager} onChange={e => { setFilterManager(e.target.value); resetPage(); }} placeholder="Filtrer manager…"

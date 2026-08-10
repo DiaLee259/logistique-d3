@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [filterMois, setFilterMois] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterArticle, setFilterArticle] = useState('');
+  const [filterDepartement, setFilterDepartement] = useState('');
   const [visible, setVisible] = useState<Record<SectionId, boolean>>(loadVisible);
   const [showCustomize, setShowCustomize] = useState(false);
   const customizeRef = useRef<HTMLDivElement>(null);
@@ -63,28 +64,33 @@ export default function Dashboard() {
   if (filterMois) params.mois = filterMois;
   if (filterEntrepot) params.entrepotId = filterEntrepot;
   if (filterArticle) params.articleId = filterArticle;
+  if (filterDepartement) params.departement = filterDepartement;
+
+  const entrepotDeptParams: Record<string, string> = {};
+  if (filterEntrepot) entrepotDeptParams.entrepotId = filterEntrepot;
+  if (filterDepartement) entrepotDeptParams.departement = filterDepartement;
 
   const { data: kpis } = useQuery<DashboardKpis>({
-    queryKey: ['dashboard-kpis', filterMois, filterEntrepot, filterArticle],
+    queryKey: ['dashboard-kpis', filterMois, filterEntrepot, filterArticle, filterDepartement],
     queryFn: () => dashboardApi.kpis(params),
     refetchInterval: 30_000,
   });
 
   const { data: evolution = [] } = useQuery<{ date: string; entrees: number; sorties: number }[]>({
-    queryKey: ['dashboard-evolution', filterMois, filterEntrepot, filterArticle],
+    queryKey: ['dashboard-evolution', filterMois, filterEntrepot, filterArticle, filterDepartement],
     queryFn: () => dashboardApi.evolution(params),
     enabled: visible.evolution,
   });
 
   const { data: departements = [] } = useQuery<{ departement: string; volume: number }[]>({
-    queryKey: ['dashboard-departements', filterMois, filterEntrepot],
+    queryKey: ['dashboard-departements', filterMois, filterEntrepot, filterDepartement],
     queryFn: () => dashboardApi.departements(params),
     enabled: visible.departements,
   });
 
   const { data: demandeurs = [] } = useQuery<{ demandeur: string; commandes: number }[]>({
-    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot],
-    queryFn: () => dashboardApi.demandeurs({ ...(filterMois ? { mois: filterMois } : {}), ...(filterEntrepot ? { entrepotId: filterEntrepot } : {}) }),
+    queryKey: ['dashboard-demandeurs', filterMois, filterEntrepot, filterDepartement],
+    queryFn: () => dashboardApi.demandeurs({ ...(filterMois ? { mois: filterMois } : {}), ...entrepotDeptParams }),
     enabled: visible.demandeurs,
   });
 
@@ -94,21 +100,21 @@ export default function Dashboard() {
     expeditionToLivraison: number | null;
     totalCommandesAnalysees?: number;
   }>({
-    queryKey: ['dashboard-delais', filterEntrepot],
-    queryFn: () => dashboardApi.delais(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
+    queryKey: ['dashboard-delais', filterEntrepot, filterDepartement],
+    queryFn: () => dashboardApi.delais(entrepotDeptParams),
     refetchInterval: 60_000,
     enabled: visible.delais,
   });
 
   const { data: topArticles = [] } = useQuery<{ nom: string; reference: string; volume: number }[]>({
-    queryKey: ['dashboard-top-articles', filterEntrepot],
-    queryFn: () => dashboardApi.topArticles(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
+    queryKey: ['dashboard-top-articles', filterEntrepot, filterDepartement],
+    queryFn: () => dashboardApi.topArticles(entrepotDeptParams),
     enabled: visible.topArticles,
   });
 
   const { data: commandesStats = [] } = useQuery<{ statut: string; count: number }[]>({
-    queryKey: ['dashboard-commandes', filterEntrepot],
-    queryFn: () => dashboardApi.commandes(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
+    queryKey: ['dashboard-commandes', filterEntrepot, filterDepartement],
+    queryFn: () => dashboardApi.commandes(entrepotDeptParams),
     refetchInterval: 15_000,
     enabled: visible.statuts,
   });
@@ -137,7 +143,7 @@ export default function Dashboard() {
     setVisible(prev => ({ ...prev, [id]: !prev[id] }));
 
   const commandesEnCours = (kpis?.commandesValidees ?? 0) + (kpis?.commandesExpediees ?? 0);
-  const anyFilter = filterMois || filterEntrepot || filterArticle;
+  const anyFilter = filterMois || filterEntrepot || filterArticle || filterDepartement;
 
   return (
     <div className="space-y-4">
@@ -167,9 +173,25 @@ export default function Dashboard() {
           <option value="">Tous articles</option>
           {articles.filter(a => a.actif).map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
         </select>
+        <div className="relative">
+          <input
+            value={filterDepartement}
+            onChange={e => setFilterDepartement(e.target.value)}
+            placeholder="Département…"
+            className="w-28 px-3 py-1 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          {filterDepartement && (
+            <button
+              onClick={() => setFilterDepartement('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
         {anyFilter && (
           <button
-            onClick={() => { setFilterMois(''); setFilterEntrepot(''); setFilterArticle(''); }}
+            onClick={() => { setFilterMois(''); setFilterEntrepot(''); setFilterArticle(''); setFilterDepartement(''); }}
             className="px-2.5 py-1 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted flex items-center gap-1"
           >
             <X className="w-3 h-3" /> Réinitialiser
@@ -183,6 +205,11 @@ export default function Dashboard() {
         {filterArticle && (
           <span className="text-xs text-orange-600 font-medium ml-1">
             📦 {articles.find(a => a.id === filterArticle)?.nom ?? 'Article'}
+          </span>
+        )}
+        {filterDepartement && (
+          <span className="text-xs text-primary font-medium ml-1">
+            🗺️ Dép. {filterDepartement}
           </span>
         )}
 
@@ -332,7 +359,7 @@ export default function Dashboard() {
             <div className={`bg-card rounded-xl border border-border p-4 ${visible.statuts ? 'lg:col-span-2' : ''}`}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Évolution entrées / sorties
-                {(filterEntrepot || filterArticle) && (
+                {(filterEntrepot || filterArticle || filterDepartement) && (
                   <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>
@@ -390,7 +417,7 @@ export default function Dashboard() {
             <div className="bg-card rounded-xl border border-border p-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Volume sorties par département
-                {(filterEntrepot || filterMois) && (
+                {(filterEntrepot || filterMois || filterDepartement) && (
                   <span className="ml-2 text-primary normal-case font-normal">— filtré</span>
                 )}
               </h3>
