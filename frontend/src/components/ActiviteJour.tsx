@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, ChevronLeft, ChevronRight, CalendarDays, Users } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, CalendarDays, Users, FileDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { dashboardApi } from '@/lib/api';
+import { useTri } from '@/lib/useTri';
 import { cn, formatDate, formatNumber, statutCommandeLabel, statutCommandeColor } from '@/lib/utils';
 
 type CommandeJour = {
@@ -49,9 +51,19 @@ function decaleJour(jour: string, delta: number) {
   return dateLocale(d);
 }
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function ActiviteJour({ params }: { params: Record<string, string> }) {
   const aujourdHui = dateLocale(new Date());
   const [jour, setJour] = useState(aujourdHui);
+  const [exportEnCours, setExportEnCours] = useState(false);
 
   const { data, isLoading } = useQuery<ActiviteJourData>({
     queryKey: ['dashboard-activite-jour', jour, JSON.stringify(params)],
@@ -59,12 +71,45 @@ export default function ActiviteJour({ params }: { params: Record<string, string
     refetchInterval: 60_000,
   });
 
+  // _duree fusionne durée (livrées) et âge (en cours) pour que la colonne
+  // « Durée » soit triable d'un seul geste.
+  const detailEnrichi = useMemo(
+    () => (data?.commandes ?? []).map(c => ({ ...c, _duree: c.dureeJours ?? c.ageJours })),
+    [data],
+  );
+  const triDetail = useTri(detailEnrichi);
+  const triLog = useTri(data?.parLogisticien ?? [], 'total');
+
+  const exporterExcel = async () => {
+    setExportEnCours(true);
+    try {
+      const blob = await dashboardApi.activiteJourExport({ ...params, date: jour });
+      downloadBlob(blob, `activite-${jour}.xlsx`);
+    } catch {
+      toast.error("L'export a échoué");
+    } finally {
+      setExportEnCours(false);
+    }
+  };
+
   const c = data?.compteurs;
+
+  const thTriable = (cleTri: string, label: string, opts?: { gauche?: boolean; titre?: string }) => (
+    <th
+      onClick={() => triDetail.trier(cleTri)}
+      title={opts?.titre ?? 'Cliquer pour trier'}
+      className={cn(
+        'px-3 py-2.5 font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none hover:text-foreground',
+        opts?.gauche ? 'text-left' : 'text-right',
+      )}>
+      {label}{triDetail.indicateur(cleTri)}
+    </th>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Sélecteur de jour */}
-      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5 w-fit">
+      {/* Sélecteur de jour + export */}
+      <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5">
         <CalendarDays className="w-4 h-4 text-muted-foreground" />
         <button
           onClick={() => setJour(j => decaleJour(j, -1))}
@@ -93,6 +138,15 @@ export default function ActiviteJour({ params }: { params: Record<string, string
             Aujourd'hui
           </button>
         )}
+        <button
+          onClick={exporterExcel}
+          disabled={exportEnCours || !data}
+          title="Exporter la journée au format Excel (synthèse, par logisticien, détail)"
+          className="ml-auto flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border rounded-lg hover:border-primary transition-colors text-muted-foreground hover:text-foreground bg-card disabled:opacity-50">
+          {exportEnCours
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Export…</>
+            : <><FileDown className="w-3.5 h-3.5" /> Exporter Excel</>}
+        </button>
       </div>
 
       {isLoading || !data ? (
@@ -133,14 +187,27 @@ export default function ActiviteJour({ params }: { params: Record<string, string
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-muted-foreground">
-                    <th className="px-4 py-2 text-left font-medium">Logisticien</th>
-                    <th className="px-4 py-2 text-right font-medium">Validées Log1</th>
-                    <th className="px-4 py-2 text-right font-medium">Expédiées</th>
-                    <th className="px-4 py-2 text-right font-medium">Total</th>
+                    {([
+                      { cle: 'nom', label: 'Logisticien', gauche: true },
+                      { cle: 'validees', label: 'Validées Log1' },
+                      { cle: 'expediees', label: 'Expédiées' },
+                      { cle: 'total', label: 'Total' },
+                    ] as const).map(col => (
+                      <th
+                        key={col.cle}
+                        onClick={() => triLog.trier(col.cle)}
+                        title="Cliquer pour trier"
+                        className={cn(
+                          'px-4 py-2 font-medium cursor-pointer select-none hover:text-foreground',
+                          (col as any).gauche ? 'text-left' : 'text-right',
+                        )}>
+                        {col.label}{triLog.indicateur(col.cle)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.parLogisticien.map((l, i) => (
+                  {triLog.triees.map((l, i) => (
                     <tr key={l.nom} className={cn('border-t border-border', i % 2 === 1 && 'bg-muted/20')}>
                       <td className="px-4 py-2 font-medium">{l.nom}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-blue-600 dark:text-blue-400">{l.validees || '—'}</td>
@@ -167,20 +234,20 @@ export default function ActiviteJour({ params }: { params: Record<string, string
                 <table className="w-full text-xs">
                   <thead className="bg-muted sticky top-0">
                     <tr>
-                      <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">N° Commande</th>
-                      <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Demandeur</th>
-                      <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Dép.</th>
-                      <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Statut</th>
+                      {thTriable('numero', 'N° Commande', { gauche: true })}
+                      {thTriable('demandeur', 'Demandeur', { gauche: true })}
+                      {thTriable('departement', 'Dép.', { gauche: true })}
+                      {thTriable('statut', 'Statut', { gauche: true })}
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Événements du jour</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Réception</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Validé Log1</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Expédié</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Livré</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap" title="Durée réception → livraison ; pour une commande non livrée, ancienneté depuis la réception">Durée</th>
+                      {thTriable('dateReception', 'Réception')}
+                      {thTriable('dateTraitement', 'Validé Log1')}
+                      {thTriable('dateExpedition', 'Expédié')}
+                      {thTriable('dateLivraison', 'Livré')}
+                      {thTriable('_duree', 'Durée', { titre: 'Durée réception → livraison ; pour une commande non livrée, ancienneté depuis la réception. Cliquer pour trier.' })}
                     </tr>
                   </thead>
                   <tbody>
-                    {data.commandes.map((cmd, i) => (
+                    {triDetail.triees.map((cmd, i) => (
                       <tr key={cmd.numero} className={cn('border-t border-border', i % 2 === 1 && 'bg-muted/20')}>
                         <td className="px-3 py-2 font-mono font-medium whitespace-nowrap">{cmd.numero}</td>
                         <td className="px-3 py-2 max-w-[160px] truncate" title={cmd.demandeur ?? ''}>{cmd.demandeur || '—'}</td>

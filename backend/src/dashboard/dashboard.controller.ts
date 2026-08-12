@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -59,5 +60,15 @@ export class DashboardController {
   getActiviteJour(@Query() filters: Record<string, string>, @Request() req?: any) {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
     return this.service.getActiviteJour(filters, ue);
+  }
+
+  @Get('activite-jour/export')
+  async exportActiviteJour(@Query() filters: Record<string, string>, @Request() req: any, @Res() res: Response) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    const buffer = await this.service.exportActiviteJour(filters, ue);
+    const jour = filters.date || new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="activite-${jour}.xlsx"`);
+    res.send(buffer);
   }
 }

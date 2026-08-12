@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Loader2, TrendingUp } from 'lucide-react';
 import { dashboardApi } from '@/lib/api';
+import { useTri } from '@/lib/useTri';
 import { cn, formatNumber } from '@/lib/utils';
 
 type LignePilotage = {
@@ -53,13 +54,16 @@ function couleurTaux(taux: number | null) {
 
 export default function PilotageCommandes({ params }: { params: Record<string, string> }) {
   const [dimension, setDimension] = useState<DimensionId>('parDepartement');
-  const [triParAttente, setTriParAttente] = useState(false);
 
   const { data, isLoading } = useQuery<Pilotage>({
     queryKey: ['dashboard-pilotage', JSON.stringify(params)],
     queryFn: () => dashboardApi.pilotage(params),
     refetchInterval: 60_000,
   });
+
+  // Tri par colonne (défaut : volume décroissant), rattaché à la dimension courante.
+  const lignesDim = useMemo(() => data?.[dimension] ?? [], [data, dimension]);
+  const tri = useTri(lignesDim, 'total');
 
   if (isLoading) {
     return (
@@ -78,11 +82,7 @@ export default function PilotageCommandes({ params }: { params: Record<string, s
   }
 
   const config = DIMENSIONS.find(d => d.id === dimension)!;
-  const lignes = [...data[dimension]];
-  if (triParAttente) {
-    // Les dossiers bloqués passent devant : c'est là qu'il faut agir.
-    lignes.sort((a, b) => (b.attenteMax ?? -1) - (a.attenteMax ?? -1));
-  }
+  const lignes = tri.triees;
 
   const t = data.totaux;
   const cellule = 'px-3 py-2 text-right tabular-nums whitespace-nowrap';
@@ -121,19 +121,6 @@ export default function PilotageCommandes({ params }: { params: Record<string, s
           ))}
         </div>
 
-        <button
-          onClick={() => setTriParAttente(p => !p)}
-          title="Faire remonter les lignes dont le dossier ouvert le plus ancien attend le plus longtemps"
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors',
-            triParAttente
-              ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400'
-              : 'border-border text-muted-foreground hover:text-foreground',
-          )}>
-          <AlertTriangle className="w-3.5 h-3.5" />
-          Trier par ancienneté du backlog
-        </button>
-
         <span className="ml-auto text-xs text-muted-foreground">
           Taux de livraison global{' '}
           <strong className={couleurTaux(t.tauxLivraison)}>
@@ -147,20 +134,33 @@ export default function PilotageCommandes({ params }: { params: Record<string, s
           <table className="w-full text-xs">
             <thead className="bg-muted sticky top-0">
               <tr>
-                <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">{config.entete}</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Total</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">En attente</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">En cours</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Livrées</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Refusées</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Annulées</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Grilles</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Taux livr.</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground" title="Réception → Traitement">Récep.→Trait.</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground" title="Traitement → Expédition">Trait.→Expéd.</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground" title="Expédition → Livraison">Expéd.→Livr.</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground" title="Réception → Livraison">Délai total</th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground" title="Ancienneté du dossier ouvert le plus ancien">Backlog max</th>
+                {([
+                  { cle: 'libelle', label: config.entete, gauche: true },
+                  { cle: 'total', label: 'Total' },
+                  { cle: 'enAttente', label: 'En attente' },
+                  { cle: 'enCours', label: 'En cours' },
+                  { cle: 'livrees', label: 'Livrées' },
+                  { cle: 'refusees', label: 'Refusées' },
+                  { cle: 'annulees', label: 'Annulées' },
+                  { cle: 'grilles', label: 'Grilles' },
+                  { cle: 'tauxLivraison', label: 'Taux livr.' },
+                  { cle: 'delaiTraitement', label: 'Récep.→Trait.', titre: 'Réception → Traitement' },
+                  { cle: 'delaiExpedition', label: 'Trait.→Expéd.', titre: 'Traitement → Expédition' },
+                  { cle: 'delaiLivraison', label: 'Expéd.→Livr.', titre: 'Expédition → Livraison' },
+                  { cle: 'delaiTotal', label: 'Délai total', titre: 'Réception → Livraison' },
+                  { cle: 'attenteMax', label: 'Backlog max', titre: 'Ancienneté du dossier ouvert le plus ancien' },
+                ] as { cle: string; label: string; gauche?: boolean; titre?: string }[]).map(col => (
+                  <th
+                    key={col.cle}
+                    onClick={() => tri.trier(col.cle)}
+                    title={col.titre ? `${col.titre}. Cliquer pour trier.` : 'Cliquer pour trier'}
+                    className={cn(
+                      'px-3 py-2.5 font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none hover:text-foreground',
+                      col.gauche ? 'text-left' : 'text-right',
+                    )}>
+                    {col.label}{tri.indicateur(col.cle)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>

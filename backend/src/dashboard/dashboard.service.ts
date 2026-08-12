@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TypeMouvement } from '@prisma/client';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 
 function parseMois(mois?: string): { dateDebut?: string; dateFin?: string } {
@@ -483,5 +484,97 @@ export class DashboardService {
       .sort((a, b) => b.total - a.total);
 
     return { jour, compteurs, parLogisticien, commandes: detail };
+  }
+
+  /**
+   * Export Excel de l'activité d'une journée : mêmes données que l'onglet
+   * (on réutilise getActiviteJour pour garantir des chiffres identiques),
+   * réparties sur 3 feuilles : synthèse, par logisticien, détail commandes.
+   */
+  async exportActiviteJour(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const data = await this.getActiviteJour(filters, userEntrepots);
+
+    const LABELS: Record<string, string> = {
+      RECUE: 'Reçue', VALIDEE: 'Validée Log1', EXPEDIEE: 'Expédiée',
+      LIVREE: 'Livrée', REFUSEE: 'Refusée', ANNULEE: 'Annulée',
+    };
+    const fmt = (d?: Date | null) => (d ? d.toISOString().split('T')[0] : '');
+
+    const wb = new ExcelJS.Workbook();
+
+    const styliser = (ws: ExcelJS.Worksheet) => {
+      const h = ws.getRow(1);
+      h.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      h.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6E' } };
+      h.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      h.height = 30;
+      ws.eachRow((r, i) => {
+        if (i > 1 && i % 2 === 0) r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F8FC' } };
+        r.eachCell(cell => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD0D7E4' } }, bottom: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+            left: { style: 'thin', color: { argb: 'FFD0D7E4' } }, right: { style: 'thin', color: { argb: 'FFD0D7E4' } },
+          };
+        });
+      });
+    };
+
+    const ws1 = wb.addWorksheet('Synthèse');
+    ws1.columns = [
+      { header: 'Indicateur', key: 'k', width: 30 },
+      { header: `Journée du ${data.jour}`, key: 'v', width: 18 },
+    ];
+    ws1.addRow({ k: 'Commandes reçues', v: data.compteurs.recues });
+    ws1.addRow({ k: 'Validées Log1', v: data.compteurs.valideesLog1 });
+    ws1.addRow({ k: 'Expédiées', v: data.compteurs.expediees });
+    ws1.addRow({ k: 'Livrées', v: data.compteurs.livrees });
+    ws1.addRow({ k: 'Refusées', v: data.compteurs.refusees });
+    ws1.addRow({ k: 'Annulées (approximation)', v: data.compteurs.annulees });
+    styliser(ws1);
+
+    const ws2 = wb.addWorksheet('Par logisticien');
+    ws2.columns = [
+      { header: 'Logisticien', key: 'nom', width: 28 },
+      { header: 'Validées Log1', key: 'validees', width: 14 },
+      { header: 'Expédiées', key: 'expediees', width: 12 },
+      { header: 'Total', key: 'total', width: 10 },
+    ];
+    for (const l of data.parLogisticien) ws2.addRow(l);
+    styliser(ws2);
+
+    const ws3 = wb.addWorksheet('Détail commandes');
+    ws3.columns = [
+      { header: 'N° Commande', key: 'numero', width: 20 },
+      { header: 'Statut', key: 'statut', width: 16 },
+      { header: 'Département', key: 'departement', width: 13 },
+      { header: 'Demandeur', key: 'demandeur', width: 24 },
+      { header: 'Événements du jour', key: 'evenements', width: 34 },
+      { header: 'Réception', key: 'dateReception', width: 12 },
+      { header: 'Validé Log1', key: 'dateTraitement', width: 12 },
+      { header: 'Expédié', key: 'dateExpedition', width: 12 },
+      { header: 'Livré', key: 'dateLivraison', width: 12 },
+      { header: 'Durée récep.→livr. (j)', key: 'dureeJours', width: 16 },
+      { header: 'Âge en cours (j)', key: 'ageJours', width: 14 },
+    ];
+    for (const cmd of data.commandes) {
+      ws3.addRow({
+        numero: cmd.numero,
+        statut: cmd.statut,
+        departement: cmd.departement,
+        demandeur: cmd.demandeur ?? '',
+        evenements: cmd.evenements.map(e => LABELS[e] ?? e).join(', '),
+        dateReception: fmt(cmd.dateReception),
+        dateTraitement: fmt(cmd.dateTraitement),
+        dateExpedition: fmt(cmd.dateExpedition),
+        dateLivraison: fmt(cmd.dateLivraison),
+        dureeJours: cmd.dureeJours ?? '',
+        ageJours: cmd.ageJours ?? '',
+      });
+    }
+    ws3.views = [{ state: 'frozen', ySplit: 1 }];
+    ws3.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws3.columns.length } };
+    styliser(ws3);
+
+    return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 }

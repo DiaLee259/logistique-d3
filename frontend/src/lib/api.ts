@@ -62,6 +62,8 @@ export const dashboardApi = {
     api.get('/dashboard/pilotage', { params }).then(r => r.data),
   activiteJour: (params?: Record<string, string>) =>
     api.get('/dashboard/activite-jour', { params }).then(r => r.data),
+  activiteJourExport: (params?: Record<string, string>) =>
+    api.get('/dashboard/activite-jour/export', { params, responseType: 'blob' }).then(r => r.data as Blob),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
