@@ -54,4 +54,10 @@ export class DashboardController {
     const ue: string[] = req?.user?.privileges?.entrepots ?? [];
     return this.service.getPilotage(filters, ue);
   }
+
+  @Get('activite-jour')
+  getActiviteJour(@Query() filters: Record<string, string>, @Request() req?: any) {
+    const ue: string[] = req?.user?.privileges?.entrepots ?? [];
+    return this.service.getActiviteJour(filters, ue);
+  }
 }

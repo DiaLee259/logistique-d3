@@ -12,6 +12,7 @@ import {
 import { dashboardApi, entrepotsApi, articlesApi, inventairesApi, commandesApi } from '@/lib/api';
 import KpiCard from '@/components/KpiCard';
 import PilotageCommandes from '@/components/PilotageCommandes';
+import ActiviteJour from '@/components/ActiviteJour';
 import { cn, formatDate, formatNumber, statutCommandeLabel } from '@/lib/utils';
 import type { DashboardKpis, Entrepot, Article, ManagerZone } from '@/lib/types';
 
@@ -37,7 +38,7 @@ function loadVisible(): Record<SectionId, boolean> {
 }
 
 export default function Dashboard() {
-  const [ongletActif, setOngletActif] = useState<'general' | 'pilotage'>('general');
+  const [ongletActif, setOngletActif] = useState<'general' | 'pilotage' | 'jour'>('general');
   const [filterMois, setFilterMois] = useState('');
   const [filterEntrepot, setFilterEntrepot] = useState('');
   const [filterArticle, setFilterArticle] = useState('');
@@ -172,6 +173,7 @@ export default function Dashboard() {
         {([
           { id: 'general', label: 'Vue générale' },
           { id: 'pilotage', label: 'Pilotage commandes' },
+          { id: 'jour', label: 'Activité du jour' },
         ] as const).map(o => (
           <button
             key={o.id}
@@ -342,6 +344,15 @@ export default function Dashboard() {
       )}
 
       {ongletActif === 'pilotage' && <PilotageCommandes params={params} />}
+
+      {/* L'onglet jour a sa propre date : on ne lui passe que les filtres de périmètre */}
+      {ongletActif === 'jour' && (
+        <ActiviteJour params={{
+          ...(filterEntrepot ? { entrepotId: filterEntrepot } : {}),
+          ...(filterDepartement ? { departement: filterDepartement } : {}),
+          ...(filterManager ? { manager: filterManager } : {}),
+        }} />
+      )}
 
       {ongletActif === 'general' && (<>
       {/* Alerte inventaire */}

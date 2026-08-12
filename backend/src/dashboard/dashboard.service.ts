@@ -373,4 +373,115 @@ export class DashboardService {
       parManager: ventile(c => c.manager ?? ''),
     };
   }
+
+  /**
+   * Activité d'une journée : événements du cycle de commande survenus ce jour-là
+   * (réception, validation Log1, expédition, livraison, refus), avec compteurs,
+   * ventilation par logisticien et détail des commandes touchées.
+   *
+   * Particularités du modèle (vérifiées dans commandes.service.ts) :
+   * - un refus écrit dateTraitement → refusées du jour = dateTraitement ∈ jour
+   *   ET statut REFUSEE ; validées Log1 = dateTraitement ∈ jour ET statut ≠ REFUSEE ;
+   * - l'annulation n'écrit aucune date jalon → approximée par updatedAt, ce qui
+   *   peut sur-compter une commande annulée un autre jour puis modifiée ce jour-là
+   *   (signalé côté interface) ;
+   * - dateTransmissionLog2 est posée dans le même update que dateTraitement,
+   *   donc inutile de la suivre séparément.
+   */
+  async getActiviteJour(filters: Record<string, string> = {}, userEntrepots: string[] = []) {
+    const jour = filters.date || new Date().toISOString().split('T')[0];
+    // Les deux bornes en interprétation locale serveur : 'YYYY-MM-DD' seul serait
+    // parsé en UTC alors que 'T23:59:59' est parsé en local — fenêtre bancale.
+    const debut = new Date(jour + 'T00:00:00');
+    const fin = new Date(jour + 'T23:59:59.999');
+    const fenetre = { gte: debut, lte: fin };
+
+    const where: any = { deletedAt: null };
+    applyCommonFilters(where, filters, userEntrepots, 'entrepotSource');
+    where.OR = [
+      { dateReception: fenetre },
+      { dateTraitement: fenetre },
+      { dateExpedition: fenetre },
+      { dateLivraison: fenetre },
+      { statut: 'ANNULEE', updatedAt: fenetre },
+    ];
+
+    const commandes = await this.prisma.commande.findMany({
+      where,
+      select: {
+        numero: true,
+        statut: true,
+        departement: true,
+        demandeur: true,
+        societe: true,
+        dateReception: true,
+        dateTraitement: true,
+        dateExpedition: true,
+        dateLivraison: true,
+        updatedAt: true,
+        valideur: { select: { prenom: true, nom: true } },
+        expediteur: { select: { prenom: true, nom: true } },
+      },
+      orderBy: { dateReception: 'desc' },
+    });
+
+    const dansJour = (d?: Date | null) => !!d && d >= debut && d <= fin;
+    const maintenant = Date.now();
+
+    const compteurs = { recues: 0, valideesLog1: 0, expediees: 0, livrees: 0, refusees: 0, annulees: 0 };
+
+    const parLog = new Map<string, { validees: number; expediees: number }>();
+    const bump = (nom: string, champ: 'validees' | 'expediees') => {
+      if (!parLog.has(nom)) parLog.set(nom, { validees: 0, expediees: 0 });
+      parLog.get(nom)![champ]++;
+    };
+
+    const detail = commandes.map(c => {
+      const evenements: string[] = [];
+      if (dansJour(c.dateReception)) { compteurs.recues++; evenements.push('RECUE'); }
+      if (dansJour(c.dateTraitement)) {
+        if (c.statut === 'REFUSEE') { compteurs.refusees++; evenements.push('REFUSEE'); }
+        else {
+          compteurs.valideesLog1++; evenements.push('VALIDEE');
+          if (c.valideur) bump(`${c.valideur.prenom} ${c.valideur.nom}`, 'validees');
+        }
+      }
+      if (dansJour(c.dateExpedition)) {
+        compteurs.expediees++; evenements.push('EXPEDIEE');
+        if (c.expediteur) bump(`${c.expediteur.prenom} ${c.expediteur.nom}`, 'expediees');
+      }
+      if (dansJour(c.dateLivraison)) { compteurs.livrees++; evenements.push('LIVREE'); }
+      if (c.statut === 'ANNULEE' && dansJour(c.updatedAt)) { compteurs.annulees++; evenements.push('ANNULEE'); }
+
+      // Durée du cycle si la commande est livrée ; sinon âge du dossier encore
+      // ouvert, pour faire ressortir ce qui traîne.
+      const dureeJours = c.dateLivraison && c.dateReception
+        ? Math.round(((c.dateLivraison.getTime() - c.dateReception.getTime()) / 86400000) * 10) / 10
+        : null;
+      const enCours = !c.dateLivraison && c.statut !== 'ANNULEE' && c.statut !== 'REFUSEE';
+      const ageJours = enCours && c.dateReception
+        ? Math.round(((maintenant - c.dateReception.getTime()) / 86400000) * 10) / 10
+        : null;
+
+      return {
+        numero: c.numero,
+        demandeur: c.demandeur,
+        departement: c.departement,
+        statut: c.statut,
+        evenements,
+        dateReception: c.dateReception,
+        dateTraitement: c.dateTraitement,
+        dateExpedition: c.dateExpedition,
+        dateLivraison: c.dateLivraison,
+        dureeJours,
+        ageJours,
+      };
+    });
+
+    const parLogisticien = [...parLog.entries()]
+      .map(([nom, v]) => ({ nom, ...v, total: v.validees + v.expediees }))
+      .sort((a, b) => b.total - a.total);
+
+    return { jour, compteurs, parLogisticien, commandes: detail };
+  }
 }

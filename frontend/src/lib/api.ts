@@ -60,6 +60,8 @@ export const dashboardApi = {
     api.get('/dashboard/commandes', { params }).then(r => r.data),
   pilotage: (params?: Record<string, string>) =>
     api.get('/dashboard/pilotage', { params }).then(r => r.data),
+  activiteJour: (params?: Record<string, string>) =>
+    api.get('/dashboard/activite-jour', { params }).then(r => r.data),
 };
 
 // ── Articles ──────────────────────────────────────────────────────────────────
